@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="t">
+  <title id="t">oracular: a tray of cookies</title>
+  <!-- tray, seen slightly from above -->
+  <ellipse cx="64" cy="78" rx="58" ry="30" fill="#3A6B8C"/>
+  <ellipse cx="64" cy="74" rx="50" ry="23" fill="#24465E"/>
+  <!-- cookies -->
+  <g fill="#E9B872">
+    <circle cx="40" cy="74" r="13"/>
+    <circle cx="66" cy="62" r="13"/>
+    <circle cx="92" cy="74" r="13"/>
+    <circle cx="53" cy="90" r="12"/>
+    <circle cx="78" cy="90" r="12"/>
+  </g>
+  <!-- chips -->
+  <g fill="#24465E">
+    <circle cx="35" cy="70" r="2.2"/><circle cx="44" cy="78" r="2.2"/><circle cx="42" cy="68" r="1.8"/>
+    <circle cx="61" cy="58" r="2.2"/><circle cx="70" cy="66" r="2.2"/><circle cx="69" cy="57" r="1.8"/>
+    <circle cx="87" cy="70" r="2.2"/><circle cx="96" cy="78" r="2.2"/><circle cx="94" cy="68" r="1.8"/>
+    <circle cx="49" cy="87" r="2.2"/><circle cx="57" cy="94" r="2.2"/><circle cx="56" cy="85" r="1.8"/>
+    <circle cx="74" cy="87" r="2.2"/><circle cx="82" cy="94" r="2.2"/><circle cx="81" cy="85" r="1.8"/>
+  </g>
+</svg>

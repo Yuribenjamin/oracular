@@ -44,6 +44,15 @@
           }
         }
       }
+    },
+    {
+      "includes": ["examples/**"],
+      "formatter": {
+        "enabled": false
+      },
+      "assist": {
+        "enabled": false
+      }
     }
   ]
 }
