@@ -14,6 +14,13 @@ updates:
       interval: monthly
     allow:
       - dependency-type: development
+    ignore:
+      # typescript stays on 5.x until tsup's dts build supports 7.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # @types/node tracks the Node version in .nvmrc.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         patterns: ["*"]
