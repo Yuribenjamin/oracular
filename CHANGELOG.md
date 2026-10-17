@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+### Patch Changes
+
+- [#6](https://github.com/Yuribenjamin/oracular/pull/6) [`57d121f`](https://github.com/Yuribenjamin/oracular/commit/57d121f107f4ed92f2e59bf354cc6e19f705de1b) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - Docs corrections from the first production integration; new evaluate(), evidenceToReveal(), episodeClosed() and explain() filtering; default export condition.
+
 ## 0.1.1
 
 ### Patch Changes
