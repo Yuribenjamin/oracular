@@ -1,0 +1,51 @@
+name: Bug report
+description: Something behaves differently from what the docs say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The more of this you can fill in, the faster it gets fixed. The
+        state is plain JSON, so `serialize(state)` is often the best evidence.
+  - type: input
+    id: version
+    attributes:
+      label: oracular version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Browser and version, Node version, or React Native / Hermes version.
+      placeholder: "Node 22.16, Chrome 141, React Native 0.81 (Hermes)…"
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Minimal config and events
+      description: The smallest `createState` config and sequence of `observe` / `endEpisode` / `markRevealed` calls that shows the problem. Timestamps included.
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+      description: Output of `predict` / `shouldReveal` / `explain`, or the thrown error, verbatim.
+    validations:
+      required: true
+  - type: textarea
+    id: state
+    attributes:
+      label: Serialized state (optional)
+      description: "`serialize(state)` at the point of failure, if it is small enough and contains nothing private."
+      render: json

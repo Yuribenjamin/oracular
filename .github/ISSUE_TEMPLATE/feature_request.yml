@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a change to the engine, its API or the docs.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that oracular makes hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The change you have in mind. For API changes, sketch the signature; for model changes, the formula.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Including doing it in your own code on top of the current API.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This keeps the library pure, zero-dependency and free of I/O (no network, storage, DOM, timers or globals).
+          required: true
+        - label: This is not one of the items already on the roadmap (React hook, Vue composable, devtools panel, presets), or it says how it relates to one.

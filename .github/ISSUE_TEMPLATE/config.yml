@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/Yuribenjamin/oracular/discussions
+    about: Ask how to model something, share what you built, or discuss tuning. Issues are for bugs and concrete proposals.
+  - name: Security issue
+    url: https://github.com/Yuribenjamin/oracular/security/advisories/new
+    about: Report privately. See SECURITY.md.
