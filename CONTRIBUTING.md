@@ -35,7 +35,7 @@ src/            the library (zero runtime dependencies, no I/O of any kind)
   config.ts     validation and normalisation of config, events and options
   math.ts       decay, Beta mean/variance, Laplace smoothing, lift
   intent.ts     α/β bookkeeping; withContributions is the only place α and β are written
-  learning.ts   hit/miss records, base rate, learned and effective weights
+  learning.ts   hit/miss records, episode counts, learned and effective weights
   episode.ts    episode bookkeeping (seen signals, resolution, timeout)
   observe.ts    observe and endEpisode
   predict.ts    predict, shouldReveal, markRevealed

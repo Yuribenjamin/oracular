@@ -27,56 +27,61 @@ An outcome event that no episode preceded still counts toward the base rate. An 
 
 ## From hits and misses to a weight
 
-For a signal with initial weight `w₀`, `hits` and `misses`:
+For a signal with initial weight `w₀`, `hits` and `misses`, inside an intent that has seen `episodes` episodes of which `outcomes` ended with the outcome:
 
 ```
-n         = hits + misses
-q         = (hits + 1) / (n + 2)                        Laplace-smoothed hit rate
-b         = (outcomes + 1) / (episodes + 2)             Laplace-smoothed base rate
-lift      = (q − b) / (1 − b)   if q ≥ b
-          = (q − b) / b         otherwise                → in [−1, 1]
-learned   = gain × |w₀| × lift                          0 while n = 0
-effective = (k × w₀ + n × learned) / (k + n)            k = learning.priorEpisodes
+n         = hits + misses                                       episodes in which the signal was seen
+qWith     = (hits + 1) / (n + 2)                                outcome rate of those episodes
+qWithout  = (outcomes − hits + 1) / (episodes − n + 2)          outcome rate of the other episodes
+lift      = (qWith − qWithout) / (1 − qWithout)   if qWith ≥ qWithout
+          = (qWith − qWithout) / qWithout         otherwise      → in [−1, 1]
+learned   = gain × |w₀| × lift                                  0 while n = 0
+effective = (k × w₀ + n × learned) / (k + n)                    k = learning.priorEpisodes
 ```
 
-Two knobs, both under `config.learning`:
+Both rates are Laplace-smoothed (+1 / +2). Two knobs, both under `config.learning`:
 
 - **`gain`** (default 2) caps how far a perfectly predictive signal can grow: `learned` lives in [−gain·|w₀|, gain·|w₀|].
 - **`priorEpisodes`** (default 10) is how many completed episodes it takes for the user's history to weigh as much as your initial weight. The signal's strength (`w₀`) and your confidence in it (`k`) are deliberately separate things.
 
-## Why the base rate matters
+## Why the contrast matters
 
-`lift` compares the signal's hit rate with the intent's own base rate, not with 50%. For an outcome that happens in 3% of sessions, a signal followed by it 30% of the time is strong evidence; centered on 50% it would wrongly learn as negative. Conversely, a signal present in every session of a user who upgrades 70% of the time carries no information, and its weight correctly drifts toward zero.
+`lift` compares the outcome rate of the sessions in which the signal appeared with the outcome rate of the sessions in which it did not. That is the question a signal has to answer: does the outcome happen more often when you are present? For an outcome that happens in 3% of sessions, a signal followed by it 30% of the time is strong evidence; compared against 50% it would wrongly learn as negative, and compared against the overall base rate (which includes its own sessions) it would be judged partly against itself.
 
 ## Worked example
 
 Twenty sessions. In ten, signal `A` (weight 1) is seen and the outcome follows. In the other ten, signal `B` (weight 1) is seen and nothing follows.
 
 ```
-A: hits 10, misses 0     q_A = 11/12 = 0.917
-B: hits 0,  misses 10    q_B = 1/12  = 0.083
-base rate: 10 of 20      b   = 11/22 = 0.5
+A: hits 10, misses 0     qWith_A    = 11/12 = 0.917
+   other 10 sessions, 0 outcomes      qWithout_A = 1/12  = 0.083
+B: hits 0,  misses 10    qWith_B    = 1/12  = 0.083
+   other 10 sessions, 10 outcomes     qWithout_B = 11/12 = 0.917
 
-lift_A = (0.917 − 0.5) / 0.5 = +0.833    learned_A = 2 × 1 × 0.833 = +1.67
-lift_B = (0.083 − 0.5) / 0.5 = −0.833    learned_B = −1.67
+lift_A = (0.917 − 0.083) / (1 − 0.083) = +0.909    learned_A = 2 × 1 × 0.909 = +1.82
+lift_B = (0.083 − 0.917) / 0.917       = −0.909    learned_B = −1.82
 
-effective_A = (10 × 1 + 10 × 1.67) / 20 = +1.33
-effective_B = (10 × 1 − 10 × 1.67) / 20 = −0.33
+effective_A = (10 × 1 + 10 × 1.82) / 20 = +1.41
+effective_B = (10 × 1 − 10 × 1.82) / 20 = −0.41
 ```
 
-After twenty sessions, `A` counts a third more than you said and `B` has flipped to weak evidence *against*. With `priorEpisodes: 2` the same history gives `A` 1.56; with `50` it gives 1.11. These numbers are pinned by the test suite.
+After twenty sessions, `A` counts 41% more than you said and `B` has flipped to evidence *against*. With `priorEpisodes: 2` the same history gives `A` 1.68; with `50` it gives 1.14. These numbers are pinned by the test suite.
 
 ## Early-episode learning
 
-The first confirmed episode does not raise a signal's weight; it lowers it slightly, and it is worth understanding why. After one episode in which `A` was seen and the outcome followed, `A` has one hit and no misses, so its smoothed hit rate is `q = (1 + 1) / (1 + 2) = 2/3`. The intent has one episode with the outcome and none without, so its smoothed base rate is also `b = 2/3`. The two are equal, `lift` is 0, `learned` is 0, and the blend becomes
+The first confirmed episode moves a signal's weight slightly, and it is worth understanding why. After one episode in which `A` was seen and the outcome followed, `A` has one hit and no misses, so `qWith = (1 + 1) / (1 + 2) = 2/3`. There are no other episodes yet, so `qWithout` is the smoothed rate of an empty set, `1/2`. The lift is `(2/3 − 1/2) / (1/2) = 1/3`, `learned` is `2/3 × w₀`, and the blend becomes
 
 ```
-effective = (k × w₀ + 1 × 0) / (k + 1) = w₀ × k / (k + 1)
+effective = (k × w₀ + 1 × 2/3 × w₀) / (k + 1) = w₀ × (k + 2/3) / (k + 1)
 ```
 
-With `priorEpisodes` at its default of 10 that is 0.91 × w₀; with 5 it is 0.83 × w₀; with 20 it is 0.95 × w₀. The dip is small, it is governed entirely by `priorEpisodes`, and it disappears as soon as there are episodes *without* the signal to compare against: after one confirmed episode and five sessions where `A` was not seen and nothing happened, `A` sits above its initial weight (`b` drops to 2/8, `lift` turns positive).
+With `priorEpisodes` at its default of 10 that is 0.97 × w₀; with 5 it is 0.94 × w₀; with 20 it is 0.98 × w₀. A small dip, governed by `priorEpisodes`, that turns into a rise as soon as there are sessions without the signal where the outcome did not happen: after one confirmed episode and five such sessions, `A` sits above its initial weight.
 
-The underlying reason is that the base rate includes the episodes the signal appeared in, so with very little data the signal is compared partly against itself. **Version 0.2.0 changes the contrast:** a signal's hit rate will be compared against the outcome rate of episodes in which it was *not* seen. The description above is the current (0.1.x) behaviour, and the [Tuning guide](/guide/tuning#learning-priorepisodes-and-learning-gain) shows how to pick `priorEpisodes` with it in mind.
+The dip exists because one observation cannot clear the Laplace smoothing on its own: with a single hit the lift is 1/3, and the blend treats a learned weight below `w₀` as a reason to shrink. A confirmed first episode never pushes a weight below `(k + 2/3) / (k + 1)` of its initial value.
+
+## Signals present in every episode
+
+A signal that appears in every session of an intent has no sessions without it to be compared against. `qWithout` is then the smoothed rate of an empty set, `1/2`, and the signal is judged against 50% rather than against this user's actual behaviour: for an intent whose outcome happens in most sessions it reads as positive, for a rare outcome as negative, in both cases without having told you anything. Keep this in mind for signals like `app.opened` that fire in every session; give them a small weight, or none, and let the discriminating signals carry the intent.
 
 ## Forgetting
 

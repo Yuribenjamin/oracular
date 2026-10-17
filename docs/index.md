@@ -27,7 +27,7 @@ features:
     details: There is no I/O in the library. No network, storage, DOM, timers or globals. Nothing can leave the device because nothing in the code could send it.
   - icon: 🧠
     title: Learns on-device
-    details: Your weights are priors. Each user's own outcomes correct them, centered on that user's base rate, right where the data lives.
+    details: Your weights are priors. Each user's own outcomes correct them, judging every signal against the sessions where it did not appear, right where the data lives.
   - icon: 🔍
     title: Explainable
     details: Every prediction comes with per-signal contributions and impact on p, so you can see exactly why something fired and tune it with numbers, not guesses.

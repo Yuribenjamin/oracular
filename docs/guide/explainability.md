@@ -10,9 +10,9 @@ After ten sessions in which `pricing.viewed` led to an upgrade six times out of 
 
 ```ts
 [
-  { signal: 'pricing.viewed', contribution: 2.58, impact: 0.14, initialWeight: 3, learnedWeight: 2, effectiveWeight: 2.59, hits: 6, misses: 1 },
-  { signal: 'limit.hit',      contribution: 2,    impact: 0.10, initialWeight: 2, learnedWeight: 0, effectiveWeight: 2,    hits: 0, misses: 0 },
-  { signal: 'export.clicked', contribution: 0,    impact: 0,    initialWeight: 1, learnedWeight: 0, effectiveWeight: 0.5,  hits: 7, misses: 3 },
+  { signal: 'pricing.viewed', contribution: 3.31, impact: 0.17, initialWeight: 3, learnedWeight: 3.78, effectiveWeight: 3.32, hits: 6, misses: 1 },
+  { signal: 'limit.hit',      contribution: 2,    impact: 0.09, initialWeight: 2, learnedWeight: 0,    effectiveWeight: 2,    hits: 0, misses: 0 },
+  { signal: 'export.clicked', contribution: 0,    impact: 0,    initialWeight: 1, learnedWeight: 0.67, effectiveWeight: 0.83, hits: 7, misses: 3 },
 ]
 ```
 
@@ -44,8 +44,8 @@ const { prediction, reveal, explanation } = evaluate(state, 'upgrade', Date.now(
 ## Reading the example
 
 - `limit.hit` has no history, so `learnedWeight` is 0 and `effectiveWeight` is exactly the initial 2.
-- `export.clicked` was followed by an upgrade exactly as often as any session was (7 of 10 is also the base rate), so the history says it carries no information. Its learned weight is 0 and the blend is pulling the effective weight toward 0: `(10 × 1 + 10 × 0) / 20 = 0.5`.
-- `pricing.viewed` beat the base rate, so it learned a positive weight. The blend is still just below the initial 3 only because your guess was higher than seven episodes can yet support.
+- `pricing.viewed` was followed by an upgrade in six of its seven sessions, while the three sessions without it saw one upgrade: `qWith = 7/9`, `qWithout = 2/5`, a lift of 0.63 and a learned weight of 3.78. Blended with your 3 over seven episodes, the effective weight is 3.32.
+- `export.clicked` appeared in every session, so there are no sessions without it to compare against. The comparison then falls back to an uninformative 50%, and its 7-of-10 rate reads as mildly positive (learned 0.67, effective 0.83). Always-present signals are the known weak spot of the contrast; see [Episodes & learning](/guide/concepts/episodes-and-learning#signals-present-in-every-episode).
 
 ## Why it adds up
 

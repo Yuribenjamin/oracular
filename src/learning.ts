@@ -33,8 +33,10 @@ export interface SignalWeights {
 
 /**
  * initial:   the developer's weight w0.
- * learned:   gain · |w0| · lift(q, b), where q is the signal's Laplace-smoothed hit rate and
- *            b the intent's Laplace-smoothed base rate (episodes ending with the outcome).
+ * learned:   gain · |w0| · lift(qWith, qWithout), where qWith is the Laplace-smoothed outcome
+ *            rate of episodes in which the signal was seen (hits / (hits + misses)) and
+ *            qWithout the Laplace-smoothed outcome rate of the intent's other episodes
+ *            (episodes without the signal). 0 until the signal has completed an episode.
  * effective: (k · w0 + n · learned) / (k + n), with k = learning.priorEpisodes and n = hits + misses.
  */
 export function signalWeights(
@@ -49,10 +51,15 @@ export function signalWeights(
   }
   const record = getOwn(state.learned, signal) ?? NONE;
   const n = record.hits + record.misses;
-  const q = laplace(record.hits, n);
-  const b = laplace(state.episodes.hits, state.episodes.hits + state.episodes.misses);
+  const qWith = laplace(record.hits, n);
+  // The contrast: episodes of this intent in which the signal was not seen. hits + misses counts
+  // the episodes it was seen in (one record per episode), so the rest is the complement.
+  const totalEpisodes = state.episodes.hits + state.episodes.misses;
+  const episodesWithout = Math.max(0, totalEpisodes - n);
+  const outcomesWithout = Math.min(episodesWithout, Math.max(0, state.episodes.hits - record.hits));
+  const qWithout = laplace(outcomesWithout, episodesWithout);
   // Nothing has been learned about a signal until it has been seen in a completed episode.
-  const learned = n === 0 ? 0 : learning.gain * Math.abs(initial) * lift(q, b);
+  const learned = n === 0 ? 0 : learning.gain * Math.abs(initial) * lift(qWith, qWithout);
   const k = learning.priorEpisodes;
   const effective = (k * initial + n * learned) / (k + n);
   return { initial, learned, effective, hits: record.hits, misses: record.misses };

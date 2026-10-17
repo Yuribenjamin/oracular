@@ -70,10 +70,14 @@ describe('learning', () => {
     expect(a.effective).toBeGreaterThan(a.initial);
     expect(b.effective).toBeLessThan(b.initial);
 
-    // Pin the formula: q_A = 11/12, q_B = 1/12, base rate 11/22, gain 2, priorEpisodes 10.
-    const base = 11 / 22;
-    const learnedA = 2 * ((11 / 12 - base) / (1 - base));
-    const learnedB = 2 * ((1 / 12 - base) / base);
+    // Pin the formula. A: seen in 10 episodes, all with the outcome → qWith = 11/12; the other
+    // 10 episodes had no outcome → qWithout = 1/12. B is the mirror image. gain 2, priorEpisodes 10.
+    const qWithA = 11 / 12;
+    const qWithoutA = 1 / 12;
+    const learnedA = 2 * ((qWithA - qWithoutA) / (1 - qWithoutA));
+    const qWithB = 1 / 12;
+    const qWithoutB = 11 / 12;
+    const learnedB = 2 * ((qWithB - qWithoutB) / qWithoutB);
     expect(a.learned).toBeCloseTo(learnedA, 12);
     expect(b.learned).toBeCloseTo(learnedB, 12);
     expect(a.effective).toBeCloseTo((10 * 1 + 10 * learnedA) / 20, 12);
@@ -103,15 +107,22 @@ describe('learning', () => {
     });
   });
 
-  it('is centered on the base rate: a signal present in every episode of a 90% intent learns nothing', () => {
+  it('a signal present in every episode converges toward zero weight', () => {
     let s = createState(buyConfig());
     for (let i = 0; i < 20; i++) s = episode(s, T + i * DAY, ['C'], i % 10 !== 9);
     const c = weights(s, 'C');
     expect(c).toMatchObject({ hits: 18, misses: 2 });
     expect(s.intents.buy!.episodes).toStrictEqual({ hits: 18, misses: 2 });
+    // Present everywhere, it carries no information about this intent: no lift, weight toward 0.
     expect(Math.abs(c.learned)).toBeLessThan(1e-12);
-    // No lift means the history says "no evidence", so the blend pulls the weight toward 0, never up.
     expect(c.effective).toBeCloseTo(1 / 3, 12);
+  });
+
+  it('after a single confirmed episode, the seen signal is at or above its initial weight', () => {
+    const s = episode(createState(buyConfig()), T, ['A'], true);
+    const a = weights(s, 'A');
+    expect(a).toMatchObject({ initial: 1, hits: 1, misses: 0 });
+    expect(a.effective).toBeGreaterThanOrEqual(a.initial);
   });
 
   it('a signal followed by the outcome only half the time still learns positive when the base rate is low', () => {
