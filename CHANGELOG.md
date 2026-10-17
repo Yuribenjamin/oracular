@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+### Patch Changes
+
+- [#10](https://github.com/Yuribenjamin/oracular/pull/10) [`04fb9aa`](https://github.com/Yuribenjamin/oracular/commit/04fb9aad298287fd280a28608f175290db691208) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - Fix the `exports` map: the `default` condition now points at the CommonJS build and stays last, so resolvers without an `import`/`require` condition (Jest's jsdom environment, some bundlers) get a file they can load. ESM-first resolvers still get the ESM build.
+
 ## 0.2.0
 
 ### Minor Changes
