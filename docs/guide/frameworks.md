@@ -5,7 +5,7 @@ oracular ships no framework code. These are **userland examples** of the same li
 1. **Load** with `deserialize(saved, { config })`, falling back to `createState(config)`. Passing the current config is what makes new weights apply and removed signals disappear; loading without it restores the old snapshot and runs your old weights.
 2. **Observe** events with a timestamp.
 3. **Persist** every time the state changes.
-4. **End the episode** when the session ends.
+4. **Let episodes end.** On the web, call `endEpisode` on `pagehide`. On mobile, do **not** end it when the app goes to the background: set `episodeTimeout` and flush the pending save instead (see React Native below).
 5. **Reveal** when `shouldReveal` is true, then `markRevealed`.
 
 The config is shared by all examples:
@@ -128,63 +128,104 @@ export function useIntent() {
 
 ## React Native
 
-`AsyncStorage` is asynchronous, so load before rendering gated UI, and end the episode when the app goes to the background with `AppState`.
+Three things differ from the web version, and all three come from a real integration:
+
+- **Do not end the episode on backgrounding.** A twenty-second app switch would split a session: the signals seen so far would get a miss, and the outcome a minute later would have nothing to credit. Set `episodeTimeout` (30 minutes here) and let idle gaps close episodes; on background, only flush the pending save.
+- **Queue events that arrive before the saved state has loaded.** `AsyncStorage` is asynchronous, and your first screens emit events immediately. Events observed before the load resolves are queued and applied once it has.
+- **Debounce the save.** Serialize on every change but write a couple of seconds later, and flush at once when the app leaves the foreground.
+
+The engine itself is plain ES2020 with no globals, so it runs unchanged on Hermes and through Metro, including Expo (verified with Expo SDK 57). No polyfills, no native module.
 
 ```tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import {
-  createState, deserialize, endEpisode, markRevealed, observe, serialize, shouldReveal,
-  type EngineState,
+  createState, deserialize, type EngineState, type IntentEvent, markRevealed, observe,
+  serialize, shouldReveal,
 } from 'oracular';
-import { config } from './intent-config';
+import { config } from './intent-config'; // must set episodeTimeout, e.g. 30 * 60 * 1000
 
 const KEY = 'oracular';
+const SAVE_DELAY = 2_000;
 
 export function useIntent() {
-  const [state, setState] = useState<EngineState | null>(null);
-  const ref = useRef<EngineState | null>(null);
-  ref.current = state;
+  const [, rerender] = useState(0);
+  const stateRef = useRef<EngineState | null>(null); // source of truth; React re-renders from it
+  const queue = useRef<IntentEvent[]>([]); // events seen before the load resolved
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const flush = useCallback(() => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    if (stateRef.current) void AsyncStorage.setItem(KEY, serialize(stateRef.current));
+  }, []);
+
+  const commit = useCallback((next: EngineState) => {
+    stateRef.current = next;
+    rerender((n) => n + 1);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, SAVE_DELAY); // debounced save
+  }, [flush]);
+
+  // Load with the config the app ships now, then drain the pre-load queue.
   useEffect(() => {
     let cancelled = false;
     AsyncStorage.getItem(KEY).then((saved) => {
       if (cancelled) return;
+      let s: EngineState;
       try {
-        setState(saved ? deserialize(saved, { config }) : createState(config));
+        s = saved ? deserialize(saved, { config }) : createState(config);
       } catch {
-        setState(createState(config));
+        s = createState(config); // corrupt or incompatible: start fresh
       }
+      for (const event of queue.current) s = observe(s, event);
+      queue.current = [];
+      commit(s);
     });
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [commit]);
 
-  useEffect(() => {
-    if (state) void AsyncStorage.setItem(KEY, serialize(state));
-  }, [state]);
-
+  // Background: flush the save. Do not endEpisode here; episodeTimeout closes idle sessions.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (next !== 'active' && ref.current) setState(endEpisode(ref.current, Date.now()));
+      if (next !== 'active') flush();
     });
     return () => sub.remove();
-  }, []);
+  }, [flush]);
 
-  function track(name: string) {
-    setState((s) => (s ? observe(s, { name, at: Date.now() }) : s));
-  }
-  function reveal(intent: string): boolean {
-    const s = ref.current;
-    const now = Date.now();
-    if (!s || !shouldReveal(s, intent, now)) return false;
-    setState(markRevealed(s, intent, now));
-    return true;
-  }
+  const track = useCallback(
+    (name: string) => {
+      const event: IntentEvent = { name, at: Date.now() };
+      if (!stateRef.current) {
+        queue.current.push(event);
+        return;
+      }
+      commit(observe(stateRef.current, event));
+    },
+    [commit],
+  );
 
-  return { ready: state !== null, track, reveal };
+  const reveal = useCallback(
+    (intent: string): boolean => {
+      const s = stateRef.current;
+      const now = Date.now();
+      if (!s || !shouldReveal(s, intent, now)) return false;
+      commit(markRevealed(s, intent, now));
+      return true;
+    },
+    [commit],
+  );
+
+  return { ready: stateRef.current !== null, track, reveal };
 }
 ```
+
+The outcome is an ordinary event: `track('ride.started')` with the name you put in `outcome`.
 
 ## Node
 

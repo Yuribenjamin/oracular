@@ -19,17 +19,19 @@ From the [Signals & weights](/guide/concepts/signals-and-weights) table: p cross
 
 ## Threshold and z together
 
-Number of `pricing.viewed` (+3) signals the quickstart config needs:
+Evidence the quickstart config needs, and how many `pricing.viewed` (+3) signals that is. The table is generated from [`evidenceToReveal`](/api/functions/evidenceToReveal) and checked by the test suite:
 
-| threshold | z    | signals |
-| --------- | ---- | ------- |
-| 0.3       | 1.28 | 3       |
-| 0.5       | 0    | 3       |
-| 0.5       | 1.28 | 6       |
-| 0.5       | 1.64 | 6       |
-| 0.5       | 2    | 7       |
-| 0.7       | 1.28 | 12      |
-| 0.9       | 1.28 | 41      |
+<!-- generated:threshold-z-table -->
+| threshold | z | evidence needed | signals of weight 3 |
+| --------- | ---- | --------------- | ------------------- |
+| 0.3 | 1.28 | 7.2 | 3 |
+| 0.5 | 0 | 9.0 | 3 |
+| 0.5 | 1.28 | 15.1 | 6 |
+| 0.5 | 1.64 | 17.0 | 6 |
+| 0.5 | 2 | 18.9 | 7 |
+| 0.7 | 1.28 | 33.1 | 12 |
+| 0.9 | 1.28 | 122.9 | 41 |
+<!-- /generated:threshold-z-table -->
 
 `z = 0` turns the confidence requirement off and fires on the mean alone. `z = 1.64` is a one-sided 95% bound, `z = 2.33` about 99%. Raising `threshold` is far more expensive than raising `z`, because evidence has to push p itself, not just tighten it.
 
@@ -52,6 +54,26 @@ shouldReveal(state, 'upgrade', now, { threshold: 0.8 }); // threshold 0.8, z 1.6
 ## Cooldowns
 
 After you call [`markRevealed`](/api/functions/markRevealed), and after the intent's outcome event, a cooldown runs for `cooldown` (default: the intent's `halfLife`) during which `shouldReveal` is false regardless of the evidence. [`predict`](/api/functions/predict) reports `revealed` (inside a reveal cooldown) and `suppressedUntil` (when the later of the running cooldowns ends, or null). Details on [Outcomes & cooldowns](/guide/concepts/outcomes-and-cooldowns).
+
+## The full shape
+
+Everything `predict` returns, so you can see where `lower` and the cooldown fields sit:
+
+```ts
+interface Prediction {
+  intent: string;
+  p: number;                        // α / (α + β)
+  sd: number;                       // Beta standard deviation
+  lower: number;                    // p − z·sd, clamped to [0, 1]; what shouldReveal tests
+  confidence: number;               // 1 − 2·sd, clamped to [0, 1]; a heuristic
+  evidence: number;                 // α + β, prior strength included
+  revealed: boolean;                // inside the cooldown after markRevealed
+  revealedAt: number | null;
+  suppressedUntil: number | null;   // end of the later running cooldown, or null
+}
+```
+
+[`evaluate`](/api/functions/evaluate) returns this as `prediction`, together with the `reveal` boolean and the `explanation` rows, from one decay pass.
 
 ## `confidence`
 

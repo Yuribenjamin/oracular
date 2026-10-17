@@ -33,14 +33,16 @@ They become the initial parameters:
 
 `prior` is where p sits with no evidence, and where it returns when evidence decays. A good first value is the fraction of users (or sessions) that actually do the thing: if 5% of sessions end in an upgrade, start at 0.05.
 
-`priorStrength` is how much evidence it takes to move p. It is measured in the same pseudo-count units as signal weights, so with `priorStrength: 10` and a signal of weight 3, one signal is worth 3/10 of the prior. The table shows how many identical `pricing.viewed` (+3) signals in quick succession it takes for the quickstart config to fire at the default threshold:
+`priorStrength` is how much evidence it takes to move p. It is measured in the same pseudo-count units as signal weights, so with `priorStrength: 10` and a signal of weight 3, one signal is worth 3/10 of the prior. The table shows the evidence the quickstart config needs to fire at the default gate, and how many identical signals in quick succession that is. It is generated from [`evidenceToReveal`](/api/functions/evidenceToReveal) and checked by the test suite:
 
-| priorStrength | signals of weight 3 | of weight 2 | of weight 1 |
-| ------------- | ------------------- | ----------- | ----------- |
-| 5             | 3                   | 5           | 9           |
-| 10            | 6                   | 8           | 16          |
-| 20            | 9                   | 14          | 27          |
-| 50            | 20                  | 30          | 59          |
+<!-- generated:priorStrength-table -->
+| priorStrength | evidence needed | weight 3 | weight 2 | weight 1 |
+| ------------- | --------------- | -------- | -------- | -------- |
+| 5 | 8.9 | 3 | 5 | 9 |
+| 10 | 15.1 | 6 | 8 | 16 |
+| 20 | 26.5 | 9 | 14 | 27 |
+| 50 | 58.2 | 20 | 30 | 59 |
+<!-- /generated:priorStrength-table -->
 
 A weak prior (small `priorStrength`) lets a few signals swing p; a strong one demands a lot of evidence. See the [Tuning guide](/guide/tuning) for how to choose.
 

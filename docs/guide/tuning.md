@@ -25,16 +25,24 @@ Where p starts and where it returns. Use the observed base rate. Too high and th
 
 ## `priorStrength`
 
-How much evidence it takes to move p, in the same pseudo-count units as weights. Signals of a given weight, fired together, needed to clear the default gate:
+How much evidence it takes to move p, in the same pseudo-count units as weights. The evidence the quickstart config needs to clear the default gate, and how many signals of a given weight, fired together, that is. Generated from [`evidenceToReveal`](/api/functions/evidenceToReveal) and checked by the test suite, so the table and the library cannot disagree:
 
-| priorStrength | weight 3 | weight 2 | weight 1 |
-| ------------- | -------- | -------- | -------- |
-| 5             | 3        | 5        | 9        |
-| 10            | 6        | 8        | 16       |
-| 20            | 9        | 14       | 27       |
-| 50            | 20       | 30       | 59       |
+<!-- generated:priorStrength-table -->
+| priorStrength | evidence needed | weight 3 | weight 2 | weight 1 |
+| ------------- | --------------- | -------- | -------- | -------- |
+| 5 | 8.9 | 3 | 5 | 9 |
+| 10 | 15.1 | 6 | 8 | 16 |
+| 20 | 26.5 | 9 | 14 | 27 |
+| 50 | 58.2 | 20 | 30 | 59 |
+<!-- /generated:priorStrength-table -->
 
-Rule of thumb: `priorStrength` is roughly the amount of weight a session must accumulate to fire at threshold 0.5 with the default `z`, times about two. If a ready session is worth 10 to 12 pseudo-counts, `priorStrength: 5` fires on it and `priorStrength: 20` does not.
+Rule of thumb for the default gate (threshold 0.5, z 1.28):
+
+```
+evidence needed ≈ (1 − 2·prior) × priorStrength + 1.9 × √priorStrength
+```
+
+The first term is what it takes to pull p to 0.5 (α must catch up with β); the second is the confidence margin, which grows only with the square root of the strength. For the quickstart (prior 0.05): priorStrength 5 → about 9, 10 → about 15, 20 → about 26, 50 → about 58. Read it the other way to choose: if a convincing session is worth 10 to 12 pseudo-counts, `priorStrength: 5` fires on it (needs 8.9) and `priorStrength: 10` does not (needs 15.1). For an exact number with your own threshold and z, call `evidenceToReveal(intentConfig)`.
 
 ## `halfLife`
 
@@ -67,17 +75,19 @@ Remember that your weights are **priors** for the learner. After `priorEpisodes`
 
 ## `threshold` and `z`
 
-`threshold` is the probability you need; `z` is how sure you need to be of it. Signals of weight 3 needed:
+`threshold` is the probability you need; `z` is how sure you need to be of it. For the quickstart config, the evidence each gate needs and how many signals of weight 3 that is (generated, like the table above):
 
-| threshold | z    | signals |
-| --------- | ---- | ------- |
-| 0.3       | 1.28 | 3       |
-| 0.5       | 0    | 3       |
-| 0.5       | 1.28 | 6       |
-| 0.5       | 1.64 | 6       |
-| 0.5       | 2    | 7       |
-| 0.7       | 1.28 | 12      |
-| 0.9       | 1.28 | 41      |
+<!-- generated:threshold-z-table -->
+| threshold | z | evidence needed | signals of weight 3 |
+| --------- | ---- | --------------- | ------------------- |
+| 0.3 | 1.28 | 7.2 | 3 |
+| 0.5 | 0 | 9.0 | 3 |
+| 0.5 | 1.28 | 15.1 | 6 |
+| 0.5 | 1.64 | 17.0 | 6 |
+| 0.5 | 2 | 18.9 | 7 |
+| 0.7 | 1.28 | 33.1 | 12 |
+| 0.9 | 1.28 | 122.9 | 41 |
+<!-- /generated:threshold-z-table -->
 
 Prefer a moderate `threshold` with the default `z` over a high threshold: raising the threshold is expensive, tightening the bound is cheap. For actions with a real cost to the user (an interruption, a discount), raise `z` to 1.64 or 2 first.
 
@@ -93,6 +103,8 @@ The idle gap that ends a session on its own. 30 minutes is the usual web convent
 
 `priorEpisodes` (default 10): completed episodes needed before the user's history weighs as much as your initial weight. Lower it for apps with many short sessions where you trust the data more than your guess; raise it when outcomes are rare and noisy.
 
+It also sets the size of the early-episode dip described on [Episodes & learning](/guide/concepts/episodes-and-learning#early-episode-learning): after the first confirmed episode a signal sits at `k / (k + 1)` of its initial weight (0.91× at 10, 0.83× at 5, 0.95× at 20) until there are sessions without it to compare against. If the first few sessions of a new user matter to you, keep `priorEpisodes` at 10 or above.
+
 `gain` (default 2): the most a signal can grow (or flip) relative to your weight. 1 means history can only shrink or flip within your scale; 3 lets a signal you underrated become a strong one.
 
 With the default values, a signal that always precedes the outcome ends twenty sessions at 1.33× its initial weight, and one that never does ends at −0.33×. The derivation is on [Episodes & learning](/guide/concepts/episodes-and-learning).
@@ -100,6 +112,50 @@ With the default values, a signal that always precedes the outcome ends twenty s
 ## `learning.halfLife`
 
 Off by default: history is permanent. Set to months if the user's habits change and old hits should stop counting.
+
+## Two worked examples
+
+### Days: the upgrade offer
+
+The quickstart config. Evidence needed: 15.1 pseudo-counts. Six `pricing.viewed` at once fire it; one a day fires on the seventh; one every three days never does, because a one-week half-life removes evidence about as fast as that pace adds it. The outcome `upgrade.completed` resets the slate and pauses offers for the cooldown, a week by default. Everything on this page so far is this example.
+
+### Hours: about to ride
+
+A transit app wants to surface the ticket wallet or the live platform view when a rider is about to board. The behaviour builds over minutes and is stale by lunchtime, so every duration is hours:
+
+```ts
+ride: {
+  prior: 0.1,
+  priorStrength: 8,
+  halfLife: 3 * HOUR,
+  signals: {
+    'app.opened': 1,
+    'departures.viewed': 2,
+    'route.planned': 3,
+    'ticket.bought': 4,
+    'trip.cancelled': -3,
+  },
+  outcome: 'ride.started',
+  reveal: { cooldown: 4 * HOUR },
+}
+// with config.episodeTimeout: 30 * MINUTE
+```
+
+`evidenceToReveal(ride)` is 11.7. A typical morning:
+
+| time  | event              | p     | lower | fires |
+| ----- | ------------------ | ----- | ----- | ----- |
+| 07:00 | app.opened         | 0.200 | 0.038 | no    |
+| 07:02 | departures.viewed  | 0.345 | 0.169 | no    |
+| 07:03 | route.planned      | 0.485 | 0.320 | no    |
+| 07:06 | ticket.bought      | 0.598 | 0.454 | no    |
+| 07:08 | departures.viewed  | 0.640 | 0.506 | yes   |
+
+Ten pseudo-counts put p at 0.6 but leave the lower bound under 0.5; the second look at departures (+2, total 12) opens the gate. Then the clock does its work: with a three-hour half-life, the same state read at 10:06 is back to p 0.44, and at 19:06 to 0.31. The evening commute has to earn its own reveal, which is what you want.
+
+When `ride.started` arrives at 07:16 (an ordinary `observe` call with that name), the evidence resets to the prior (p 0.1), the seen signals get their hit, and `suppressedUntil` is set to 11:16: the four-hour cooldown keeps the wallet from popping up again on the way to the office. A 30-minute `episodeTimeout` means the morning and evening trips are separate episodes, so an evening with no ride gives the evening's signals a miss rather than crediting them to the morning.
+
+The pattern to copy: half-life at the horizon over which the behaviour builds, cooldown a bit longer than the behaviour's own cycle, episode timeout at the natural session gap. Then check with `evidenceToReveal` that a typical ready sequence clears it and a casual one does not.
 
 ## Try it
 
