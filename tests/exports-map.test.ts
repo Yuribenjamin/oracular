@@ -52,14 +52,25 @@ describe('package.json exports', () => {
   it('is shipped with the same key order: npm pack does not reorder it', () => {
     const dir = mkdtempSync(join(tmpdir(), 'oracular-pack-'));
     try {
-      const out = execFileSync('npm', ['pack', '--silent', '--pack-destination', dir], {
+      // This test may itself run inside `npm publish` (prepublishOnly → check). npm passes its own
+      // flags to child processes as npm_config_* variables, so a nested `npm pack` would inherit
+      // e.g. --json from the publish. Scrub them and ask for JSON output explicitly.
+      const env: NodeJS.ProcessEnv = {};
+      for (const [key, value] of Object.entries(process.env)) {
+        if (!/^npm_config_/i.test(key) && !/^npm_package_/i.test(key)) env[key] = value;
+      }
+      const out = execFileSync('npm', ['pack', '--json', '--pack-destination', dir], {
         cwd: root,
+        env,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
-      const tarball = join(dir, out.split('\n').pop() ?? '');
+      });
+      const [packed] = JSON.parse(out) as Array<{ filename: string }>;
+      expect(packed?.filename).toMatch(/^oracular-.*\.tgz$/);
       const shipped = JSON.parse(
-        execFileSync('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' }),
+        execFileSync('tar', ['-xOf', join(dir, packed!.filename), 'package/package.json'], {
+          encoding: 'utf8',
+        }),
       );
       expect(JSON.stringify(shipped.exports)).toBe(JSON.stringify(pkg.exports));
     } finally {
