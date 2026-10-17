@@ -5,7 +5,33 @@ import type { EngineConfig, EngineState, IntentConfig, IntentState } from './typ
 import { getOwn, isRecord } from './util';
 import { STATE_VERSION } from './version';
 
-/** Builds a fresh state: every intent starts at its prior, no episode is open. */
+/**
+ * Builds a fresh engine state from a config. Every intent starts at its prior and no episode is
+ * open. The config is validated and a normalized copy is stored inside the state, so a persisted
+ * state remembers the weights it was built with; pass your current config to {@link deserialize}
+ * when loading.
+ *
+ * @param config - Intents with their priors and signals, plus engine-wide options. Validated
+ *   strictly: unknown keys, non-finite numbers and out-of-range values throw.
+ * @returns A new, JSON-serializable state. `config` is not mutated.
+ * @throws {TypeError} When a value has the wrong type or a key is not recognised.
+ * @throws {RangeError} When a number is out of range, for example a `prior` outside (0, 1) or a
+ *   signal weight of 0.
+ * @example
+ * ```ts
+ * const state = createState({
+ *   intents: {
+ *     upgrade: {
+ *       prior: 0.05,
+ *       priorStrength: 10,
+ *       halfLife: 7 * 24 * 60 * 60 * 1000,
+ *       signals: { 'pricing.viewed': 3, 'limit.hit': 2, 'plan.downgraded': -4 },
+ *       outcome: 'upgrade.completed',
+ *     },
+ *   },
+ * });
+ * ```
+ */
 export function createState(config: EngineConfig): EngineState {
   const normalized = normalizeConfig(config);
   const intents: Record<string, IntentState> = {};

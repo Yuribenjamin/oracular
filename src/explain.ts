@@ -8,8 +8,24 @@ import { getOwn } from './util';
 
 /**
  * Why the intent's p is what it is at time `at`: one entry per declared signal, the ones that
- * matter most first. `contribution` is the signed pseudo-count the signal currently holds,
- * `impact` is how much p would drop (or rise) if that contribution were removed.
+ * matter most first. `contribution` is the signed pseudo-count the signal currently holds after
+ * decay, `impact` is how much p would change if that contribution were removed, and the three
+ * weights show what the developer said, what this user's history says, and what the next
+ * occurrence will actually add. Read-only.
+ *
+ * @param state - The current state. Not mutated.
+ * @param intent - Name of an intent declared in the config.
+ * @param at - The time to evaluate at; contributions and learned counts are decayed to it.
+ * @returns One {@link SignalExplanation} per declared signal, sorted by |impact| descending,
+ *   then by name. Empty for an intent that declares no signals.
+ * @throws {RangeError} When `intent` is not declared in the config.
+ * @throws {TypeError} When `state` is not an engine state or `at` is not finite.
+ * @example
+ * ```ts
+ * for (const row of explain(state, 'upgrade', Date.now())) {
+ *   console.log(row.signal, row.impact.toFixed(2), row.effectiveWeight.toFixed(2));
+ * }
+ * ```
  */
 export function explain(state: EngineState, intent: string, at: number): SignalExplanation[] {
   const s = requireState(state);

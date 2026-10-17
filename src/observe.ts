@@ -20,9 +20,23 @@ import { hasOwn } from './util';
  * signal's effective weight to α (positive) or β (negative) and remember the signal for this
  * episode. For every intent the event is the outcome of: give the remembered signals a hit,
  * count the episode toward the base rate, record `lastOutcomeAt`, and (by default) reset the
- * evidence to the prior.
- * Any event opens or extends the current episode; an idle gap longer than
- * `config.episodeTimeout` closes the previous episode first.
+ * evidence to the prior. Any event opens or extends the current episode; an idle gap longer
+ * than `config.episodeTimeout` closes the previous episode first.
+ *
+ * @param state - The current state. Not mutated.
+ * @param event - `name` is matched against every intent's signals and outcome; `at` is the
+ *   event's timestamp, in the same unit as your durations; `props` are accepted and ignored,
+ *   and never stored.
+ * @returns The next state. Intents the event does not touch keep their stored numbers; their
+ *   decay is applied when they are next read or updated.
+ * @throws {TypeError} When `state` is not an engine state, or the event has no non-empty
+ *   `name`, no finite `at`, or a `props` that is not a plain object.
+ * @example
+ * ```ts
+ * let state = createState(config);
+ * state = observe(state, { name: 'pricing.viewed', at: Date.now() });
+ * state = observe(state, { name: 'upgrade.completed', at: Date.now() }); // outcome
+ * ```
  */
 export function observe(state: EngineState, event: IntentEvent): EngineState {
   let s = requireState(state);
@@ -66,8 +80,22 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
 
 /**
  * Ends the current episode at `at`. Every intent whose outcome did not arrive gives a miss to
- * each signal seen this episode and counts the episode toward its base rate. Returns the same
- * state when no episode is open.
+ * each signal seen this episode and counts the episode toward its base rate. Call it when a
+ * session ends: tab closed, app backgrounded, user signed out.
+ *
+ * @param state - The current state. Not mutated.
+ * @param at - When the episode ended. If it had already timed out under
+ *   `config.episodeTimeout`, it is closed at the moment it timed out instead.
+ * @returns The next state with no open episode, or the very same state object when no episode
+ *   was open.
+ * @throws {TypeError} When `state` is not an engine state or `at` is not a finite number.
+ * @example
+ * ```ts
+ * window.addEventListener('pagehide', () => {
+ *   state = endEpisode(state, Date.now());
+ *   localStorage.setItem('oracular', serialize(state));
+ * });
+ * ```
  */
 export function endEpisode(state: EngineState, at: number): EngineState {
   const s = requireState(state);

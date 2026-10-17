@@ -14,18 +14,45 @@ import type {
 import { getOwn, hasOwn, isRecord } from './util';
 import { STATE_VERSION } from './version';
 
-/** The state as JSON. The state is plain data, so this is `JSON.stringify`. */
+/**
+ * The state as a JSON string, for the host app to persist wherever it likes. The state is plain
+ * data, so this is `JSON.stringify` after a shape check. The output never contains event props.
+ *
+ * @param state - The state to persist.
+ * @returns A JSON string that {@link deserialize} restores losslessly.
+ * @throws {TypeError} When `state` is not an engine state.
+ * @example
+ * ```ts
+ * localStorage.setItem('oracular', serialize(state));
+ * ```
+ */
 export function serialize(state: EngineState): string {
   return JSON.stringify(requireState(state));
 }
 
 /**
- * Restores a state saved with `serialize`.
+ * Restores a state saved with {@link serialize}.
  *
- * Pass the app's current `config`: it is validated and replaces the stored snapshot, intents
- * and signals no longer declared are dropped (α and β are recomputed from the kept
+ * Always pass the app's current `config`: it is validated and replaces the stored snapshot,
+ * intents and signals no longer declared are dropped (α and β are recomputed from the kept
  * contributions), and newly declared intents start at their prior. Pass `migrate` to upgrade a
  * state saved by an older version of this library.
+ *
+ * @param json - A string produced by {@link serialize}.
+ * @param opts - `config`: the app's current config. `migrate`: called as
+ *   `migrate(stored, version)` when the stored version differs from {@link STATE_VERSION};
+ *   it must return a state of the current version.
+ * @returns A validated state that satisfies the engine's invariants.
+ * @throws {SyntaxError} When `json` is not valid JSON.
+ * @throws {TypeError} When the stored data, the result of `migrate`, `opts` or `opts.config`
+ *   has the wrong shape.
+ * @throws {RangeError} When the stored version differs and no `migrate` is given, when
+ *   `migrate` does not return the current version, or when a stored number is out of range.
+ * @example
+ * ```ts
+ * const saved = localStorage.getItem('oracular');
+ * let state = saved ? deserialize(saved, { config }) : createState(config);
+ * ```
  */
 export function deserialize(json: string, opts: DeserializeOptions = {}): EngineState {
   if (typeof json !== 'string') throw new TypeError('oracular: deserialize expects a JSON string');

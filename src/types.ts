@@ -1,4 +1,12 @@
-/** Options that decide when `shouldReveal` fires. Resolved per call → intent → engine → defaults. */
+/**
+ * Options that decide when `shouldReveal` fires and how long cooldowns last. Resolved per call →
+ * intent → engine → defaults.
+ *
+ * @example
+ * ```ts
+ * shouldReveal(state, 'upgrade', Date.now(), { threshold: 0.7, z: 1.64 });
+ * ```
+ */
 export interface RevealOptions {
   /** Probability the intent must reach, in [0, 1]. Default 0.5. */
   threshold?: number;
@@ -8,7 +16,17 @@ export interface RevealOptions {
   cooldown?: number;
 }
 
-/** How the engine learns from the user's own outcomes. */
+/**
+ * How the engine learns from the user's own outcomes.
+ *
+ * @example
+ * ```ts
+ * const config = {
+ *   intents,
+ *   learning: { priorEpisodes: 5, gain: 1.5, halfLife: 90 * 24 * 60 * 60 * 1000 },
+ * };
+ * ```
+ */
 export interface LearningConfig {
   /** Half-life of learned hit/miss counts, in the same unit as `at`. Omit for no forgetting. */
   halfLife?: number;
@@ -18,7 +36,22 @@ export interface LearningConfig {
   priorEpisodes?: number;
 }
 
-/** One thing the user might be about to do. */
+/**
+ * One thing the user might be about to do, tracked as a Beta(α, β) distribution with
+ * α₀ = prior × priorStrength and β₀ = (1 − prior) × priorStrength.
+ *
+ * @example
+ * ```ts
+ * const churn: IntentConfig = {
+ *   prior: 0.08,
+ *   priorStrength: 20,
+ *   halfLife: 14 * 24 * 60 * 60 * 1000,
+ *   signals: { 'session.short': 1, 'notifications.disabled': 3, 'feature.new.used': -2 },
+ *   outcome: 'account.cancelled',
+ *   reveal: { threshold: 0.5, z: 1.64 },
+ * };
+ * ```
+ */
 export interface IntentConfig {
   /** Prior probability, strictly between 0 and 1. */
   prior: number;
@@ -36,6 +69,19 @@ export interface IntentConfig {
   reveal?: RevealOptions;
 }
 
+/**
+ * Everything `createState` needs. A normalized copy is stored in the state; pass the current
+ * config to `deserialize` on load.
+ *
+ * @example
+ * ```ts
+ * const config: EngineConfig = {
+ *   episodeTimeout: 30 * 60 * 1000,
+ *   intents: { upgrade, churn },
+ *   reveal: { z: 1.28 },
+ * };
+ * ```
+ */
 export interface EngineConfig {
   intents: Record<string, IntentConfig>;
   /** Idle gap after which the current episode ends on its own, in the same unit as `at`. Omit to end episodes only via `endEpisode`. */
@@ -59,6 +105,10 @@ export interface SignalRecord {
   misses: number;
 }
 
+/**
+ * Everything the engine knows about one intent for this user. Plain data; read it for debugging
+ * or dashboards, but change it only through the engine's functions.
+ */
 export interface IntentState {
   /** Beta α. Always equals prior α plus the sum of `contributions[*].alpha`. */
   alpha: number;
@@ -78,6 +128,7 @@ export interface IntentState {
   revealCount: number;
 }
 
+/** What one intent has seen in the current episode. */
 export interface EpisodeIntentRecord {
   /** Signals seen since the episode started (or since this intent's last outcome). */
   seen: string[];
@@ -85,13 +136,24 @@ export interface EpisodeIntentRecord {
   resolved: boolean;
 }
 
+/** The current episode (session). One episode is open at a time, shared by all intents. */
 export interface EpisodeState {
   startedAt: number | null;
   lastEventAt: number | null;
   intents: Record<string, EpisodeIntentRecord>;
 }
 
-/** Plain JSON. Persist it with `serialize`, restore it with `deserialize`. */
+/**
+ * The whole engine state: plain JSON with no functions, class instances or hidden fields.
+ * Persist it with `serialize`, restore it with `deserialize`.
+ *
+ * @example
+ * ```ts
+ * const state = createState(config);
+ * state.intents.upgrade.alpha; // 0.5 for prior 0.05 × priorStrength 10
+ * JSON.stringify(state) === serialize(state); // true
+ * ```
+ */
 export interface EngineState {
   version: typeof import('./version').STATE_VERSION;
   /** Snapshot of the config this state was built with. Pass your current config to `deserialize` on load. */
@@ -100,6 +162,15 @@ export interface EngineState {
   episode: EpisodeState;
 }
 
+/**
+ * What the app feeds to `observe`. Any event name is accepted; only names that appear in some
+ * intent's `signals` or as its `outcome` change evidence, every event extends the episode.
+ *
+ * @example
+ * ```ts
+ * observe(state, { name: 'pricing.viewed', at: Date.now(), props: { plan: 'pro' } });
+ * ```
+ */
 export interface IntentEvent {
   name: string;
   /** Timestamp. Every duration in the config uses the same unit (milliseconds recommended). */
@@ -108,6 +179,14 @@ export interface IntentEvent {
   props?: Record<string, unknown>;
 }
 
+/**
+ * What `predict` returns for one intent at one moment.
+ *
+ * @example
+ * ```ts
+ * const { p, lower, confidence, revealed, suppressedUntil } = predict(state, 'upgrade', now);
+ * ```
+ */
 export interface Prediction {
   intent: string;
   /** Mean of the Beta distribution: α / (α + β). */
@@ -131,6 +210,16 @@ export interface Prediction {
   suppressedUntil: number | null;
 }
 
+/**
+ * One row of `explain`: what a single signal is doing to an intent right now, and what has been
+ * learned about it.
+ *
+ * @example
+ * ```ts
+ * const [strongest] = explain(state, 'upgrade', now);
+ * strongest?.signal; // the signal with the largest |impact|
+ * ```
+ */
 export interface SignalExplanation {
   signal: string;
   /** Signed pseudo-counts this signal currently holds: positive in α, negative in β, after decay. */
@@ -147,9 +236,28 @@ export interface SignalExplanation {
   misses: number;
 }
 
-/** Turns a stored state of an older version into a current `EngineState`. */
+/**
+ * Turns a stored state of an older version into a current `EngineState`. Receives the parsed
+ * JSON as-is and the version it declares.
+ *
+ * @example
+ * ```ts
+ * const migrate: Migrate = (stored, version) => {
+ *   if (version === 0) return { ...(stored as object), version: 1 } as EngineState;
+ *   throw new Error(`unknown state version ${version}`);
+ * };
+ * ```
+ */
 export type Migrate = (stored: unknown, version: number) => EngineState;
 
+/**
+ * Options for `deserialize`.
+ *
+ * @example
+ * ```ts
+ * deserialize(saved, { config: currentConfig, migrate });
+ * ```
+ */
 export interface DeserializeOptions {
   /** The app's current config. Validated, swapped in, and used to prune signals and intents no longer declared. */
   config?: EngineConfig;
