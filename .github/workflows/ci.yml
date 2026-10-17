@@ -1,0 +1,54 @@
+name: oracular CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run smoke
+      - if: matrix.node == 22
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist
+
+  smoke:
+    name: Built output runs (Node ${{ matrix.node }})
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      # No npm install: the library has zero runtime dependencies, and the
+      # dev toolchain needs Node 22+. This proves the published output itself
+      # runs on Node 18 and 20, resolving 'oracular' through the exports map.
+      - run: npm run smoke
