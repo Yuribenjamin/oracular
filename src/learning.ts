@@ -51,7 +51,8 @@ export function signalWeights(
   const n = record.hits + record.misses;
   const q = laplace(record.hits, n);
   const b = laplace(state.episodes.hits, state.episodes.hits + state.episodes.misses);
-  const learned = learning.gain * Math.abs(initial) * lift(q, b);
+  // Nothing has been learned about a signal until it has been seen in a completed episode.
+  const learned = n === 0 ? 0 : learning.gain * Math.abs(initial) * lift(q, b);
   const k = learning.priorEpisodes;
   const effective = (k * initial + n * learned) / (k + n);
   return { initial, learned, effective, hits: record.hits, misses: record.misses };
