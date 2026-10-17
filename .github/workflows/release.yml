@@ -41,11 +41,27 @@ jobs:
 
       - run: npm ci
 
+      # The rehearsal below only makes sense when a publish would follow: npm refuses even a dry
+      # run of a version that is already on the registry ("cannot publish over"), which is the
+      # normal state of main between releases.
+      - name: Check whether this version is already on npm
+        id: registry
+        run: |
+          v=$(node -p "require('./package.json').version")
+          if npm view "oracular@$v" version >/dev/null 2>&1; then
+            echo "oracular@$v is already on npm: nothing will be published, rehearsal skipped"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "oracular@$v is not on npm yet: rehearsing the publish"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Rehearsal: runs prepublishOnly (npm run check) under the real publish environment, with
       # npm's own flags inherited by every nested npm call exactly as they are during the publish,
       # and prints the full output. A failure stops the job here with its cause in the log; inside
       # `changeset publish` the same failure would only read "command failed: npm run check".
       - name: Rehearse publish
+        if: steps.registry.outputs.published == 'false'
         run: npm publish --dry-run --json --access public --tag latest
         env:
           NPM_CONFIG_PROVENANCE: "true"
