@@ -77,10 +77,17 @@ function expectClosedUnit(value: unknown, path: string): number {
   return n;
 }
 
-function expectName(value: unknown, path: string): string {
+export function expectName(value: unknown, path: string): string {
   if (typeof value !== 'string' || value.length === 0)
     typeError(path, 'must be a non-empty string');
   return value;
+}
+
+/** Keys of user-named records must be usable as own properties of a plain object. */
+function expectKeyName(name: string, path: string): string {
+  if (name.length === 0) typeError(path, 'names must be non-empty strings');
+  if (name === '__proto__') typeError(path, 'must not use the reserved name "__proto__"');
+  return name;
 }
 
 /** Validates reveal options and returns a copy with only the defined keys. */
@@ -117,7 +124,7 @@ function normalizeIntent(value: unknown, path: string): IntentConfig {
   const signalsRecord = expectRecord(record.signals, `${path}.signals`);
   const signals: Record<string, number> = {};
   for (const [name, weight] of Object.entries(signalsRecord)) {
-    if (name.length === 0) typeError(`${path}.signals`, 'signal names must be non-empty strings');
+    expectKeyName(name, `${path}.signals`);
     const w = expectNumber(weight, `${path}.signals[${JSON.stringify(name)}]`);
     if (w === 0) {
       rangeError(
@@ -157,7 +164,7 @@ export function normalizeConfig(value: unknown): EngineConfig {
   if (names.length === 0) typeError('config.intents', 'must declare at least one intent');
   const intents: Record<string, IntentConfig> = {};
   for (const name of names) {
-    if (name.length === 0) typeError('config.intents', 'intent names must be non-empty strings');
+    expectKeyName(name, 'config.intents');
     intents[name] = normalizeIntent(intentsRecord[name], `config.intents[${JSON.stringify(name)}]`);
   }
   const out: EngineConfig = { intents };
@@ -210,6 +217,12 @@ export function expectTimestamp(value: unknown, path: string): number {
   return expectNumber(value, path);
 }
 
-export function expectIntentName(value: unknown): string {
-  return expectName(value, 'intent');
+export function validateEvent(event: unknown): { name: string; at: number } {
+  if (!isRecord(event)) typeError('event', 'must be an object like { name, at }');
+  const name = expectName(event.name, 'event.name');
+  const at = expectTimestamp(event.at, 'event.at');
+  if (event.props !== undefined && !isRecord(event.props)) {
+    typeError('event.props', 'must be a plain object when present');
+  }
+  return { name, at };
 }

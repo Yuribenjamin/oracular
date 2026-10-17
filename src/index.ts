@@ -1,3 +1,4 @@
+export { endEpisode, observe } from './observe';
 export { createState } from './state';
 export type {
   DeserializeOptions,

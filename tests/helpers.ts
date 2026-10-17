@@ -120,7 +120,34 @@ export function assertInvariants(state: EngineState): void {
   }
 
   // Plain JSON: no undefined, NaN, Infinity, functions or class instances anywhere.
-  expect(JSON.parse(JSON.stringify(state))).toStrictEqual(state);
+  assertPlainJson(state, 'state');
+}
+
+/**
+ * Checks that a value survives JSON.stringify/JSON.parse unchanged: finite numbers, strings,
+ * booleans, null, arrays, and plain objects with no undefined values. (A strict deep-equal
+ * round trip can't be used: a key named "constructor" shadows the type check in vitest.)
+ */
+export function assertPlainJson(value: unknown, path: string): void {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+  if (typeof value === 'number') {
+    expect(Number.isFinite(value), `${path} must be a finite number, got ${String(value)}`).toBe(
+      true,
+    );
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const [i, item] of value.entries()) assertPlainJson(item, `${path}[${i}]`);
+    return;
+  }
+  expect(typeof value, `${path} must be JSON-serializable`).toBe('object');
+  const proto = Object.getPrototypeOf(value);
+  expect(proto === Object.prototype || proto === null, `${path} must be a plain object`).toBe(true);
+  for (const key of Object.keys(value as object)) {
+    const item = (value as Record<string, unknown>)[key];
+    expect(item, `${path}.${key} must not be undefined`).not.toBeUndefined();
+    assertPlainJson(item, `${path}.${key}`);
+  }
 }
 
 /** A SaaS-style fixture used across the suite. Durations in ms. */

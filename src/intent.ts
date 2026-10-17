@@ -1,6 +1,6 @@
 import { decayFactor } from './math';
 import type { IntentConfig, IntentState, SignalContribution } from './types';
-import { mapRecord } from './util';
+import { getOwn, mapRecord } from './util';
 
 export function priorCounts(intent: IntentConfig): { alpha0: number; beta0: number } {
   return {
@@ -63,7 +63,7 @@ export function applySignal(
   signal: string,
   weight: number,
 ): IntentState {
-  const prev = state.contributions[signal] ?? { alpha: 0, beta: 0 };
+  const prev = getOwn(state.contributions, signal) ?? { alpha: 0, beta: 0 };
   const next: SignalContribution =
     weight >= 0
       ? { alpha: prev.alpha + weight, beta: prev.beta }

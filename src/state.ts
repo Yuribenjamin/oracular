@@ -2,7 +2,7 @@ import { normalizeConfig } from './config';
 import { emptyEpisode } from './episode';
 import { initIntent } from './intent';
 import type { EngineConfig, EngineState, IntentConfig, IntentState } from './types';
-import { isRecord } from './util';
+import { getOwn, isRecord } from './util';
 import { STATE_VERSION } from './version';
 
 /** Builds a fresh state: every intent starts at its prior, no episode is open. */
@@ -29,7 +29,7 @@ export function requireState(state: unknown): EngineState {
 }
 
 export function requireIntentConfig(state: EngineState, name: string): IntentConfig {
-  const intent = state.config.intents[name];
+  const intent = getOwn(state.config.intents, name);
   if (intent === undefined) {
     throw new RangeError(`oracular: unknown intent ${JSON.stringify(name)}`);
   }
@@ -42,5 +42,5 @@ export function getIntentState(
   name: string,
   intent: IntentConfig,
 ): IntentState {
-  return state.intents[name] ?? initIntent(intent);
+  return getOwn(state.intents, name) ?? initIntent(intent);
 }
