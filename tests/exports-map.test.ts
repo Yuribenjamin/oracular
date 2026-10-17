@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,22 +53,22 @@ describe('package.json exports', () => {
     const dir = mkdtempSync(join(tmpdir(), 'oracular-pack-'));
     try {
       // This test may itself run inside `npm publish` (prepublishOnly → check). npm passes its own
-      // flags to child processes as npm_config_* variables, so a nested `npm pack` would inherit
-      // e.g. --json from the publish. Scrub them and ask for JSON output explicitly.
+      // flags to child processes as npm_config_* variables, so scrub them from the nested call.
+      // npm's own output is not parsed at all (its --json shape differs between npm 10 and 12):
+      // the tarball is whatever .tgz landed in the destination directory.
       const env: NodeJS.ProcessEnv = {};
       for (const [key, value] of Object.entries(process.env)) {
         if (!/^npm_config_/i.test(key) && !/^npm_package_/i.test(key)) env[key] = value;
       }
-      const out = execFileSync('npm', ['pack', '--json', '--pack-destination', dir], {
+      execFileSync('npm', ['pack', '--pack-destination', dir], {
         cwd: root,
         env,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
+        stdio: 'ignore',
       });
-      const [packed] = JSON.parse(out) as Array<{ filename: string }>;
-      expect(packed?.filename).toMatch(/^oracular-.*\.tgz$/);
+      const tarball = readdirSync(dir).find((f) => f.endsWith('.tgz'));
+      expect(tarball, `npm pack wrote no tarball into ${dir}`).toMatch(/^oracular-.*\.tgz$/);
       const shipped = JSON.parse(
-        execFileSync('tar', ['-xOf', join(dir, packed!.filename), 'package/package.json'], {
+        execFileSync('tar', ['-xOf', join(dir, tarball!), 'package/package.json'], {
           encoding: 'utf8',
         }),
       );
