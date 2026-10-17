@@ -118,3 +118,26 @@ function closeEpisode(state: EngineState, at: number): EngineState {
   }
   return { ...state, intents, episode: emptyEpisode() };
 }
+
+/**
+ * Whether an episode closed between two states: `prev` had an open episode and `next` either
+ * has none or has a different one. Useful after `observe` or `endEpisode` to react to a
+ * session ending, for example to persist, or to read the misses it produced as
+ * `next.intents[x].episodes.misses - prev.intents[x].episodes.misses`.
+ *
+ * @param prev - The state before the operation.
+ * @param next - The state after it.
+ * @returns True when `prev.episode.startedAt` is not null and differs from
+ *   `next.episode.startedAt`.
+ * @throws `TypeError` when either argument is not an engine state.
+ * @example
+ * ```ts
+ * const next = observe(state, event);
+ * if (episodeClosed(state, next)) persist(next);
+ * ```
+ */
+export function episodeClosed(prev: EngineState, next: EngineState): boolean {
+  const a = requireState(prev);
+  const b = requireState(next);
+  return a.episode.startedAt !== null && b.episode.startedAt !== a.episode.startedAt;
+}

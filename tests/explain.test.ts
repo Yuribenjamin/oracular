@@ -125,4 +125,41 @@ describe('explain', () => {
     expect(() => explain(s, 'nope', T)).toThrow(RangeError);
     expect(() => explain(s, 'upgrade', Number.NaN)).toThrow(TypeError);
   });
+
+  describe('filters', () => {
+    it('nonZero keeps only signals that currently hold evidence', () => {
+      const rows = explain(withEvidence(), 'upgrade', T, { nonZero: true });
+      expect(rows.map((r) => r.signal).sort()).toStrictEqual([
+        'limit.hit',
+        'plan.downgraded',
+        'pricing.viewed',
+      ]);
+      expect(rows.every((r) => r.contribution !== 0)).toBe(true);
+      expect(rows).toStrictEqual(
+        explain(withEvidence(), 'upgrade', T).filter((r) => r.contribution !== 0),
+      );
+    });
+
+    it('limit takes the top rows of the sorted list, after nonZero', () => {
+      const all = explain(withEvidence(), 'upgrade', T);
+      expect(explain(withEvidence(), 'upgrade', T, { limit: 2 })).toStrictEqual(all.slice(0, 2));
+      expect(explain(withEvidence(), 'upgrade', T, { limit: 0 })).toStrictEqual([]);
+      expect(explain(withEvidence(), 'upgrade', T, { limit: 99 })).toStrictEqual(all);
+      expect(explain(withEvidence(), 'upgrade', T, { nonZero: true, limit: 1 })).toStrictEqual([
+        all[0],
+      ]);
+    });
+
+    it('defaults are unchanged and options are validated', () => {
+      expect(explain(withEvidence(), 'upgrade', T, {})).toStrictEqual(
+        explain(withEvidence(), 'upgrade', T),
+      );
+      expect(() => explain(withEvidence(), 'upgrade', T, { limit: -1 })).toThrow(RangeError);
+      expect(() => explain(withEvidence(), 'upgrade', T, { limit: 2.5 })).toThrow(RangeError);
+      // biome-ignore lint/suspicious/noExplicitAny: deliberately invalid input
+      expect(() => explain(withEvidence(), 'upgrade', T, { nonZero: 1 } as any)).toThrow(TypeError);
+      // biome-ignore lint/suspicious/noExplicitAny: deliberately invalid input
+      expect(() => explain(withEvidence(), 'upgrade', T, { top: 2 } as any)).toThrow(TypeError);
+    });
+  });
 });

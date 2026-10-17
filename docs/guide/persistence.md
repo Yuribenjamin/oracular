@@ -12,7 +12,7 @@ localStorage.setItem('oracular', serialize(state));
 
 [`serialize`](/api/functions/serialize) is `JSON.stringify` after a shape check. The output contains your config snapshot, α and β per intent, per-signal contributions and hit/miss counts, the open episode, and the reveal and outcome timestamps. It never contains event `props`. For a handful of intents it is a few kilobytes.
 
-Persist after every `observe` if writes are cheap (localStorage, an in-memory store flushed later), or debounce; and always persist after `endEpisode`.
+Persist after every `observe` if writes are cheap (localStorage, an in-memory store flushed later), or debounce; always persist after `endEpisode`, and persist at once whenever [`episodeClosed(prev, next)`](/api/functions/episodeClosed) is true, since a close is where misses are recorded. On mobile, flush the pending save when the app goes to the background; see [Using with frameworks](/guide/frameworks#react-native).
 
 ## Load: pass your current config
 
@@ -50,9 +50,17 @@ const state = deserialize(saved, {
 
 The release notes for any version bump will include the migration. Until then, `migrate` is never called.
 
-## Validation
+## Validation and errors
 
-`deserialize` validates everything: the config, every number (finite, in range), every key (undeclared signals and intents are pruned, prototype-polluting keys are ignored), the episode. A tampered or truncated string throws a `TypeError`, `RangeError` or `SyntaxError` rather than producing a state that violates the engine's invariants. If you store state where users can edit it, catch and fall back to `createState(config)`.
+`deserialize` validates everything: the config, every number (finite, in range), every key (undeclared signals and intents are pruned, prototype-polluting keys are ignored), the episode. It never returns a state that violates the engine's invariants; it throws instead:
+
+| Error         | When                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| `SyntaxError` | the string is not valid JSON                                                                           |
+| `RangeError`  | the stored `version` differs from `STATE_VERSION` and no `migrate` was given; `migrate` did not return the current version; a stored number is out of range (a negative count, a fractional `revealCount`) |
+| `TypeError`   | the state is malformed: no numeric `version`, a missing or wrongly typed field, an invalid `config`, invalid options |
+
+The same three types are used everywhere in the library (`createState`, `observe`, the options of `predict`, `explain` and `evaluate`), with the offending path in the message. If you store state where users can edit it, catch and fall back to `createState(config)`.
 
 ## One state per user
 

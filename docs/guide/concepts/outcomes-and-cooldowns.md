@@ -1,6 +1,6 @@
 # Outcomes & cooldowns
 
-The outcome event is the moment the intent stops being a prediction and becomes a fact. oracular does three things with it.
+The outcome event is the moment the intent stops being a prediction and becomes a fact. There is no special call for it: **an outcome is just `observe()` with the event name you put in the intent's `outcome`.** When that name arrives, oracular does three things with it.
 
 ## 1. It learns
 
@@ -43,7 +43,23 @@ next Mon 09:30                    suppression ends; shouldReveal depends on evid
 
 ## Reading it
 
-[`predict`](/api/functions/predict) returns:
+The full shape [`predict`](/api/functions/predict) returns (also available as `prediction` from [`evaluate`](/api/functions/evaluate)):
+
+```ts
+interface Prediction {
+  intent: string;
+  p: number;                        // α / (α + β)
+  sd: number;                       // Beta standard deviation
+  lower: number;                    // p − z·sd, clamped to [0, 1]
+  confidence: number;               // 1 − 2·sd, clamped to [0, 1]; a heuristic
+  evidence: number;                 // α + β, prior strength included
+  revealed: boolean;                // inside the cooldown after markRevealed
+  revealedAt: number | null;
+  suppressedUntil: number | null;   // end of the later running cooldown, or null
+}
+```
+
+The cooldown fields:
 
 | field             | meaning                                                              |
 | ----------------- | -------------------------------------------------------------------- |

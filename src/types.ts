@@ -239,6 +239,39 @@ export interface SignalExplanation {
 }
 
 /**
+ * Filters for `explain` and `evaluate`. By default every declared signal is returned.
+ *
+ * @example
+ * ```ts
+ * explain(state, 'upgrade', now, { nonZero: true, limit: 3 }); // the three signals doing the most
+ * ```
+ */
+export interface ExplainOptions {
+  /** Only signals that currently hold evidence (a non-zero contribution). Default false. */
+  nonZero?: boolean;
+  /** At most this many rows, taken from the top of the impact-sorted list. Default: all. */
+  limit?: number;
+}
+
+/** Reveal overrides and explain filters together, for `evaluate`. */
+export interface EvaluateOptions extends RevealOptions, ExplainOptions {}
+
+/**
+ * What `evaluate` returns: the same values `predict`, `shouldReveal` and `explain` would give
+ * for the same inputs, computed from a single decay pass.
+ *
+ * @example
+ * ```ts
+ * const { prediction, reveal, explanation } = evaluate(state, 'upgrade', Date.now());
+ * ```
+ */
+export interface Evaluation {
+  prediction: Prediction;
+  reveal: boolean;
+  explanation: SignalExplanation[];
+}
+
+/**
  * Turns a stored state of an older version into a current `EngineState`. Receives the parsed
  * JSON as-is and the version it declares.
  *

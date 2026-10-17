@@ -29,6 +29,18 @@ After ten sessions in which `pricing.viewed` led to an upgrade six times out of 
 
 Rows are sorted by |impact| descending, then by name. Impact is nonlinear in p, so a +3 contribution can matter more than a −4 one depending on where p sits.
 
+Two optional filters, both off by default: `nonZero` keeps only signals that currently hold evidence, and `limit` caps the number of rows after sorting.
+
+```ts
+explain(state, 'upgrade', Date.now(), { nonZero: true, limit: 3 }); // the three signals doing the most
+```
+
+If you also need the prediction and the reveal decision, [`evaluate`](/api/functions/evaluate) returns all three from a single decay pass and takes the same filters:
+
+```ts
+const { prediction, reveal, explanation } = evaluate(state, 'upgrade', Date.now(), { limit: 3 });
+```
+
 ## Reading the example
 
 - `limit.hit` has no history, so `learnedWeight` is 0 and `effectiveWeight` is exactly the initial 2.
@@ -47,4 +59,4 @@ Rows are sorted by |impact| descending, then by name. Impact is nonlinear in p, 
 
 ## Reference
 
-- [`explain`](/api/functions/explain), [`SignalExplanation`](/api/interfaces/SignalExplanation).
+- [`explain`](/api/functions/explain), [`ExplainOptions`](/api/interfaces/ExplainOptions), [`evaluate`](/api/functions/evaluate), [`SignalExplanation`](/api/interfaces/SignalExplanation).

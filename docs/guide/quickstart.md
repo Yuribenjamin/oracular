@@ -61,7 +61,7 @@ window.addEventListener('pagehide', () => {
 });
 ```
 
-Call `track('pricing.viewed')`, `track('limit.hit')` and `track('upgrade.completed')` from the places in your app where those things happen. That is the entire integration.
+Call `track('pricing.viewed')`, `track('limit.hit')` and `track('upgrade.completed')` from the places in your app where those things happen. That is the entire integration. Note that the outcome is not a separate API: **an outcome is just `observe()` with the outcome's event name.** The engine recognises `upgrade.completed` because the config names it in `outcome`.
 
 ## Next
 
