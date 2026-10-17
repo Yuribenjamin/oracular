@@ -78,9 +78,24 @@ all three of:
 1. a test that pins the new behaviour with concrete numbers,
 2. the matching update to the README's "How it works" section and the concept page under
    `docs/guide/concepts/`,
-3. a CHANGELOG entry.
+3. a changeset (see below) so the change is released and lands in the CHANGELOG.
 
 `explain()` must keep adding up: the sum of per-signal contributions equals α − α₀ and β − β₀.
+
+## Changesets
+
+Releases are driven by [Changesets](https://github.com/changesets/changesets). If your pull
+request changes behaviour, add a changeset and commit the generated file with your change:
+
+```sh
+npm run changeset
+```
+
+Pick the bump, then write the entry for people who use the library. While the version is
+**0.x**, a change that could break an existing integration is a **minor** bump, and so is a new
+feature; fixes and changes nobody has to react to are **patch**. Pull requests without behaviour
+changes (docs, CI, tests, refactors with identical output) need no changeset; the advisory
+"Changeset present" check on PRs will note the absence, and that is fine.
 
 ## Commit messages
 
@@ -93,7 +108,7 @@ Plain [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fi
 - [ ] new behaviour has tests; `assertInvariants` is called after every state-returning operation
 - [ ] public JSDoc updated (`@param`, `@returns`, `@throws`, `@example`): it is the API reference
 - [ ] README and concept pages updated if the model changed
-- [ ] CHANGELOG entry under the upcoming version
+- [ ] a changeset if behaviour changed (`npm run changeset`)
 - [ ] no new runtime dependency, no I/O, no `Date.now()` inside `src/`
 - [ ] `npm pack --dry-run` still lists only `dist`, README, CHANGELOG, LICENSE and package.json
 
@@ -109,15 +124,21 @@ npm run docs:preview  # serve the built site
 API reference is always generated from the JSDoc in `src/`. Guide pages live in `docs/guide/`.
 The playground imports the engine from `src/` directly, so it always runs the current code.
 
-## Release process
+## Releasing
 
-Releases are made by the maintainer.
+1. A pull request lands on `main` with a changeset.
+2. The release workflow (`.github/workflows/release.yml`) opens or updates a **"chore: version
+   packages"** pull request that bumps `package.json` and writes the CHANGELOG entries from the
+   pending changesets.
+3. Merging that pull request runs the workflow again. With no changesets left, it publishes to
+   npm through trusted publishing (OIDC, provenance attached, no tokens), creates the `vX.Y.Z`
+   tag and the GitHub release.
 
-1. Update `version` in `package.json` and move the CHANGELOG's entries under the new version
-   with the date.
-2. `npm run check` and `npm run docs:build` must pass.
-3. Commit (`chore: release vX.Y.Z`), tag `vX.Y.Z`, push the commit and the tag.
-4. `npm publish`. `prepublishOnly` runs the full check again.
-5. Create the GitHub release from the tag with the CHANGELOG entry as the body.
+`main` may be ahead of npm between releases: merged changes wait in the Version Packages PR
+until the maintainer merges it. The documentation site deploys from `main` on every push, so it
+can describe behaviour that is not yet on npm; the API reference is generated from the same
+commit, so the two always agree with each other.
 
-Pushing to `main` deploys the documentation site automatically.
+No one runs `npm publish` by hand. If the registry answers 409 for the exact version being
+released (a publish still in its staging window), `scripts/release.mjs` verifies the version is
+live and treats it as success.
