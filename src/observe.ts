@@ -29,7 +29,7 @@ import { hasOwn } from './util';
  *   and never stored.
  * @returns The next state. Intents the event does not touch keep their stored numbers; their
  *   decay is applied when they are next read or updated.
- * @throws {TypeError} When `state` is not an engine state, or the event has no non-empty
+ * @throws `TypeError` when `state` is not an engine state, or the event has no non-empty
  *   `name`, no finite `at`, or a `props` that is not a plain object.
  * @example
  * ```ts
@@ -88,7 +88,7 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
  *   `config.episodeTimeout`, it is closed at the moment it timed out instead.
  * @returns The next state with no open episode, or the very same state object when no episode
  *   was open.
- * @throws {TypeError} When `state` is not an engine state or `at` is not a finite number.
+ * @throws `TypeError` when `state` is not an engine state or `at` is not a finite number.
  * @example
  * ```ts
  * window.addEventListener('pagehide', () => {

@@ -17,8 +17,8 @@ import type { EngineState, Prediction, RevealOptions } from './types';
  *   `threshold` only matters to {@link shouldReveal}.
  * @returns The prediction. `p`, `sd`, `lower` and `confidence` are in [0, 1]; `evidence` is
  *   α + β.
- * @throws {RangeError} When `intent` is not declared in the config.
- * @throws {TypeError} When `state` is not an engine state, `at` is not finite, or `opts` is
+ * @throws `RangeError` when `intent` is not declared in the config.
+ * @throws `TypeError` when `state` is not an engine state, `at` is not finite, or `opts` is
  *   malformed.
  * @example
  * ```ts
@@ -81,8 +81,8 @@ function cooldownEnd(since: number | null, cooldown: number, at: number): number
  * @param opts - Overrides for `threshold` (default 0.5), `z` (default 1.28, a one-sided 90%
  *   bound) and `cooldown` (default: the intent's `halfLife`).
  * @returns True when the app should show, offer or reveal whatever this intent gates.
- * @throws {RangeError} When `intent` is not declared in the config.
- * @throws {TypeError} When `state` is not an engine state, `at` is not finite, or `opts` is
+ * @throws `RangeError` when `intent` is not declared in the config.
+ * @throws `TypeError` when `state` is not an engine state, `at` is not finite, or `opts` is
  *   malformed.
  * @example
  * ```ts
@@ -119,8 +119,8 @@ export function shouldReveal(
  * @param intent - Name of an intent declared in the config.
  * @param at - When the reveal happened.
  * @returns The next state.
- * @throws {RangeError} When `intent` is not declared in the config.
- * @throws {TypeError} When `state` is not an engine state or `at` is not finite.
+ * @throws `RangeError` when `intent` is not declared in the config.
+ * @throws `TypeError` when `state` is not an engine state or `at` is not finite.
  * @example
  * ```ts
  * state = markRevealed(state, 'upgrade', Date.now());

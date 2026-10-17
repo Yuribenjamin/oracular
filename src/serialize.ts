@@ -20,7 +20,7 @@ import { STATE_VERSION } from './version';
  *
  * @param state - The state to persist.
  * @returns A JSON string that {@link deserialize} restores losslessly.
- * @throws {TypeError} When `state` is not an engine state.
+ * @throws `TypeError` when `state` is not an engine state.
  * @example
  * ```ts
  * localStorage.setItem('oracular', serialize(state));
@@ -43,10 +43,10 @@ export function serialize(state: EngineState): string {
  *   `migrate(stored, version)` when the stored version differs from {@link STATE_VERSION};
  *   it must return a state of the current version.
  * @returns A validated state that satisfies the engine's invariants.
- * @throws {SyntaxError} When `json` is not valid JSON.
- * @throws {TypeError} When the stored data, the result of `migrate`, `opts` or `opts.config`
+ * @throws `SyntaxError` when `json` is not valid JSON.
+ * @throws `TypeError` when the stored data, the result of `migrate`, `opts` or `opts.config`
  *   has the wrong shape.
- * @throws {RangeError} When the stored version differs and no `migrate` is given, when
+ * @throws `RangeError` when the stored version differs and no `migrate` is given, when
  *   `migrate` does not return the current version, or when a stored number is out of range.
  * @example
  * ```ts

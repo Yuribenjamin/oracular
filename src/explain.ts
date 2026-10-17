@@ -18,8 +18,8 @@ import { getOwn } from './util';
  * @param at - The time to evaluate at; contributions and learned counts are decayed to it.
  * @returns One {@link SignalExplanation} per declared signal, sorted by |impact| descending,
  *   then by name. Empty for an intent that declares no signals.
- * @throws {RangeError} When `intent` is not declared in the config.
- * @throws {TypeError} When `state` is not an engine state or `at` is not finite.
+ * @throws `RangeError` when `intent` is not declared in the config.
+ * @throws `TypeError` when `state` is not an engine state or `at` is not finite.
  * @example
  * ```ts
  * for (const row of explain(state, 'upgrade', Date.now())) {

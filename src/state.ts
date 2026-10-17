@@ -14,8 +14,8 @@ import { STATE_VERSION } from './version';
  * @param config - Intents with their priors and signals, plus engine-wide options. Validated
  *   strictly: unknown keys, non-finite numbers and out-of-range values throw.
  * @returns A new, JSON-serializable state. `config` is not mutated.
- * @throws {TypeError} When a value has the wrong type or a key is not recognised.
- * @throws {RangeError} When a number is out of range, for example a `prior` outside (0, 1) or a
+ * @throws `TypeError` when a value has the wrong type or a key is not recognised.
+ * @throws `RangeError` when a number is out of range, for example a `prior` outside (0, 1) or a
  *   signal weight of 0.
  * @example
  * ```ts
