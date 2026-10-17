@@ -1,0 +1,215 @@
+import type { EngineConfig, IntentConfig, LearningConfig, RevealOptions } from './types';
+import { isRecord } from './util';
+
+export const DEFAULT_THRESHOLD = 0.5;
+export const DEFAULT_Z = 1.28;
+export const DEFAULT_GAIN = 2;
+export const DEFAULT_PRIOR_EPISODES = 10;
+
+const CONFIG_KEYS = ['intents', 'episodeTimeout', 'learning', 'reveal'] as const;
+const INTENT_KEYS = [
+  'prior',
+  'priorStrength',
+  'halfLife',
+  'signals',
+  'outcome',
+  'resetOnOutcome',
+  'reveal',
+] as const;
+const REVEAL_KEYS = ['threshold', 'z', 'cooldown'] as const;
+const LEARNING_KEYS = ['halfLife', 'gain', 'priorEpisodes'] as const;
+
+function typeError(path: string, message: string): never {
+  throw new TypeError(`oracular: ${path} ${message}`);
+}
+
+function rangeError(path: string, message: string): never {
+  throw new RangeError(`oracular: ${path} ${message}`);
+}
+
+function expectRecord(value: unknown, path: string): Record<string, unknown> {
+  if (!isRecord(value)) typeError(path, 'must be a plain object');
+  return value;
+}
+
+function expectKeys(
+  record: Record<string, unknown>,
+  allowed: readonly string[],
+  path: string,
+): void {
+  for (const key of Object.keys(record)) {
+    if (!allowed.includes(key)) {
+      typeError(
+        `${path}.${key}`,
+        `is not a recognised option (expected one of: ${allowed.join(', ')})`,
+      );
+    }
+  }
+}
+
+function expectNumber(value: unknown, path: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    typeError(path, 'must be a finite number');
+  return value;
+}
+
+function expectPositive(value: unknown, path: string): number {
+  const n = expectNumber(value, path);
+  if (n <= 0) rangeError(path, 'must be greater than 0');
+  return n;
+}
+
+function expectNonNegative(value: unknown, path: string): number {
+  const n = expectNumber(value, path);
+  if (n < 0) rangeError(path, 'must be 0 or greater');
+  return n;
+}
+
+function expectOpenUnit(value: unknown, path: string): number {
+  const n = expectNumber(value, path);
+  if (n <= 0 || n >= 1) rangeError(path, 'must be strictly between 0 and 1');
+  return n;
+}
+
+function expectClosedUnit(value: unknown, path: string): number {
+  const n = expectNumber(value, path);
+  if (n < 0 || n > 1) rangeError(path, 'must be between 0 and 1');
+  return n;
+}
+
+function expectName(value: unknown, path: string): string {
+  if (typeof value !== 'string' || value.length === 0)
+    typeError(path, 'must be a non-empty string');
+  return value;
+}
+
+/** Validates reveal options and returns a copy with only the defined keys. */
+export function normalizeRevealOptions(value: unknown, path: string): RevealOptions {
+  const record = expectRecord(value, path);
+  expectKeys(record, REVEAL_KEYS, path);
+  const out: RevealOptions = {};
+  if (record.threshold !== undefined) {
+    out.threshold = expectClosedUnit(record.threshold, `${path}.threshold`);
+  }
+  if (record.z !== undefined) out.z = expectNonNegative(record.z, `${path}.z`);
+  if (record.cooldown !== undefined) {
+    out.cooldown = expectNonNegative(record.cooldown, `${path}.cooldown`);
+  }
+  return out;
+}
+
+function normalizeLearning(value: unknown, path: string): LearningConfig {
+  const record = expectRecord(value, path);
+  expectKeys(record, LEARNING_KEYS, path);
+  const out: LearningConfig = {};
+  if (record.halfLife !== undefined)
+    out.halfLife = expectPositive(record.halfLife, `${path}.halfLife`);
+  if (record.gain !== undefined) out.gain = expectPositive(record.gain, `${path}.gain`);
+  if (record.priorEpisodes !== undefined) {
+    out.priorEpisodes = expectPositive(record.priorEpisodes, `${path}.priorEpisodes`);
+  }
+  return out;
+}
+
+function normalizeIntent(value: unknown, path: string): IntentConfig {
+  const record = expectRecord(value, path);
+  expectKeys(record, INTENT_KEYS, path);
+  const signalsRecord = expectRecord(record.signals, `${path}.signals`);
+  const signals: Record<string, number> = {};
+  for (const [name, weight] of Object.entries(signalsRecord)) {
+    if (name.length === 0) typeError(`${path}.signals`, 'signal names must be non-empty strings');
+    const w = expectNumber(weight, `${path}.signals[${JSON.stringify(name)}]`);
+    if (w === 0) {
+      rangeError(
+        `${path}.signals[${JSON.stringify(name)}]`,
+        'must be non-zero (positive is evidence for the intent, negative is evidence against)',
+      );
+    }
+    signals[name] = w;
+  }
+  const out: IntentConfig = {
+    prior: expectOpenUnit(record.prior, `${path}.prior`),
+    priorStrength: expectPositive(record.priorStrength, `${path}.priorStrength`),
+    halfLife: expectPositive(record.halfLife, `${path}.halfLife`),
+    signals,
+  };
+  if (record.outcome !== undefined) out.outcome = expectName(record.outcome, `${path}.outcome`);
+  if (record.resetOnOutcome !== undefined) {
+    if (typeof record.resetOnOutcome !== 'boolean') {
+      typeError(`${path}.resetOnOutcome`, 'must be a boolean');
+    }
+    out.resetOnOutcome = record.resetOnOutcome;
+  }
+  if (record.reveal !== undefined)
+    out.reveal = normalizeRevealOptions(record.reveal, `${path}.reveal`);
+  return out;
+}
+
+/**
+ * Validates a config and returns a fresh copy holding only the defined, recognised keys,
+ * so that it survives a JSON round trip unchanged.
+ */
+export function normalizeConfig(value: unknown): EngineConfig {
+  const record = expectRecord(value, 'config');
+  expectKeys(record, CONFIG_KEYS, 'config');
+  const intentsRecord = expectRecord(record.intents, 'config.intents');
+  const names = Object.keys(intentsRecord);
+  if (names.length === 0) typeError('config.intents', 'must declare at least one intent');
+  const intents: Record<string, IntentConfig> = {};
+  for (const name of names) {
+    if (name.length === 0) typeError('config.intents', 'intent names must be non-empty strings');
+    intents[name] = normalizeIntent(intentsRecord[name], `config.intents[${JSON.stringify(name)}]`);
+  }
+  const out: EngineConfig = { intents };
+  if (record.episodeTimeout !== undefined) {
+    out.episodeTimeout = expectPositive(record.episodeTimeout, 'config.episodeTimeout');
+  }
+  if (record.learning !== undefined)
+    out.learning = normalizeLearning(record.learning, 'config.learning');
+  if (record.reveal !== undefined)
+    out.reveal = normalizeRevealOptions(record.reveal, 'config.reveal');
+  return out;
+}
+
+export interface ResolvedReveal {
+  threshold: number;
+  z: number;
+  cooldown: number;
+}
+
+export function resolveReveal(
+  config: EngineConfig,
+  intent: IntentConfig,
+  opts: RevealOptions | undefined,
+): ResolvedReveal {
+  const o = opts === undefined ? {} : normalizeRevealOptions(opts, 'options');
+  return {
+    threshold:
+      o.threshold ?? intent.reveal?.threshold ?? config.reveal?.threshold ?? DEFAULT_THRESHOLD,
+    z: o.z ?? intent.reveal?.z ?? config.reveal?.z ?? DEFAULT_Z,
+    cooldown: o.cooldown ?? intent.reveal?.cooldown ?? config.reveal?.cooldown ?? intent.halfLife,
+  };
+}
+
+export interface ResolvedLearning {
+  /** null means learned counts never decay. */
+  halfLife: number | null;
+  gain: number;
+  priorEpisodes: number;
+}
+
+export function resolveLearning(config: EngineConfig): ResolvedLearning {
+  return {
+    halfLife: config.learning?.halfLife ?? null,
+    gain: config.learning?.gain ?? DEFAULT_GAIN,
+    priorEpisodes: config.learning?.priorEpisodes ?? DEFAULT_PRIOR_EPISODES,
+  };
+}
+
+export function expectTimestamp(value: unknown, path: string): number {
+  return expectNumber(value, path);
+}
+
+export function expectIntentName(value: unknown): string {
+  return expectName(value, 'intent');
+}
