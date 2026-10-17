@@ -37,7 +37,7 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       },
-      "default": "./dist/index.js"
+      "default": "./dist/index.cjs"
     },
     "./package.json": "./package.json"
   },

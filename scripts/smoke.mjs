@@ -19,6 +19,13 @@ const p0 = predict(before, 'upgrade', 2).p;
 const p1 = predict(after, 'upgrade', 2).p;
 
 assert.equal(STATE_VERSION, 1);
+// Through the exports map, import must land on the ESM build (import.meta.resolve: Node ≥ 18.19).
+if (typeof import.meta.resolve === 'function') {
+  const resolved = import.meta.resolve('oracular');
+  assert.ok(resolved.endsWith('/dist/index.js'), `import.meta.resolve('oracular') → ${resolved}`);
+} else {
+  console.log('import.meta.resolve unavailable on this Node; skipped the ESM resolution check');
+}
 assert.ok(p0 >= 0 && p0 <= 1, 'p0 in [0,1]');
 assert.ok(p1 >= 0 && p1 <= 1, 'p1 in [0,1]');
 assert.ok(p1 > p0, 'a positive signal raises p');
