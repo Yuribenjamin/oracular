@@ -41,6 +41,15 @@ jobs:
 
       - run: npm ci
 
+      # Rehearsal: runs prepublishOnly (npm run check) under the real publish environment, with
+      # npm's own flags inherited by every nested npm call exactly as they are during the publish,
+      # and prints the full output. A failure stops the job here with its cause in the log; inside
+      # `changeset publish` the same failure would only read "command failed: npm run check".
+      - name: Rehearse publish
+        run: npm publish --dry-run --json --access public --tag latest
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+
       # With pending changesets: opens or updates the "Version Packages" PR.
       # Without: runs the publish script. `changeset publish` publishes only versions that are
       # not on the registry yet, with provenance, authenticated through OIDC. No NPM_TOKEN.

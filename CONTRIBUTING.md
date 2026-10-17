@@ -134,6 +134,14 @@ The playground imports the engine from `src/` directly, so it always runs the cu
    npm through trusted publishing (OIDC, provenance attached, no tokens), creates the `vX.Y.Z`
    tag and the GitHub release.
 
+Before the Changesets step, every release run rehearses the publish with
+`npm publish --dry-run --json --access public --tag latest`. That runs `prepublishOnly` (the full
+`check`) in the real publish environment, including the npm flags that nested npm calls inherit,
+and prints its output. If `check` fails there, the job stops with the real error in the log and
+nothing is published; the Changesets step would only have reported "command failed". When you
+change `check` or anything it runs (tests that shell out, the smoke scripts), rehearse locally
+with the same command, ideally with the runner's npm major (`npx npm@12 publish --dry-run ...`).
+
 `main` may be ahead of npm between releases: merged changes wait in the Version Packages PR
 until the maintainer merges it. The documentation site deploys from `main` on every push, so it
 can describe behaviour that is not yet on npm; the API reference is generated from the same
