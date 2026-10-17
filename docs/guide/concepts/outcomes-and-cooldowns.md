@@ -4,13 +4,13 @@ The outcome event is the moment the intent stops being a prediction and becomes 
 
 ## 1. It learns
 
-Every signal seen in the episode gets a hit and the episode counts toward the base rate, as described in [Episodes & learning](/guide/concepts/episodes-and-learning).
+Every signal seen in the episode gets a hit and the episode counts toward the intent's episode totals, as described in [Episodes & learning](/guide/concepts/episodes-and-learning).
 
 ## 2. It resets the slate
 
 By default (`resetOnOutcome: true`) the intent's evidence returns to the prior: α and β go back to α₀ and β₀ and the per-signal contributions are cleared. The user already upgraded; stop predicting that they will.
 
-What survives the reset: everything learned (`learned`, the base-rate counters), `lastRevealedAt`, `revealCount`, and the new `lastOutcomeAt`.
+What survives the reset: everything learned (`learned`, the episode counters), `lastRevealedAt`, `revealCount`, and the new `lastOutcomeAt`.
 
 Set `resetOnOutcome: false` for intents whose outcome can repeat within one episode, such as *adds another item to the cart*, where evidence should keep accumulating.
 

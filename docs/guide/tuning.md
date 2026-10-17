@@ -101,9 +101,9 @@ The idle gap that ends a session on its own. 30 minutes is the usual web convent
 
 ## `learning.priorEpisodes` and `learning.gain`
 
-`priorEpisodes` (default 10): completed episodes needed before the user's history weighs as much as your initial weight. Lower it for apps with many short sessions where you trust the data more than your guess; raise it when outcomes are rare and noisy.
+`priorEpisodes` (default 10): how much contrast it takes before the user's history weighs as much as your initial weight. Contrast is counted as `nEff = (sessions with the signal × sessions without) / (both)`, so ten sessions on each side count as five. Lower `priorEpisodes` for apps with many short sessions where you trust the data more than your guess; raise it when outcomes are rare and noisy.
 
-It also sets the size of the early-episode dip described on [Episodes & learning](/guide/concepts/episodes-and-learning#early-episode-learning): after the first confirmed episode a signal sits at `k / (k + 1)` of its initial weight (0.91× at 10, 0.83× at 5, 0.95× at 20) until there are sessions without it to compare against. If the first few sessions of a new user matter to you, keep `priorEpisodes` at 10 or above.
+There is no early dip: a weight does not move until the signal has been both present and absent, and the first confirmed session leaves it exactly where you set it. See [Episodes & learning](/guide/concepts/episodes-and-learning#early-episode-learning) for the numbers.
 
 `gain` (default 2): the most a signal can grow (or flip) relative to your weight. 1 means history can only shrink or flip within your scale; 3 lets a signal you underrated become a strong one.
 

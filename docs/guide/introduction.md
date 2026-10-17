@@ -8,7 +8,7 @@ It is about 4 kB gzipped, has no dependencies, and contains no I/O of any kind.
 
 - **A per-intent probability with a confidence bound.** Each intent is a Beta distribution. Signals add evidence, time takes it away, and [`predict`](/api/functions/predict) gives you p, its standard deviation and a lower bound.
 - **A gate.** [`shouldReveal`](/api/functions/shouldReveal) is true only when both p and the lower bound clear your threshold, and no cooldown is running. Thin evidence with a high mean does not fire.
-- **A learner.** The weights you give signals are priors. Every episode in which a signal is followed by the intent's outcome is a hit, every episode where it isn't is a miss, and the signal's weight drifts toward what this user's own history supports, centered on this user's base rate. See [Episodes & learning](/guide/concepts/episodes-and-learning).
+- **A learner.** The weights you give signals are priors. Every episode in which a signal is followed by the intent's outcome is a hit, every episode where it isn't is a miss, and the signal's weight drifts toward what this user's own history supports, judged against the sessions in which the signal did not appear. See [Episodes & learning](/guide/concepts/episodes-and-learning).
 - **An explainer.** [`explain`](/api/functions/explain) returns, per signal, how much evidence it holds and how much p would move without it. You can always see why something fired.
 
 ## What it isn't

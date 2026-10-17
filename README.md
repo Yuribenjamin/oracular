@@ -97,14 +97,17 @@ Events happen inside **episodes** (sessions). An episode ends when you call `end
 A signal's weight is then a blend of your prior and the learned estimate:
 
 ```
-q        = (hits + 1) / (hits + misses + 2)          Laplace-smoothed hit rate
-b        = (outcomes + 1) / (episodes + 2)           Laplace-smoothed base rate
-lift     = (q − b) / (1 − b)  if q ≥ b,  else  (q − b) / b     → in [−1, 1]
-learned  = gain × |w₀| × lift                        0 until the signal has history
-effective = (k × w₀ + n × learned) / (k + n)         n = hits + misses, k = priorEpisodes
+nWith    = hits + misses                                      episodes with the signal
+nWithout = episodes − nWith                                   episodes without it
+qWith    = (hits + 1) / (nWith + 2)                           outcome rate with the signal
+qWithout = (outcomes − hits + 1) / (nWithout + 2)             outcome rate without it
+lift     = (qWith − qWithout) / (1 − qWithout)  if qWith ≥ qWithout,  else  (qWith − qWithout) / qWithout   → in [−1, 1]
+learned  = gain × |w₀| × lift                                 0 until the signal has history
+nEff     = (nWith × nWithout) / (nWith + nWithout)            0 if either side is 0
+effective = (k × w₀ + nEff × learned) / (k + nEff)            k = priorEpisodes
 ```
 
-`w₀` is your initial weight, `gain` (default 2) caps how far a perfectly predictive signal can grow, and `priorEpisodes` (default 10) is how many completed episodes it takes for the user's own history to count as much as your guess. A signal's strength and your confidence in it are separate knobs. Centering on the base rate matters: for an outcome that happens in 3% of sessions, a signal followed by it 30% of the time is strong evidence, not weak.
+`w₀` is your initial weight, `gain` (default 2) caps how far a perfectly predictive signal can grow, and `priorEpisodes` (default 10) is how much contrast it takes for the user's own history to count as much as your guess. A signal's strength and your confidence in it are separate knobs. A signal is judged against the sessions in which it did *not* appear, so for an outcome that happens in 3% of sessions, a signal followed by it 30% of the time is strong evidence, not weak. And learning needs contrast: a signal that has never been absent has no counterfactual, so its weight stands until there are sessions without it. Nothing drifts after a single outcome.
 
 Learned counts never decay unless you set `learning.halfLife`.
 
@@ -330,13 +333,13 @@ After ten sessions in which `pricing.viewed` led to an upgrade six times out of 
 ```ts
 explain(state, 'upgrade', Date.now());
 // [
-//   { signal: 'pricing.viewed', contribution: 2.58, impact: 0.14, initialWeight: 3, learnedWeight: 2, effectiveWeight: 2.59, hits: 6, misses: 1 },
-//   { signal: 'limit.hit',      contribution: 2,    impact: 0.10, initialWeight: 2, learnedWeight: 0, effectiveWeight: 2,    hits: 0, misses: 0 },
-//   { signal: 'export.clicked', contribution: 0,    impact: 0,    initialWeight: 1, learnedWeight: 0, effectiveWeight: 0.5,  hits: 7, misses: 3 },
+//   { signal: 'pricing.viewed', contribution: 3.12, impact: 0.16, initialWeight: 3, learnedWeight: 3.78, effectiveWeight: 3.13, hits: 6, misses: 1 },
+//   { signal: 'limit.hit',      contribution: 2,    impact: 0.10, initialWeight: 2, learnedWeight: 0,    effectiveWeight: 2,    hits: 0, misses: 0 },
+//   { signal: 'export.clicked', contribution: 0,    impact: 0,    initialWeight: 1, learnedWeight: 0.67, effectiveWeight: 1,    hits: 7, misses: 3 },
 // ]
 ```
 
-Rows are sorted by the size of their impact. `limit.hit` has no history yet, so its effective weight is exactly the initial one. `export.clicked` was followed by an upgrade exactly as often as any session was (7 of 10, the base rate), so this user's history says it carries no information, and its weight is on its way to zero. `pricing.viewed` beat the base rate, so it learned a positive weight; the blend is still below the initial 3 only because the developer's guess was higher than what seven episodes support so far.
+Rows are sorted by the size of their impact. `limit.hit` has no history yet, so its effective weight is exactly the initial one. `pricing.viewed` was followed by an upgrade in six of its seven sessions while the three sessions without it saw one upgrade, so it learned a weight above the initial 3. `export.clicked` appeared in every session: it has no counterfactual, so whatever its hit rate, its weight stands at exactly the initial 1 until a session happens without it. See [Episodes & learning](https://yuribenjamin.github.io/oracular/guide/concepts/episodes-and-learning) for why learning needs contrast.
 
 ## Design rules
 

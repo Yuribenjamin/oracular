@@ -53,7 +53,7 @@ Ask how long a signal should keep mattering:
 
 ## Learned data decays separately
 
-Hit and miss counts, and the base rate, are not evidence about *now*; they are knowledge about *this user*. They do not decay unless you set `learning.halfLife`, which gives them their own, usually much longer, half-life. See [Episodes & learning](/guide/concepts/episodes-and-learning).
+Hit and miss counts, and the episode counts, are not evidence about *now*; they are knowledge about *this user*. They do not decay unless you set `learning.halfLife`, which gives them their own, usually much longer, half-life. See [Episodes & learning](/guide/concepts/episodes-and-learning).
 
 ## Reference
 
