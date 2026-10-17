@@ -1,0 +1,56 @@
+name: oracular release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+
+      # npm trusted publishing (OIDC, no token) needs npm 11.5.1 or newer; Node 22 bundles npm 10.
+      - name: Upgrade npm
+        run: npm install -g npm@^12
+
+      - name: Assert npm supports trusted publishing
+        run: |
+          node -e '
+            const [v, min] = [process.argv[1], "11.5.1"];
+            const cmp = (a, b) => { const x = a.split(".").map(Number), y = b.split(".").map(Number); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+            if (cmp(v, min) < 0) { console.error(`npm ${v} is older than ${min}`); process.exit(1); }
+            console.log(`npm ${v}`);
+          ' "$(npm -v)"
+
+      - run: npm ci
+
+      # With pending changesets: opens or updates the "Version Packages" PR.
+      # Without: runs the publish script. `changeset publish` publishes only versions that are
+      # not on the registry yet, with provenance, authenticated through OIDC. No NPM_TOKEN.
+      # The PAT (not GITHUB_TOKEN) is what lets the Version Packages PR trigger CI.
+      - uses: changesets/action@v2
+        with:
+          publish-script: npm run release
+          create-github-releases: true
+          commit-message: "chore: version packages"
+          pr-title: "chore: version packages"
+          github-token: ${{ secrets.RELEASE_PAT }}
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
