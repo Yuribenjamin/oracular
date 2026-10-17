@@ -10,9 +10,9 @@ After ten sessions in which `pricing.viewed` led to an upgrade six times out of 
 
 ```ts
 [
-  { signal: 'pricing.viewed', contribution: 3.31, impact: 0.17, initialWeight: 3, learnedWeight: 3.78, effectiveWeight: 3.32, hits: 6, misses: 1 },
-  { signal: 'limit.hit',      contribution: 2,    impact: 0.09, initialWeight: 2, learnedWeight: 0,    effectiveWeight: 2,    hits: 0, misses: 0 },
-  { signal: 'export.clicked', contribution: 0,    impact: 0,    initialWeight: 1, learnedWeight: 0.67, effectiveWeight: 0.83, hits: 7, misses: 3 },
+  { signal: 'pricing.viewed', contribution: 3.12, impact: 0.16, initialWeight: 3, learnedWeight: 3.78, effectiveWeight: 3.13, hits: 6, misses: 1 },
+  { signal: 'limit.hit',      contribution: 2,    impact: 0.10, initialWeight: 2, learnedWeight: 0,    effectiveWeight: 2,    hits: 0, misses: 0 },
+  { signal: 'export.clicked', contribution: 0,    impact: 0,    initialWeight: 1, learnedWeight: 0.67, effectiveWeight: 1,    hits: 7, misses: 3 },
 ]
 ```
 
@@ -44,8 +44,8 @@ const { prediction, reveal, explanation } = evaluate(state, 'upgrade', Date.now(
 ## Reading the example
 
 - `limit.hit` has no history, so `learnedWeight` is 0 and `effectiveWeight` is exactly the initial 2.
-- `pricing.viewed` was followed by an upgrade in six of its seven sessions, while the three sessions without it saw one upgrade: `qWith = 7/9`, `qWithout = 2/5`, a lift of 0.63 and a learned weight of 3.78. Blended with your 3 over seven episodes, the effective weight is 3.32.
-- `export.clicked` appeared in every session, so there are no sessions without it to compare against. The comparison then falls back to an uninformative 50%, and its 7-of-10 rate reads as mildly positive (learned 0.67, effective 0.83). Always-present signals are the known weak spot of the contrast; see [Episodes & learning](/guide/concepts/episodes-and-learning#signals-present-in-every-episode).
+- `pricing.viewed` was followed by an upgrade in six of its seven sessions, while the three sessions without it saw one upgrade: `qWith = 7/9`, `qWithout = 2/5`, a lift of 0.63 and a learned weight of 3.78. The contrast is 7 sessions against 3, `nEff = 2.1`, so blended with your 3 the effective weight is 3.13.
+- `export.clicked` appeared in every session. `learnedWeight` shows what its 7-of-10 rate would say against an empty comparison set, but with no session without it there is no counterfactual, `nEff` is 0, and its effective weight stands at exactly the initial 1. Learning needs contrast; see [Episodes & learning](/guide/concepts/episodes-and-learning#learning-needs-contrast).
 
 ## Why it adds up
 

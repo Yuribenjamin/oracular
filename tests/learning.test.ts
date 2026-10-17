@@ -80,9 +80,9 @@ describe('learning', () => {
     const learnedB = 2 * ((qWithB - qWithoutB) / qWithoutB);
     expect(a.learned).toBeCloseTo(learnedA, 12);
     expect(b.learned).toBeCloseTo(learnedB, 12);
-    expect(a.effective).toBeCloseTo((10 * 1 + 10 * learnedA) / 20, 12);
-    expect(b.effective).toBeCloseTo((10 * 1 + 10 * learnedB) / 20, 12);
-    expect(b.effective).toBeLessThan(0);
+    // nEff = (10 × 10) / (10 + 10) = 5 for both.
+    expect(a.effective).toBeCloseTo((10 * 1 + 5 * learnedA) / 15, 12);
+    expect(b.effective).toBeCloseTo((10 * 1 + 5 * learnedB) / 15, 12);
   });
 
   it('a signal with no completed episodes keeps exactly its initial weight and has learned nothing', () => {
@@ -107,22 +107,39 @@ describe('learning', () => {
     });
   });
 
-  it('a signal present in every episode converges toward zero weight', () => {
+  it('a signal that has never been absent keeps its initial weight: learning needs contrast', () => {
+    // C is in every one of 20 episodes, 18 of which end with the outcome. There is no session
+    // without C to compare against, so there is no counterfactual and nothing to learn from.
     let s = createState(buyConfig());
     for (let i = 0; i < 20; i++) s = episode(s, T + i * DAY, ['C'], i % 10 !== 9);
     const c = weights(s, 'C');
     expect(c).toMatchObject({ hits: 18, misses: 2 });
     expect(s.intents.buy!.episodes).toStrictEqual({ hits: 18, misses: 2 });
-    // Present everywhere, it carries no information about this intent: no lift, weight toward 0.
-    expect(Math.abs(c.learned)).toBeLessThan(1e-12);
-    expect(c.effective).toBeCloseTo(1 / 3, 12);
+    expect(Math.abs(c.effective - c.initial)).toBeLessThanOrEqual(1e-9);
   });
 
-  it('after a single confirmed episode, the seen signal is at or above its initial weight', () => {
+  it('after a single confirmed episode the seen signal keeps exactly its initial weight', () => {
+    // One episode with A and the outcome: A has been present once and absent never, so nEff = 0.
     const s = episode(createState(buyConfig()), T, ['A'], true);
     const a = weights(s, 'A');
     expect(a).toMatchObject({ initial: 1, hits: 1, misses: 0 });
-    expect(a.effective).toBeGreaterThanOrEqual(a.initial);
+    expect(Math.abs(a.effective - a.initial)).toBeLessThanOrEqual(1e-9);
+  });
+
+  it('trial scenario: one confirmed episode with A, then five episodes with neither A nor the outcome', () => {
+    let s = episode(createState(buyConfig()), T, ['A'], true);
+    for (let i = 1; i <= 5; i++) s = episode(s, T + i * DAY, [], false);
+    const a = weights(s, 'A');
+    expect(a).toMatchObject({ initial: 1, hits: 1, misses: 0 });
+    expect(s.intents.buy!.episodes).toStrictEqual({ hits: 1, misses: 5 });
+    // qWith = 2/3, qWithout = 1/7, lift = (2/3 − 1/7) / (1 − 1/7), learned = 2 × lift,
+    // nEff = (1 × 5) / (1 + 5), effective = (10 + nEff × learned) / (10 + nEff) ≈ 1.017.
+    const lift = (2 / 3 - 1 / 7) / (1 - 1 / 7);
+    const nEff = (1 * 5) / 6;
+    const expected = (10 * 1 + nEff * 2 * lift) / (10 + nEff);
+    expect(a.effective).toBeCloseTo(expected, 12);
+    expect(a.effective).toBeGreaterThan(a.initial);
+    expect(a.effective).toBeLessThan(1.05);
   });
 
   it('a signal followed by the outcome only half the time still learns positive when the base rate is low', () => {
@@ -165,8 +182,9 @@ describe('learning', () => {
   });
 
   it('a negative initial weight can learn its way positive', () => {
+    // 20 confirmed episodes with N and 20 without it: nEff = 10, enough to outweigh priorEpisodes.
     let s = createState(buyConfig());
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       s = episode(s, T + 2 * i * DAY, ['N'], true);
       s = episode(s, T + (2 * i + 1) * DAY, [], false);
     }
@@ -187,16 +205,20 @@ describe('learning', () => {
     assertInvariants(nextA);
     expect(nextA.intents.buy!.contributions.A).toStrictEqual({ alpha: a.effective, beta: 0 });
 
-    // B still carries a decayed contribution from the last B episode; the new (negative) weight lands in beta.
+    // B still carries a decayed contribution from the last B episode. Its effective weight after
+    // 20 episodes is small; whichever sign it has, that is the side the new occurrence lands on.
     const b = weights(s, 'B');
     const leftover = s.intents.buy!.contributions.B!;
     const nextB = observe(s, { name: 'B', at });
     assertInvariants(nextB);
-    expect(nextB.intents.buy!.contributions.B!.alpha).toBeCloseTo(leftover.alpha * d, 12);
-    expect(nextB.intents.buy!.contributions.B!.beta).toBeCloseTo(
-      leftover.beta * d - b.effective,
-      12,
-    );
+    const c = nextB.intents.buy!.contributions.B!;
+    if (b.effective >= 0) {
+      expect(c.alpha).toBeCloseTo(leftover.alpha * d + b.effective, 12);
+      expect(c.beta).toBeCloseTo(leftover.beta * d, 12);
+    } else {
+      expect(c.alpha).toBeCloseTo(leftover.alpha * d, 12);
+      expect(c.beta).toBeCloseTo(leftover.beta * d - b.effective, 12);
+    }
   });
 
   it('forgets with learning.halfLife, and never without it', () => {

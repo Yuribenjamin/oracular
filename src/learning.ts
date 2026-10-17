@@ -37,7 +37,10 @@ export interface SignalWeights {
  *            rate of episodes in which the signal was seen (hits / (hits + misses)) and
  *            qWithout the Laplace-smoothed outcome rate of the intent's other episodes
  *            (episodes without the signal). 0 until the signal has completed an episode.
- * effective: (k · w0 + n · learned) / (k + n), with k = learning.priorEpisodes and n = hits + misses.
+ * effective: (k · w0 + nEff · learned) / (k + nEff), with k = learning.priorEpisodes and
+ *            nEff = (nWith · nWithout) / (nWith + nWithout): the comparison is only trusted once
+ *            the signal has been both present and absent. A signal that has never been absent
+ *            (or never present) has no counterfactual, nEff is 0, and the developer's weight stands.
  */
 export function signalWeights(
   state: IntentState,
@@ -50,18 +53,20 @@ export function signalWeights(
     throw new RangeError(`oracular: ${JSON.stringify(signal)} is not a signal of this intent`);
   }
   const record = getOwn(state.learned, signal) ?? NONE;
-  const n = record.hits + record.misses;
-  const qWith = laplace(record.hits, n);
+  const nWith = record.hits + record.misses;
+  const qWith = laplace(record.hits, nWith);
   // The contrast: episodes of this intent in which the signal was not seen. hits + misses counts
   // the episodes it was seen in (one record per episode), so the rest is the complement.
   const totalEpisodes = state.episodes.hits + state.episodes.misses;
-  const episodesWithout = Math.max(0, totalEpisodes - n);
-  const outcomesWithout = Math.min(episodesWithout, Math.max(0, state.episodes.hits - record.hits));
-  const qWithout = laplace(outcomesWithout, episodesWithout);
+  const nWithout = Math.max(0, totalEpisodes - nWith);
+  const outcomesWithout = Math.min(nWithout, Math.max(0, state.episodes.hits - record.hits));
+  const qWithout = laplace(outcomesWithout, nWithout);
   // Nothing has been learned about a signal until it has been seen in a completed episode.
-  const learned = n === 0 ? 0 : learning.gain * Math.abs(initial) * lift(qWith, qWithout);
+  const learned = nWith === 0 ? 0 : learning.gain * Math.abs(initial) * lift(qWith, qWithout);
+  // Learning needs contrast: weight the comparison by how much of both sides has been seen.
+  const nEff = nWith + nWithout === 0 ? 0 : (nWith * nWithout) / (nWith + nWithout);
   const k = learning.priorEpisodes;
-  const effective = (k * initial + n * learned) / (k + n);
+  const effective = (k * initial + nEff * learned) / (k + nEff);
   return { initial, learned, effective, hits: record.hits, misses: record.misses };
 }
 

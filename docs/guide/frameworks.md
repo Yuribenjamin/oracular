@@ -227,6 +227,10 @@ export function useIntent() {
 
 The outcome is an ordinary event: `track('ride.started')` with the name you put in `outcome`.
 
+### Trials on real devices
+
+A dev-only panel (a debug screen that prints `explain` output) does not exist in standalone builds, and a trial on a real device is exactly where you want to see what the engine learned. Plan for an in-app export: a hidden gesture or settings row that opens the system Share sheet with `serialize(state)` and your own decision log (each `shouldReveal` that fired, when, and what you showed). That is enough to reproduce the user's state on a laptop with `deserialize` and read it with `explain` or the [Playground](/playground). On Android, `adb` access to the app's storage (`AsyncStorage` lives under the app's data directory) is the alternative when you can attach the device.
+
 ## Node
 
 On a server, the "device" is the per-user record in your own store, and the clock is whatever timestamp the client sent. The library still does no I/O; you load, call, and save around it.
