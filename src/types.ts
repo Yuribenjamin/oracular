@@ -1,3 +1,5 @@
+import type { STATE_VERSION } from './version';
+
 /**
  * Options that decide when `shouldReveal` fires and how long cooldowns last. Resolved per call →
  * intent → engine → defaults.
@@ -155,7 +157,7 @@ export interface EpisodeState {
  * ```
  */
 export interface EngineState {
-  version: typeof import('./version').STATE_VERSION;
+  version: typeof STATE_VERSION;
   /** Snapshot of the config this state was built with. Pass your current config to `deserialize` on load. */
   config: EngineConfig;
   intents: Record<string, IntentState>;
