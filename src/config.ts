@@ -1,4 +1,11 @@
-import type { EngineConfig, IntentConfig, LearningConfig, RevealOptions } from './types';
+import type {
+  EngineConfig,
+  EvaluateOptions,
+  ExplainOptions,
+  IntentConfig,
+  LearningConfig,
+  RevealOptions,
+} from './types';
 import { isRecord } from './util';
 
 export const DEFAULT_THRESHOLD = 0.5;
@@ -18,6 +25,7 @@ const INTENT_KEYS = [
 ] as const;
 const REVEAL_KEYS = ['threshold', 'z', 'cooldown'] as const;
 const LEARNING_KEYS = ['halfLife', 'gain', 'priorEpisodes'] as const;
+const EXPLAIN_KEYS = ['nonZero', 'limit'] as const;
 
 function typeError(path: string, message: string): never {
   throw new TypeError(`oracular: ${path} ${message}`);
@@ -118,7 +126,8 @@ function normalizeLearning(value: unknown, path: string): LearningConfig {
   return out;
 }
 
-function normalizeIntent(value: unknown, path: string): IntentConfig {
+/** Validates one intent's config and returns a copy with only the defined, recognised keys. */
+export function normalizeIntentConfig(value: unknown, path: string): IntentConfig {
   const record = expectRecord(value, path);
   expectKeys(record, INTENT_KEYS, path);
   const signalsRecord = expectRecord(record.signals, `${path}.signals`);
@@ -165,7 +174,10 @@ export function normalizeConfig(value: unknown): EngineConfig {
   const intents: Record<string, IntentConfig> = {};
   for (const name of names) {
     expectKeyName(name, 'config.intents');
-    intents[name] = normalizeIntent(intentsRecord[name], `config.intents[${JSON.stringify(name)}]`);
+    intents[name] = normalizeIntentConfig(
+      intentsRecord[name],
+      `config.intents[${JSON.stringify(name)}]`,
+    );
   }
   const out: EngineConfig = { intents };
   if (record.episodeTimeout !== undefined) {
@@ -178,6 +190,44 @@ export function normalizeConfig(value: unknown): EngineConfig {
   return out;
 }
 
+/** Validates explain filters and returns a copy with only the defined keys. */
+export function normalizeExplainOptions(value: unknown, path: string): ExplainOptions {
+  const record = expectRecord(value, path);
+  expectKeys(record, EXPLAIN_KEYS, path);
+  const out: ExplainOptions = {};
+  if (record.nonZero !== undefined) {
+    if (typeof record.nonZero !== 'boolean') typeError(`${path}.nonZero`, 'must be a boolean');
+    out.nonZero = record.nonZero;
+  }
+  if (record.limit !== undefined) {
+    const n = expectNumber(record.limit, `${path}.limit`);
+    if (!Number.isInteger(n) || n < 0)
+      rangeError(`${path}.limit`, 'must be a non-negative integer');
+    out.limit = n;
+  }
+  return out;
+}
+
+/** Splits `evaluate` options into reveal overrides and explain filters, rejecting unknown keys. */
+export function splitEvaluateOptions(
+  value: EvaluateOptions | undefined,
+  path: string,
+): { reveal: RevealOptions; explain: ExplainOptions } {
+  if (value === undefined) return { reveal: {}, explain: {} };
+  const record = expectRecord(value, path);
+  expectKeys(record, [...REVEAL_KEYS, ...EXPLAIN_KEYS], path);
+  const reveal: Record<string, unknown> = {};
+  const explain: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(record)) {
+    if ((REVEAL_KEYS as readonly string[]).includes(key)) reveal[key] = v;
+    else explain[key] = v;
+  }
+  return {
+    reveal: normalizeRevealOptions(reveal, path),
+    explain: normalizeExplainOptions(explain, path),
+  };
+}
+
 export interface ResolvedReveal {
   threshold: number;
   z: number;
@@ -185,16 +235,17 @@ export interface ResolvedReveal {
 }
 
 export function resolveReveal(
-  config: EngineConfig,
+  config: EngineConfig | undefined,
   intent: IntentConfig,
   opts: RevealOptions | undefined,
+  normalized = false,
 ): ResolvedReveal {
-  const o = opts === undefined ? {} : normalizeRevealOptions(opts, 'options');
+  const o = opts === undefined ? {} : normalized ? opts : normalizeRevealOptions(opts, 'options');
   return {
     threshold:
-      o.threshold ?? intent.reveal?.threshold ?? config.reveal?.threshold ?? DEFAULT_THRESHOLD,
-    z: o.z ?? intent.reveal?.z ?? config.reveal?.z ?? DEFAULT_Z,
-    cooldown: o.cooldown ?? intent.reveal?.cooldown ?? config.reveal?.cooldown ?? intent.halfLife,
+      o.threshold ?? intent.reveal?.threshold ?? config?.reveal?.threshold ?? DEFAULT_THRESHOLD,
+    z: o.z ?? intent.reveal?.z ?? config?.reveal?.z ?? DEFAULT_Z,
+    cooldown: o.cooldown ?? intent.reveal?.cooldown ?? config?.reveal?.cooldown ?? intent.halfLife,
   };
 }
 

@@ -2,6 +2,9 @@ import {
   createState,
   deserialize,
   endEpisode,
+  episodeClosed,
+  evaluate,
+  evidenceToReveal,
   explain,
   markRevealed,
   observe,
@@ -70,5 +73,16 @@ describe('purity', () => {
     const json = pure(serialize, s1);
     pure(deserialize, json);
     pure(deserialize, json, { config: upgradeConfig({ episodeTimeout: MINUTE }) });
+  });
+
+  it('evaluate, evidenceToReveal and episodeClosed', () => {
+    const s0 = pure(createState, upgradeConfig({ episodeTimeout: MINUTE }));
+    const s1 = pure(observe, s0, { name: 'pricing.viewed', at: T });
+    pure(evaluate, s1, 'upgrade', T + MINUTE);
+    pure(evaluate, s1, 'upgrade', T + MINUTE, { z: 2, nonZero: true, limit: 2 });
+    pure(evidenceToReveal, upgradeConfig().intents.upgrade!);
+    pure(evidenceToReveal, upgradeConfig().intents.upgrade!, { threshold: 0.7, z: 1.64 });
+    const s2 = pure(endEpisode, s1, T + 2 * MINUTE);
+    pure(episodeClosed, s1, s2);
   });
 });
