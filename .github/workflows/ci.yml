@@ -52,3 +52,15 @@ jobs:
       # dev toolchain needs Node 22+. This proves the published output itself
       # runs on Node 18 and 20, resolving 'oracular' through the exports map.
       - run: npm run smoke
+
+  docs:
+    name: Docs site builds (dead links fail)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:build

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "tsconfig": "tsconfig.json",
+  "out": "docs/api",
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+  "docsRoot": "docs",
+  "readme": "none",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "sourceLinkTemplate": "https://github.com/Yuribenjamin/oracular/blob/main/{path}#L{line}",
+  "parametersFormat": "table",
+  "interfacePropertiesFormat": "table",
+  "typeDeclarationFormat": "table",
+  "useCodeBlocks": true,
+  "hidePageHeader": true,
+  "sidebar": {
+    "autoConfiguration": true,
+    "format": "vitepress",
+    "pretty": true,
+    "collapsed": false
+  }
+}

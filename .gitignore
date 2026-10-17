@@ -4,3 +4,8 @@ coverage/
 *.tgz
 *.log
 .DS_Store
+
+# documentation site: generated API reference, VitePress cache and build
+docs/api/
+docs/.vitepress/cache/
+docs/.vitepress/dist/

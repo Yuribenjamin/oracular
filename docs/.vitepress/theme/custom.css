@@ -1,0 +1,11 @@
+/* The logo SVG declares a 128px intrinsic size; let the hero show it larger. */
+.VPHero .image-src {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+}
+@media (min-width: 960px) {
+  .VPHero .image-src {
+    max-width: 340px;
+  }
+}

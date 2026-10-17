@@ -6,7 +6,17 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/dist", "!**/node_modules", "!**/coverage", "!package-lock.json"]
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/coverage",
+      "!package-lock.json",
+      "!docs/api",
+      "!docs/.vitepress/cache",
+      "!docs/.vitepress/dist",
+      "!**/*.vue"
+    ]
   },
   "formatter": {
     "enabled": true,
