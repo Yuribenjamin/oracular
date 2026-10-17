@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Patch Changes
+
+- [#3](https://github.com/Yuribenjamin/oracular/pull/3) [`b5670db`](https://github.com/Yuribenjamin/oracular/commit/b5670db087d4e63a7a6c74366c9b751b1dd05e9b) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - No library changes. First version published through the automated release pipeline, with npm provenance attestation.
+
 ## 0.1.0
 
 First release. Published as [v0.1.0](https://github.com/Yuribenjamin/oracular/releases/tag/v0.1.0).
