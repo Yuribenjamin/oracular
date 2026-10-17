@@ -35,6 +35,8 @@ if (shouldReveal(state, 'upgrade', Date.now())) {
 }
 ```
 
+With these numbers the offer fires after roughly six strong signals inside a week (p must clear 0.5 with a 90% lower bound); lower `priorStrength` or raise the weights to fire sooner.
+
 That block is copied verbatim into the test suite, so it always runs.
 
 ## Contents
