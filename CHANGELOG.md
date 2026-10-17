@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- [#8](https://github.com/Yuribenjamin/oracular/pull/8) [`72c5f3c`](https://github.com/Yuribenjamin/oracular/commit/72c5f3c296c80ed99f8def26cdb120cdbfc239b3) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - Learning compares a signal's outcome rate against sessions without the signal, and only trusts the comparison once both have been seen. Weights no longer drift after a single outcome.
+
 ## 0.1.2
 
 ### Patch Changes
