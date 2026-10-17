@@ -1,14 +1,10 @@
 # Changelog
 
-All notable changes to `oracular` are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
-[Semantic Versioning](https://semver.org/).
+## 0.1.0
 
-## [0.1.0] - 2026-10-17
+First release. Published as [v0.1.0](https://github.com/Yuribenjamin/oracular/releases/tag/v0.1.0).
 
-First release.
-
-### Added
+### Minor Changes
 
 - `createState`, `observe`, `endEpisode`: intents tracked as Beta(α, β) with per-signal
   weights, exponential decay back toward the prior, and episode bookkeeping (explicit end or
@@ -28,5 +24,3 @@ First release.
   that swaps in the app's current config and prunes signals and intents no longer declared.
 - ESM and CommonJS builds with type declarations; runs unchanged in browsers, Node 18+ and
   React Native.
-
-[0.1.0]: https://github.com/Yuribenjamin/oracular/releases/tag/v0.1.0
