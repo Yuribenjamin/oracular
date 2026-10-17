@@ -150,11 +150,78 @@ describe('shouldReveal', () => {
     expect(predict(s, 'tip', T + MINUTE).p).toBeCloseTo(0.3, 12);
   });
 
-  it('keeps firing after the outcome when resetOnOutcome is false', () => {
-    let s = hits(createState(thinConfig({ resetOnOutcome: false })), 4);
+  it('with resetOnOutcome: false the evidence survives the outcome, but the cooldown still applies', () => {
+    let s = hits(createState(thinConfig({ resetOnOutcome: false, reveal: { cooldown: HOUR } })), 4);
     s = observe(s, { name: 'tip.used', at: T + MINUTE });
     assertInvariants(s);
-    expect(shouldReveal(s, 'tip', T + MINUTE)).toBe(true);
+    const pred = predict(s, 'tip', T + MINUTE);
+    expect(pred.p).toBeGreaterThan(0.5);
+    expect(pred.lower).toBeGreaterThan(0.5);
+    expect(pred.suppressedUntil).toBe(T + MINUTE + HOUR);
+    expect(shouldReveal(s, 'tip', T + MINUTE)).toBe(false);
+    expect(shouldReveal(s, 'tip', T + MINUTE + HOUR)).toBe(true);
+  });
+});
+
+describe('outcome cooldown', () => {
+  it('records lastOutcomeAt on the intent', () => {
+    let s = createState(thinConfig());
+    expect(s.intents.tip!.lastOutcomeAt).toBeNull();
+    s = observe(s, { name: 'tip.used', at: T });
+    assertInvariants(s);
+    expect(s.intents.tip!.lastOutcomeAt).toBe(T);
+    s = observe(s, { name: 'tip.used', at: T + DAY });
+    expect(s.intents.tip!.lastOutcomeAt).toBe(T + DAY);
+  });
+
+  it('keeps shouldReveal false after the outcome despite strong fresh evidence, until the cooldown ends', () => {
+    let s = hits(createState(thinConfig({ halfLife: DAY })), 4);
+    s = observe(s, { name: 'tip.used', at: T });
+    s = hits(s, 6, T + 2 * MINUTE);
+
+    const during = predict(s, 'tip', T + 2 * MINUTE);
+    expect(during.p).toBeGreaterThan(0.5);
+    expect(during.lower).toBeGreaterThan(0.5);
+    expect(during.revealed).toBe(false);
+    expect(during.suppressedUntil).toBe(T + DAY); // cooldown defaults to the one-day half-life
+    expect(shouldReveal(s, 'tip', T + 2 * MINUTE)).toBe(false);
+    expect(shouldReveal(s, 'tip', T + DAY - 1)).toBe(false);
+
+    const after = predict(s, 'tip', T + DAY);
+    expect(after.suppressedUntil).toBeNull();
+    expect(after.lower).toBeGreaterThan(0.5);
+    expect(shouldReveal(s, 'tip', T + DAY)).toBe(true);
+  });
+
+  it('suppressedUntil is the later of the reveal and outcome cooldowns', () => {
+    const cfg = thinConfig({ reveal: { cooldown: HOUR } });
+    let s = observe(createState(cfg), { name: 'tip.used', at: T });
+    expect(predict(s, 'tip', T)).toMatchObject({ revealed: false, suppressedUntil: T + HOUR });
+
+    s = markRevealed(s, 'tip', T + 10 * MINUTE);
+    expect(predict(s, 'tip', T + 20 * MINUTE)).toMatchObject({
+      revealed: true,
+      revealedAt: T + 10 * MINUTE,
+      suppressedUntil: T + 10 * MINUTE + HOUR,
+    });
+    // The outcome cooldown has ended, the reveal cooldown has not.
+    expect(predict(s, 'tip', T + HOUR + MINUTE)).toMatchObject({
+      revealed: true,
+      suppressedUntil: T + 10 * MINUTE + HOUR,
+    });
+    expect(predict(s, 'tip', T + 10 * MINUTE + HOUR)).toMatchObject({
+      revealed: false,
+      suppressedUntil: null,
+    });
+  });
+
+  it('a cooldown of 0 disables the outcome suppression too', () => {
+    let s = hits(createState(thinConfig()), 4);
+    s = observe(s, { name: 'tip.used', at: T });
+    s = hits(s, 6, T);
+    expect(shouldReveal(s, 'tip', T)).toBe(false);
+    expect(shouldReveal(s, 'tip', T, { cooldown: 0 })).toBe(true);
+    expect(predict(s, 'tip', T, { cooldown: 0 }).suppressedUntil).toBeNull();
   });
 });
 

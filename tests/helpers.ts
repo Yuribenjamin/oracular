@@ -103,6 +103,7 @@ export function assertInvariants(state: EngineState): void {
     expectNullOrFinite(is.updatedAt, `${name}.updatedAt`);
     expectNullOrFinite(is.learnedAt, `${name}.learnedAt`);
     expectNullOrFinite(is.lastRevealedAt, `${name}.lastRevealedAt`);
+    expectNullOrFinite(is.lastOutcomeAt, `${name}.lastOutcomeAt`);
     expect(Number.isInteger(is.revealCount) && is.revealCount >= 0, `${name}.revealCount`).toBe(
       true,
     );

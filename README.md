@@ -81,11 +81,13 @@ Learned counts never decay unless you set `learning.halfLife`.
 
 ### Reveal only when confident
 
-`shouldReveal` is true when p ≥ threshold **and** p − z·sd ≥ threshold, where sd is the Beta standard deviation and z defaults to 1.28 (a one-sided 90% bound). Thin evidence with a high mean does not fire; it takes a few consistent signals. After you `markRevealed`, the intent stays revealed for a `cooldown` (default: its half-life) so you don't fire on every event.
+`shouldReveal` is true when p ≥ threshold **and** p − z·sd ≥ threshold, where sd is the Beta standard deviation and z defaults to 1.28 (a one-sided 90% bound). Thin evidence with a high mean does not fire; it takes a few consistent signals. After you `markRevealed`, the intent stays revealed for a `cooldown` (default: its half-life) so you don't fire on every event. The same cooldown runs after the intent's outcome event. `predict` reports both: `revealed` is true inside a reveal cooldown, and `suppressedUntil` is when the later of the two cooldowns ends, or null when `shouldReveal` is free to fire.
 
-### Outcomes reset the slate
+### Outcomes reset the slate and pause reveals
 
 When the outcome event arrives, the intent's evidence returns to the prior (α, β and contributions), while everything learned is kept. The user already upgraded; stop predicting that they will. Set `resetOnOutcome: false` for intents where the outcome can repeat inside one episode.
+
+The outcome also starts the intent's `cooldown`: `shouldReveal` stays false until it ends, however strong the fresh evidence, so a user who just bought is not immediately pitched again. The time of the last outcome is kept on the state as `lastOutcomeAt`.
 
 ### Every answer comes with its reasons
 
@@ -210,6 +212,7 @@ interface Prediction {
   evidence: number;     // α + β, prior strength included
   revealed: boolean;    // inside the cooldown after markRevealed
   revealedAt: number | null;
+  suppressedUntil: number | null; // end of the later running cooldown (reveal or outcome); null when none is running
 }
 
 interface SignalExplanation {

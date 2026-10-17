@@ -73,6 +73,8 @@ export interface IntentState {
   /** Time `learned` and `episodes` were last decayed to. */
   learnedAt: number | null;
   lastRevealedAt: number | null;
+  /** Time the intent's outcome event last arrived. `shouldReveal` stays false for the cooldown after it. */
+  lastOutcomeAt: number | null;
   revealCount: number;
 }
 
@@ -121,6 +123,12 @@ export interface Prediction {
   /** True while inside the cooldown that follows `markRevealed`. */
   revealed: boolean;
   revealedAt: number | null;
+  /**
+   * When the current suppression ends: the later of the reveal cooldown (after `markRevealed`)
+   * and the outcome cooldown (after the outcome event) still running at `at`, or null when
+   * neither is. `shouldReveal` is false while this is non-null.
+   */
+  suppressedUntil: number | null;
 }
 
 export interface SignalExplanation {

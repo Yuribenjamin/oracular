@@ -138,6 +138,7 @@ function intentState(value: unknown, path: string): IntentState {
     episodes: signalRecord(r.episodes, `${path}.episodes`),
     learnedAt: nullOrFinite(r.learnedAt, `${path}.learnedAt`),
     lastRevealedAt: nullOrFinite(r.lastRevealedAt, `${path}.lastRevealedAt`),
+    lastOutcomeAt: nullOrFinite(r.lastOutcomeAt, `${path}.lastOutcomeAt`),
     revealCount,
   };
 }

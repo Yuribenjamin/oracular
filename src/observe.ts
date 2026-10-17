@@ -19,7 +19,8 @@ import { hasOwn } from './util';
  * For every intent the event is a signal of: decay its evidence to `event.at`, then add the
  * signal's effective weight to α (positive) or β (negative) and remember the signal for this
  * episode. For every intent the event is the outcome of: give the remembered signals a hit,
- * count the episode toward the base rate, and (by default) reset the evidence to the prior.
+ * count the episode toward the base rate, record `lastOutcomeAt`, and (by default) reset the
+ * evidence to the prior.
  * Any event opens or extends the current episode; an idle gap longer than
  * `config.episodeTimeout` closes the previous episode first.
  */
@@ -53,6 +54,7 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
     if (isOutcome) {
       is = recordEpisode(is, episodeRecord(episode, intentName).seen, true);
       episode = markResolved(episode, intentName);
+      is = { ...is, lastOutcomeAt: at };
       if (intent.resetOnOutcome ?? true) is = resetToPrior(is, intent);
     }
 

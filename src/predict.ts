@@ -20,7 +20,14 @@ export function predict(
 
   const p = betaMean(is.alpha, is.beta);
   const sd = betaSd(is.alpha, is.beta);
-  const revealed = is.lastRevealedAt !== null && t - is.lastRevealedAt < reveal.cooldown;
+  const revealEnd = cooldownEnd(is.lastRevealedAt, reveal.cooldown, t);
+  const outcomeEnd = cooldownEnd(is.lastOutcomeAt, reveal.cooldown, t);
+  const suppressedUntil =
+    revealEnd === null
+      ? outcomeEnd
+      : outcomeEnd === null
+        ? revealEnd
+        : Math.max(revealEnd, outcomeEnd);
 
   return {
     intent: name,
@@ -29,14 +36,23 @@ export function predict(
     lower: clamp01(p - reveal.z * sd),
     confidence: clamp01(1 - 2 * sd),
     evidence: is.alpha + is.beta,
-    revealed,
+    revealed: revealEnd !== null,
     revealedAt: is.lastRevealedAt,
+    suppressedUntil,
   };
+}
+
+/** The end of a cooldown that started at `since`, if it is still running at `at`. */
+function cooldownEnd(since: number | null, cooldown: number, at: number): number | null {
+  if (since === null) return null;
+  const end = since + cooldown;
+  return at < end ? end : null;
 }
 
 /**
  * True when the intent is at least `threshold` likely, the lower confidence bound p − z·sd
- * also clears the threshold, and the intent is not inside a reveal cooldown.
+ * also clears the threshold, and no cooldown is running: neither the one that follows
+ * `markRevealed` nor the one that follows the intent's outcome event.
  */
 export function shouldReveal(
   state: EngineState,
@@ -49,7 +65,11 @@ export function shouldReveal(
   const config = requireIntentConfig(s, name);
   const { threshold } = resolveReveal(s.config, config, opts);
   const prediction = predict(s, name, at, opts);
-  return !prediction.revealed && prediction.p >= threshold && prediction.lower >= threshold;
+  return (
+    prediction.suppressedUntil === null &&
+    prediction.p >= threshold &&
+    prediction.lower >= threshold
+  );
 }
 
 /** Records that the app acted on the intent at `at`, starting its cooldown. Evidence is untouched. */

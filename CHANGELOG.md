@@ -20,6 +20,9 @@ First release.
   p − z·sd both clear the threshold, with a cooldown after each reveal.
 - `resetOnOutcome` (default on): the outcome event resets an intent's evidence to the prior
   while keeping what was learned.
+- Outcome cooldown: the outcome event is recorded as `lastOutcomeAt` and `shouldReveal` stays
+  false for the intent's cooldown afterwards; `predict` reports `suppressedUntil`, the end of
+  whichever cooldown (reveal or outcome) is still running.
 - `explain`: per-signal contribution, impact on p, initial, learned and effective weights.
 - `serialize` / `deserialize` with a `version` field, a `migrate` hook, and a `config` option
   that swaps in the app's current config and prunes signals and intents no longer declared.

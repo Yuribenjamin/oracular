@@ -20,6 +20,7 @@ export function initIntent(intent: IntentConfig): IntentState {
     episodes: { hits: 0, misses: 0 },
     learnedAt: null,
     lastRevealedAt: null,
+    lastOutcomeAt: null,
     revealCount: 0,
   };
 }
