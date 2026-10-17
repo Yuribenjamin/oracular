@@ -9,12 +9,34 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/oracular"><img src="https://img.shields.io/npm/v/oracular" alt="npm version"></a>
   <a href="https://github.com/Yuribenjamin/oracular/actions/workflows/ci.yml"><img src="https://github.com/Yuribenjamin/oracular/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://bundlephobia.com/package/oracular"><img src="https://img.shields.io/bundlephobia/minzip/oracular" alt="bundle size"></a>
+  <a href="https://www.npmjs.com/package/oracular"><img src="https://img.shields.io/npm/dm/oracular" alt="npm downloads"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/oracular" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <strong>Documentation:</strong> <a href="https://yuribenjamin.github.io/oracular/">yuribenjamin.github.io/oracular</a>
+  · <a href="https://yuribenjamin.github.io/oracular/guide/introduction">Guide</a>
+  · <a href="https://yuribenjamin.github.io/oracular/api/">API</a>
+  · <a href="https://yuribenjamin.github.io/oracular/playground">Playground</a>
 </p>
 
 **oracular** is a tiny, zero-dependency, pure-functional intent engine that runs entirely on the device. Feed it the events your app already emits. It keeps a probabilistic estimate of what the user is about to do (upgrade, churn, get stuck, buy…) and tells you when that estimate crosses a threshold *with enough confidence* to act on it: show a tip, make an offer, reveal a feature, place an ad. It learns from each user's own outcomes, so your initial guesses get corrected on their device, not on a server.
 
 It never touches the network, storage, DOM, timers or globals. Your app owns persistence and side effects; the library owns the math.
+
+## Why oracular
+
+|                              | oracular                                              | Hosted analytics SDKs                        | Rule engines                              |
+| ---------------------------- | ----------------------------------------------------- | -------------------------------------------- | ----------------------------------------- |
+| **Where scoring runs**       | On the device, inside your app                        | On the vendor's servers                      | In your code, rule by rule                |
+| **Data leaving the device**  | None; the library has no I/O                          | Events are sent to the vendor                | None, unless you add it                   |
+| **Learns per user**          | Yes, from each user's own outcomes, on their device   | Typically across users, server-side          | No; rules are static until you edit them  |
+| **Explainable**              | Per-signal contribution and impact for every answer   | Varies; model internals are usually hidden   | Yes, but only as far as the rules go      |
+| **Dependencies**             | Zero                                                  | An SDK plus a network stack                  | Depends on the engine                     |
+| **Works offline**            | Always                                                | Degrades or queues until online              | Yes                                       |
+
+oracular sits between the other two: more adaptive than fixed rules, and private where hosted scoring is not. If you need population-level analytics or experiments, use a tool built for that; if you need to know when *this* user is ready, without telling anyone, this is the one.
 
 Install with `npm install oracular`, then:
 
@@ -41,13 +63,18 @@ That block is copied verbatim into the test suite, so it always runs.
 
 ## Contents
 
+- [Why oracular](#why-oracular)
 - [How it works](#how-it-works)
 - [Examples](#examples)
+- [Using with React](#using-with-react)
 - [API](#api)
 - [Persistence](#persistence)
 - [Explainability](#explainability)
 - [Design rules](#design-rules)
 - [Roadmap](#roadmap)
+- [Contributing](#contributing)
+
+The [documentation site](https://yuribenjamin.github.io/oracular/) has the long form: one page per concept, a tuning guide with tables, recipes, framework examples, the generated API reference and a playground that runs the engine in your browser.
 
 ## How it works
 
@@ -151,6 +178,39 @@ const willBuy = {
 };
 // shouldReveal(state, 'willBuy', now) → show the sponsored placement, then markRevealed.
 ```
+
+More in the docs: [Recipes](https://yuribenjamin.github.io/oracular/guide/recipes) and the [Tuning guide](https://yuribenjamin.github.io/oracular/guide/tuning).
+
+## Using with React
+
+oracular ships no framework code; this is the userland shape. Load with your current config, observe, persist on change:
+
+```tsx
+import { useEffect, useState } from 'react';
+import { createState, deserialize, markRevealed, observe, serialize, shouldReveal } from 'oracular';
+import { config } from './intent-config';
+
+function load() {
+  const saved = localStorage.getItem('oracular');
+  return saved ? deserialize(saved, { config }) : createState(config); // always pass the config you ship now
+}
+
+export function useIntent() {
+  const [state, setState] = useState(load);
+  useEffect(() => localStorage.setItem('oracular', serialize(state)), [state]);
+
+  const track = (name: string) => setState((s) => observe(s, { name, at: Date.now() }));
+  const reveal = (intent: string) => {
+    const now = Date.now();
+    if (!shouldReveal(state, intent, now)) return false;
+    setState((s) => markRevealed(s, intent, now));
+    return true;
+  };
+  return { track, reveal };
+}
+```
+
+Add `endEpisode` on `pagehide` and you have the whole lifecycle. The same loop for Vue, React Native and Node is on the [frameworks page](https://yuribenjamin.github.io/oracular/guide/frameworks).
 
 ## API
 
@@ -284,7 +344,11 @@ Rows are sorted by the size of their impact. `limit.hit` has no history yet, so 
 
 ## Roadmap
 
-Not in 0.1, deliberately left room for: a React hook, a Vue composable, a devtools panel for watching `explain` live, and presets for common intents.
+Not in 0.1, deliberately left room for: a React hook, a Vue composable, a devtools panel for watching `explain` live, and presets for common intents. Details and how to propose more on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
+
+## Contributing
+
+Bug reports, model discussions and pull requests are welcome. Start with the [contributing guide](./CONTRIBUTING.md) for the development setup, the test rules (every state-returning operation is followed by `assertInvariants`), and the release process. The project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md); security issues go through the [security policy](./SECURITY.md), privately.
 
 ## License
 
