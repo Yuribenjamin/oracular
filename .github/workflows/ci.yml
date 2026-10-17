@@ -64,3 +64,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run docs:build
+
+  changeset:
+    name: Changeset present (advisory)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Fails when the PR changes files but adds no changeset. Advisory only: PRs without
+      # behaviour changes (docs, CI, tests, refactors) legitimately have none.
+      - run: npx changeset status --since=origin/main
