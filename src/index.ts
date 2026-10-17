@@ -1,4 +1,5 @@
 export { endEpisode, observe } from './observe';
+export { markRevealed, predict, shouldReveal } from './predict';
 export { createState } from './state';
 export type {
   DeserializeOptions,

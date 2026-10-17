@@ -1,4 +1,4 @@
-import { createState, endEpisode, observe } from 'oracular';
+import { createState, endEpisode, markRevealed, observe, predict, shouldReveal } from 'oracular';
 import { describe, expect, it } from 'vitest';
 import { clone, deepFreeze, MINUTE, upgradeConfig } from './helpers';
 
@@ -33,5 +33,16 @@ describe('purity', () => {
     const s1 = pure(observe, s0, { name: 'pricing.viewed', at: T });
     pure(endEpisode, s1, T + MINUTE);
     pure(endEpisode, s0, T);
+  });
+
+  it('predict, shouldReveal and markRevealed', () => {
+    const s0 = pure(createState, upgradeConfig());
+    const s1 = pure(observe, s0, { name: 'pricing.viewed', at: T });
+    pure(predict, s1, 'upgrade', T + MINUTE);
+    pure(predict, s1, 'upgrade', T + MINUTE, { z: 2, threshold: 0.3 });
+    pure(shouldReveal, s1, 'upgrade', T + MINUTE);
+    pure(shouldReveal, s1, 'upgrade', T + MINUTE, { threshold: 0.1, z: 0 });
+    const s2 = pure(markRevealed, s1, 'upgrade', T + MINUTE);
+    pure(predict, s2, 'upgrade', T + 2 * MINUTE);
   });
 });
