@@ -1,10 +1,12 @@
 import {
   createState,
+  deserialize,
   endEpisode,
   explain,
   markRevealed,
   observe,
   predict,
+  serialize,
   shouldReveal,
 } from 'oracular';
 import { describe, expect, it } from 'vitest';
@@ -60,5 +62,13 @@ describe('purity', () => {
     const s2 = pure(observe, s1, { name: 'plan.downgraded', at: T });
     pure(explain, s2, 'upgrade', T + MINUTE);
     pure(explain, s0, 'upgrade', T);
+  });
+
+  it('serialize and deserialize', () => {
+    const s0 = pure(createState, upgradeConfig());
+    const s1 = pure(observe, s0, { name: 'pricing.viewed', at: T });
+    const json = pure(serialize, s1);
+    pure(deserialize, json);
+    pure(deserialize, json, { config: upgradeConfig({ episodeTimeout: MINUTE }) });
   });
 });
