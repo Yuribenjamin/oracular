@@ -27,6 +27,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "oracular": "dist/cli.js"
+  },
   "exports": {
     ".": {
       "import": {
@@ -54,10 +57,10 @@
     "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.cli.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "biome ci .",
     "format": "biome check --write .",
-    "smoke": "node scripts/smoke.cjs && node scripts/smoke.mjs",
+    "smoke": "node scripts/smoke.cjs && node scripts/smoke.mjs && node scripts/smoke-cli.mjs",
     "size": "size-limit",
     "pack:check": "node scripts/pack-check.mjs",
     "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run smoke && npm run size && npm run pack:check",

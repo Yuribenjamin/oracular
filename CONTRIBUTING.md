@@ -19,10 +19,10 @@ Individual steps:
 | Command                 | What it does                                                  |
 | ----------------------- | ------------------------------------------------------------- |
 | `npm run lint`          | Biome lint + format check (`npm run format` to fix)           |
-| `npm run typecheck`     | `tsc` over `src/` against the ES2020 library only, then tests |
+| `npm run typecheck`     | `tsc` over `src/` against the ES2020 library only, `cli/` with Node types, then tests |
 | `npm test`              | vitest, once (`npm run test:watch` to iterate)                |
-| `npm run build`         | tsup → `dist/` (ESM, CJS, `.d.ts`)                            |
-| `npm run smoke`         | runs the built output through the `exports` map in CJS and ESM |
+| `npm run build`         | tsup → `dist/` (ESM, CJS, `.d.ts`, and the `dist/cli.js` bin)  |
+| `npm run smoke`         | runs the built output through the `exports` map in CJS and ESM, and the bin on the fixture logs |
 | `npm run size`          | size-limit: min+gzip size of the ESM build against the budget in `.size-limit.json` |
 | `npm run pack:check`    | packs the package, asserts the exact file list, runs publint (strict) and attw on the tarball |
 | `npm run docs:dev`      | the documentation site locally (regenerates the API reference first) |
@@ -45,6 +45,8 @@ src/            the library (zero runtime dependencies, no I/O of any kind)
   serialize.ts  serialize, deserialize, config swap
   migrate.ts    the built-in state migrations (version 1 → 2)
   recorder.ts   createRecord, createEndRecord: the recorder format
+cli/            the `oracular` bin (`oracular replay`): Node only, compiled with tsconfig.cli.json,
+                not part of the library; it imports 'oracular' like any user
 tests/          vitest suites, one per area, plus helpers.ts
   fixtures/     states saved by every published version, and the replay fixture logs
 examples/       quickstart.ts: the README's first code block, byte for byte

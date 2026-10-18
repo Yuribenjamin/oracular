@@ -72,6 +72,7 @@ That block is copied verbatim into the test suite, so it always runs.
 - [API](#api)
 - [Persistence](#persistence)
 - [Explainability](#explainability)
+- [Shadow mode & replay](#shadow-mode--replay)
 - [Design rules](#design-rules)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
@@ -358,6 +359,21 @@ explain(state, 'upgrade', Date.now());
 ```
 
 Rows are sorted by the size of their impact. `limit.hit` has no history yet, so its effective weight is exactly the initial one. `pricing.viewed` was followed by an upgrade in six of its seven sessions while the three sessions without it saw one upgrade, so it learned a weight above the initial 3. `export.clicked` appeared in every session: it has no counterfactual, so whatever its hit rate, its weight stands at exactly the initial 1 until a session happens without it. See [Episodes & learning](https://yuribenjamin.github.io/oracular/guide/concepts/episodes-and-learning) for why learning needs contrast.
+
+## Shadow mode & replay
+
+Run oracular silently first. Record what it decides, export the log, and measure a config offline before any reveal is shown:
+
+```ts
+state = observe(state, event);
+log.append(JSON.stringify(createRecord(state, event, { installId, mode: 'shadow' })));
+```
+
+```sh
+npx oracular replay shadow.ndjson --config oracular.config.json
+```
+
+`replay` reports precision, recall, lead time and reveals per user for every intent and threshold, and a reliability table with a Brier score. It scores only the periods in which reveals were not shown, because once they are, the reveal itself causes outcomes. `installId` is a random id your app generates once and stores; it is never derived from the device. The log holds event names and times, never `props`, and leaves the device only if your app sends it. The [Shadow mode guide](https://yuribenjamin.github.io/oracular/guide/shadow-mode) has the workflow and the record format.
 
 ## Design rules
 

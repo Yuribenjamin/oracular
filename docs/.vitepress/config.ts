@@ -74,6 +74,7 @@ export default defineConfig({
             { text: 'Persistence & migration', link: '/guide/persistence' },
             { text: 'Explainability', link: '/guide/explainability' },
             { text: 'Tuning guide', link: '/guide/tuning' },
+            { text: 'Shadow mode', link: '/guide/shadow-mode' },
             { text: 'Recipes', link: '/guide/recipes' },
             { text: 'Using with frameworks', link: '/guide/frameworks' },
           ],

@@ -20,6 +20,7 @@ export const EXPECTED_FILES = [
   'CHANGELOG.md',
   'LICENSE',
   'README.md',
+  'dist/cli.js',
   'dist/index.cjs',
   'dist/index.cjs.map',
   'dist/index.d.cts',
