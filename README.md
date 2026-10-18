@@ -73,7 +73,7 @@ That block is copied verbatim into the test suite, so it always runs.
 - [API](#api)
 - [Persistence](#persistence)
 - [Explainability](#explainability)
-- [Shadow mode & replay](#shadow-mode--replay)
+- [Shadow mode, replay and tune](#shadow-mode-replay-and-tune)
 - [Design rules](#design-rules)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
@@ -363,7 +363,7 @@ explain(state, 'upgrade', Date.now());
 
 Rows are sorted by the size of their impact. `limit.hit` has no history yet, so its effective weight is exactly the initial one. `pricing.viewed` was followed by an upgrade in six of its seven sessions while the three sessions without it saw one upgrade, so it learned a weight above the initial 3. `export.clicked` appeared in every session: it has no counterfactual, so whatever its hit rate, its weight stands at exactly the initial 1 until a session happens without it. See [Episodes & learning](https://yuribenjamin.github.io/oracular/guide/concepts/episodes-and-learning) for why learning needs contrast.
 
-## Shadow mode & replay
+## Shadow mode, replay and tune
 
 Run oracular silently first. Record what it decides, export the log, and measure a config offline before any reveal is shown:
 
@@ -376,7 +376,13 @@ log.append(JSON.stringify(createRecord(state, event, { installId, mode: 'shadow'
 npx oracular replay shadow.ndjson --config oracular.config.json
 ```
 
-`replay` reports precision, recall, lead time and reveals per user for every intent and threshold, and a reliability table with a Brier score. It scores only the periods in which reveals were not shown, because once they are, the reveal itself causes outcomes. `installId` is a random id your app generates once and stores; it is never derived from the device. The log holds event names and times, never `props`, and leaves the device only if your app sends it. The [Shadow mode guide](https://yuribenjamin.github.io/oracular/guide/shadow-mode) has the workflow and the record format.
+`replay` reports precision, recall, lead time and reveals per user for every intent and threshold, and a reliability table with a Brier score. It scores only the periods in which reveals were not shown, because once they are, the reveal itself causes outcomes. `installId` is a random id your app generates once and stores; it is never derived from the device. The log holds event names and times, never `props`, and leaves the device only if your app sends it.
+
+```sh
+npx oracular tune shadow.ndjson --config oracular.config.json
+```
+
+`tune` seeds a config from the same log: grouped by install, the base rate becomes the prior, the spread of per-install base rates the prior strength, each signal's lift over the episodes without it its weight, and the half-life that predicts the log best wins a grid search scored by `replay`. The counts come from the engine itself, so tune cannot disagree with what a device would learn. It prints sample sizes and a 90% interval per weight, and the config to paste; the engine corrects it per user from there. The [Shadow mode guide](https://yuribenjamin.github.io/oracular/guide/shadow-mode) has the workflow, the record format and both commands.
 
 ## Design rules
 
@@ -387,7 +393,7 @@ npx oracular replay shadow.ndjson --config oracular.config.json
 
 ## Roadmap
 
-Now is 0.4, themed **learning that matches how people behave**: cross-episode attribution, so a session's signals can earn credit for an outcome days later; `npx oracular tune` to seed a config from a shadow log; presets; and small ergonomics (`validateConfig`, `ms`, a JSON Schema for the config). 0.3 shipped shadow mode, `npx oracular replay` and per-episode saturation. Then a written stability policy before 1.0. Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
+Now is 0.4, themed **learning that matches how people behave**: cross-episode attribution, so a session's signals can earn credit for an outcome days later, and presets. Shipped so far: `npx oracular tune` to seed a config from a shadow log, and small ergonomics (`validateConfig`, `ms`, a JSON Schema for the config). 0.3 shipped shadow mode, `npx oracular replay` and per-episode saturation. Then a written stability policy before 1.0. Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
 
 ## Contributing
 

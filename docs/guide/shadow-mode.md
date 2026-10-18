@@ -1,6 +1,6 @@
 # Shadow mode
 
-Before an intent changes what users see, measure it. In shadow mode your app runs oracular exactly as it would in production and records what the engine decides, but shows nothing. You export the log, replay it offline against the config you shipped or a new one, read precision, recall and calibration, tune, and only then switch the reveal on.
+Before an intent changes what users see, measure it. In shadow mode your app runs oracular exactly as it would in production and records what the engine decides, but shows nothing. You export the log, replay it offline against the config you shipped or a new one, read precision, recall and calibration, let `tune` propose a config from it, and only then switch the reveal on.
 
 Both production integrations so far built this themselves. From 0.3 the recorder format is part of oracular, so the tooling can rely on it.
 
@@ -115,6 +115,104 @@ Replay's numbers mean something only where reveals were not shown. Once a reveal
 - `--include-live` scores everything, with a warning that live periods overstate the engine.
 
 Exit codes: 0 when the report is printed, 1 for unreadable input or nothing to score, 2 for a usage error.
+
+## Tune
+
+`npx oracular tune` reads the same log and seeds a config from it. Grouped by install, it reads what the engine itself counts, hits, misses and episode totals, off the state after every record, so it cannot disagree with what a device would learn from the same events:
+
+- **prior**: the pooled base rate, `(outcomes + 1) / (episodes + 2)`.
+- **priorStrength**: from the spread of per-install base rates, by the method of moments on a Beta distribution once the spread that sampling alone would produce is taken out, kept inside 2 to 50. Below 10 installs with a counted episode it is kept as it was, and the report says so.
+- **weights**: for each declared signal, `priorStrength × lift`, where lift is the engine's own comparison of the outcome rate in episodes with the signal against the episodes without it ([Episodes & learning](/guide/concepts/episodes-and-learning#from-hits-and-misses-to-a-weight)). A 90% Wilson interval on the rate with the signal gives the interval on the weight. A weight is labelled *thin* while its contrast is below `learning.priorEpisodes`, the point at which the engine itself would trust the comparison as much as your guess. A signal with no measurable lift is left out of the printed config.
+- **halfLife**: the lowest Brier score over a grid of half-lives, each scored by `replay` with the fitted prior, strength and weights and one fixed window.
+
+```sh
+npx oracular tune shadow-week-1.ndjson shadow-week-2.ndjson --config oracular.config.json
+```
+
+Options: `--intent <name>` to fit some intents only; `--half-lives 12h,1d,3d` for the grid (default 1h, 6h, 1d, 3d, 7d, 14d, 30d plus the current value); `--window` for the scoring window when the intent has no cooldown; `--all-events` to measure every other event name in the log as a candidate signal; `--include-live`; `--json`. On the fixture log in the repository, restricted to the `stuck` intent:
+
+```sh
+npx oracular tune tests/fixtures/replay/shadow.ndjson --config tests/fixtures/replay/config.json --intent stuck
+```
+
+<!-- tune:example -->
+```text
+oracular tune: 3 installs, 59 records (59 shadow, 0 live), 2023-11-15 07:15 UTC to 2023-11-27 07:15 UTC
+Counted: shadow episodes only. Durations assume `at` is in milliseconds. Every number is a starting point: the engine corrects the weights per user.
+
+stuck: outcome help.article.read, 3 installs, 14 counted episodes, 2 with the outcome
+
+| knob          | fitted | was | from                                                                             |
+| ------------- | ------ | --- | -------------------------------------------------------------------------------- |
+| prior         | 0.1875 | 0.1 | 2 of 14 episodes ended with the outcome, smoothed (2+1)/(14+2)                   |
+| priorStrength | 5.0    | 5.0 | kept: 3 installs with a counted episode, reading the spread needs 10             |
+| halfLife      | 10m    | 10m | lowest Brier score over the grid, 0.163 (always predicting the base rate: 0.200) |
+
+| signal         | weight | was   | 90% interval  | lift  | with: hits / misses | without: outcomes / episodes | note                     |
+| -------------- | ------ | ----- | ------------- | ----- | ------------------- | ---------------------------- | ------------------------ |
+| editor.undo    | 2.27   | 1.00  | 0.54 to 4.01  | +0.45 | 2 / 2               | 0 / 10                       | thin: 2.9 of 10 contrast |
+| search.empty   | 2.83   | 2.00  | 0.96 to 4.58  | +0.57 | 2 / 1               | 0 / 11                       | thin: 2.4 of 10 contrast |
+| help.opened    | 3.65   | 3.00  | 1.90 to 5.00  | +0.73 | 2 / 0               | 0 / 12                       | thin: 1.7 of 10 contrast |
+| task.completed | 0.83   | -4.00 | -5.00 to 3.31 | +0.17 | 0 / 1               | 2 / 13                       | thin: 0.9 of 10 contrast |
+
+Half-life grid, Brier score against "the outcome follows within 1h" (lower is better): 10m 0.163 *, 1h 0.167, 6h 0.168, 1d 0.171, 3d 0.180, 7d 0.185, 14d 0.187, 30d 0.188
+
+Config with every fitted value swapped in (paste it, or pass it to oracular replay --config):
+{
+  "intents": {
+    "upgrade": {
+      "prior": 0.05,
+      "priorStrength": 10,
+      "halfLife": 604800000,
+      "signals": {
+        "pricing.viewed": 3,
+        "limit.hit": 2,
+        "export.clicked": 1,
+        "plan.downgraded": -4
+      },
+      "outcome": "upgrade.completed"
+    },
+    "stuck": {
+      "prior": 0.1875,
+      "priorStrength": 5,
+      "halfLife": 600000,
+      "signals": {
+        "editor.undo": 2.27,
+        "search.empty": 2.83,
+        "help.opened": 3.65,
+        "task.completed": 0.83
+      },
+      "outcome": "help.article.read",
+      "saturate": false,
+      "reveal": {
+        "threshold": 0.6,
+        "cooldown": 3600000
+      }
+    },
+    "tip": {
+      "prior": 0.2,
+      "priorStrength": 5,
+      "halfLife": 86400000,
+      "signals": {
+        "app.opened": 1
+      }
+    }
+  },
+  "episodeTimeout": 1800000
+}
+```
+<!-- /tune:example -->
+
+That output is checked by the test suite against the command itself. Three installs and fourteen episodes are far too little, and the report says so: every weight is thin, the prior strength is kept, and a warning on stderr says to treat every number as a rough starting point. `task.completed` flips from −4 to +0.83 on the strength of a single episode, and its interval, −5 to 3.31, says the data does not know. Read a real log the same way: trust a weight whose interval excludes 0 and that is not thin, and keep your own number otherwise.
+
+What tune counts, and what it leaves out:
+
+- **Counted episodes.** Each install starts from `createState(config)` at its first record, as in replay. An episode counts once its verdict is known: the outcome arrived, or it ended through an `end` record or `episodeTimeout`. The open last episode of every install is not counted.
+- **Shadow only.** An episode in which any record was live is left out, because the reveal may have caused the outcome. A mixed log gets a warning, a live-only log is refused, and `--include-live` counts everything anyway.
+- **Candidates.** With `--all-events`, every other event name in the log is measured as if it were a signal of weight 1, which changes nothing about what the declared signals learn. Candidates are listed, never written into the config: a signal that fires together with one you have is one piece of evidence configured as two ([signals add](/guide/can-and-cannot-learn#signals-add-no-order-no-interactions)).
+- **What stays.** Everything tune cannot read from the log is kept as it was: `episodeTimeout`, `reveal`, `learning`, `resetOnOutcome`, `saturate`, and intents without an outcome. The printed config is the config you gave it with the fitted values swapped in, and `replay --config` takes it as it is.
+
+Exit codes as replay: 0 when the report is printed, 1 for unreadable input or nothing to fit, 2 for a usage error.
 
 ## The record format
 

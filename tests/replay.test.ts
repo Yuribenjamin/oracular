@@ -562,7 +562,12 @@ describe('oracular replay', () => {
   it('prints help and the version', async () => {
     const help = io();
     expect(await run(['--help'], help.io)).toBe(0);
-    expect(help.out.stdout).toMatch(/^Usage: oracular replay/);
+    expect(help.out.stdout).toMatch(/^Usage: oracular <command>/);
+    expect(help.out.stdout).toMatch(/\n {2}replay /);
+    expect(help.out.stdout).toMatch(/\n {2}tune /);
+    const replayHelp = io();
+    expect(await run(['replay', '--help'], replayHelp.io)).toBe(0);
+    expect(replayHelp.out.stdout).toMatch(/^Usage: oracular replay/);
     const version = io();
     expect(await run(['--version'], version.io)).toBe(0);
     const pkg = JSON.parse(readFileSync(`${root}package.json`, 'utf8'));

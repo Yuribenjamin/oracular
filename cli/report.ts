@@ -34,10 +34,11 @@ export function formatTime(at: number | null): string {
   return String(at);
 }
 
-const pct = (x: number | null) => (x === null ? '–' : `${(x * 100).toFixed(1)}%`);
-const num = (x: number | null, digits: number) => (x === null ? '–' : x.toFixed(digits));
+export const pct = (x: number | null) => (x === null ? '–' : `${(x * 100).toFixed(1)}%`);
+export const num = (x: number | null, digits: number) => (x === null ? '–' : x.toFixed(digits));
 
-function table(headers: string[], rows: string[][]): string {
+/** A Markdown-style table whose columns are padded to their widest cell. */
+export function table(headers: string[], rows: string[][]): string {
   const widths = headers.map((h, i) =>
     Math.max(h.length, ...rows.map((r) => (r[i] as string).length)),
   );
