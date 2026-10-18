@@ -1,6 +1,7 @@
+import { settlePending } from './attribution';
 import type { ResolvedLearning, ResolvedReveal } from './config';
 import { decayIntent } from './intent';
-import { decayLearned, signalWeights } from './learning';
+import { signalWeights } from './learning';
 import { betaMean, betaSd, clamp01 } from './math';
 import { getIntentState } from './state';
 import type {
@@ -13,7 +14,10 @@ import type {
 } from './types';
 import { getOwn } from './util';
 
-/** The intent decayed to `at` (evidence and learned counts), without storing anything. */
+/**
+ * The intent brought up to `at` without storing anything: evidence decayed, waiting episodes whose
+ * window has passed settled as misses, learned counts decayed.
+ */
 export function assessIntent(
   state: EngineState,
   name: string,
@@ -21,7 +25,8 @@ export function assessIntent(
   learning: ResolvedLearning,
   at: number,
 ): IntentState {
-  return decayLearned(decayIntent(getIntentState(state, name, intent), intent, at), learning, at);
+  const is = decayIntent(getIntentState(state, name, intent), intent, at);
+  return settlePending(is, intent, learning, at);
 }
 
 /** The end of a cooldown that started at `since`, if it is still running at `at`. */

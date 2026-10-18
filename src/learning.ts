@@ -70,21 +70,23 @@ export function signalWeights(
   return { initial, learned, effective, hits: record.hits, misses: record.misses };
 }
 
-/** Gives each listed signal a hit (outcome arrived) or a miss (episode ended without it), and counts the episode. */
+/**
+ * Counts one episode for the listed signals and for the base rate: `credit` of a hit and
+ * `1 − credit` of a miss. 1 when the outcome arrived in the episode, 0 when it ended without it,
+ * and in between for an episode a later outcome credits under `attribution` (see attribution.ts).
+ * Whatever the credit, the episode counts exactly once.
+ */
 export function recordEpisode(
   state: IntentState,
   signals: readonly string[],
-  outcome: boolean,
+  credit: number,
 ): IntentState {
+  const miss = 1 - credit;
   const learned = { ...state.learned };
   for (const signal of signals) {
     const r = getOwn(learned, signal) ?? NONE;
-    learned[signal] = outcome
-      ? { hits: r.hits + 1, misses: r.misses }
-      : { hits: r.hits, misses: r.misses + 1 };
+    learned[signal] = { hits: r.hits + credit, misses: r.misses + miss };
   }
-  const episodes = outcome
-    ? { hits: state.episodes.hits + 1, misses: state.episodes.misses }
-    : { hits: state.episodes.hits, misses: state.episodes.misses + 1 };
+  const episodes = { hits: state.episodes.hits + credit, misses: state.episodes.misses + miss };
   return { ...state, learned, episodes };
 }

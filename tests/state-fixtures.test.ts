@@ -58,10 +58,12 @@ describe('states saved by every published version', () => {
         const s = deserialize(text, { migrate });
         assertInvariants(s);
         expect(s.version).toBe(STATE_VERSION);
-        expect(STATE_VERSION).toBe(2);
+        expect(STATE_VERSION).toBe(3);
         // The library knows every version it ever wrote; the app's migrate is for versions it
         // does not know.
         expect(migrate).not.toHaveBeenCalled();
+        // Version 3 holds the episodes waiting under `attribution`; no earlier release had any.
+        for (const is of Object.values(s.intents)) expect(is.pending).toStrictEqual([]);
         for (const [name, record] of Object.entries(raw.episode.intents)) {
           // Version 2 counts occurrences per episode. Version 1 only knew which signals were
           // seen, so each counts once; a version 2 state keeps the counts it stored.

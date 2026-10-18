@@ -10,6 +10,7 @@ type Stored = Record<string, unknown>;
  */
 const MIGRATIONS: Record<number, (stored: Stored) => Stored> = {
   1: fromV1,
+  2: fromV2,
 };
 
 /** Whether `version` is one this library can bring up to date on its own. */
@@ -50,4 +51,21 @@ function fromV1(stored: Stored): Stored {
     }
   }
   return { ...stored, version: 2, episode: { ...episode, intents } };
+}
+
+/**
+ * Version 2 (oracular 0.3.0 to 0.5.x) → 3. Version 3 lets an intent hold closed episodes that wait
+ * for the outcome under `IntentConfig.attribution`. A version 2 state holds none, so every intent
+ * gets an empty list and nothing else changes: α, β and every learned count, and therefore every
+ * estimate, are exactly what they were.
+ */
+function fromV2(stored: Stored): Stored {
+  if (!isRecord(stored.intents)) return { ...stored, version: 3 };
+  const intents: Stored = {};
+  for (const key of Object.keys(stored.intents)) {
+    if (key === '__proto__') continue;
+    const intent = stored.intents[key];
+    intents[key] = isRecord(intent) ? { ...intent, pending: [] } : intent;
+  }
+  return { ...stored, version: 3, intents };
 }

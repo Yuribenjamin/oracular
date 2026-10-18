@@ -1,3 +1,4 @@
+import { MAX_PENDING } from './attribution';
 import { normalizeConfig, resolveLearning } from './config';
 import { initIntent, withContributions } from './intent';
 import { signalWeights } from './learning';
@@ -10,6 +11,7 @@ import type {
   EpisodeIntentRecord,
   EpisodeState,
   IntentState,
+  PendingEpisode,
   SignalContribution,
   SignalRecord,
 } from './types';
@@ -38,7 +40,7 @@ export function serialize(state: EngineState): string {
  * Always pass the app's current `config`: it is validated and replaces the stored snapshot,
  * intents and signals no longer declared are dropped (α and β are recomputed from the kept
  * contributions), and newly declared intents start at their prior. States saved by oracular
- * 0.1.0 to 0.2.x are upgraded to the current shape on their own; `migrate` is only for a version
+ * 0.1.0 to 0.5.x are upgraded to the current shape on their own; `migrate` is only for a version
  * this library does not know.
  *
  * @param json - A string produced by {@link serialize}.
@@ -158,6 +160,20 @@ function mapOwn<T>(
   return out;
 }
 
+function pendingEpisodes(value: unknown, path: string): PendingEpisode[] {
+  if (!Array.isArray(value)) typeError(path, 'must be an array');
+  if (value.length > MAX_PENDING) {
+    throw new RangeError(`oracular: ${path} must hold at most ${MAX_PENDING} episodes`);
+  }
+  return value.map((item, i) => {
+    const r = record(item, `${path}[${i}]`);
+    if (!Array.isArray(r.seen) || !r.seen.every((s) => typeof s === 'string')) {
+      typeError(`${path}[${i}].seen`, 'must be an array of strings');
+    }
+    return { endedAt: finite(r.endedAt, `${path}[${i}].endedAt`), seen: r.seen as string[] };
+  });
+}
+
 function intentState(value: unknown, path: string): IntentState {
   const r = record(value, path);
   const revealCount = finite(r.revealCount, `${path}.revealCount`);
@@ -171,6 +187,7 @@ function intentState(value: unknown, path: string): IntentState {
     contributions: mapOwn(r.contributions, `${path}.contributions`, contribution),
     learned: mapOwn(r.learned, `${path}.learned`, signalRecord),
     episodes: signalRecord(r.episodes, `${path}.episodes`),
+    pending: pendingEpisodes(r.pending, `${path}.pending`),
     learnedAt: nullOrFinite(r.learnedAt, `${path}.learnedAt`),
     lastRevealedAt: nullOrFinite(r.lastRevealedAt, `${path}.lastRevealedAt`),
     lastOutcomeAt: nullOrFinite(r.lastOutcomeAt, `${path}.lastOutcomeAt`),
@@ -255,6 +272,19 @@ function keep<T>(source: Record<string, T>, declared: Record<string, unknown>): 
   return out;
 }
 
+/** Waiting episodes with their seen lists pruned to declared signals, each once, in order of close. */
+function keepPending(
+  pending: readonly PendingEpisode[],
+  signals: Record<string, number>,
+): PendingEpisode[] {
+  return pending
+    .map((episode) => ({
+      endedAt: episode.endedAt,
+      seen: episode.seen.filter((s, i) => hasOwn(signals, s) && episode.seen.indexOf(s) === i),
+    }))
+    .sort((a, b) => a.endedAt - b.endedAt);
+}
+
 /**
  * Drops intents and signals the config no longer declares, starts newly declared intents at
  * their prior, and recomputes α and β as the (possibly new) prior plus the kept contributions.
@@ -269,7 +299,11 @@ function reconcile(raw: EngineState, config: EngineConfig): EngineState {
       intents[name] = initIntent(intent);
     } else {
       intents[name] = withContributions(
-        { ...stored, learned: keep(stored.learned, intent.signals) },
+        {
+          ...stored,
+          learned: keep(stored.learned, intent.signals),
+          pending: keepPending(stored.pending, intent.signals),
+        },
         intent,
         keep(stored.contributions, intent.signals),
       );

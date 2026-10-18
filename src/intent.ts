@@ -18,6 +18,7 @@ export function initIntent(intent: IntentConfig): IntentState {
     contributions: {},
     learned: {},
     episodes: { hits: 0, misses: 0 },
+    pending: [],
     learnedAt: null,
     lastRevealedAt: null,
     lastOutcomeAt: null,

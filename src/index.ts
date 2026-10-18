@@ -22,6 +22,7 @@ export type {
   IntentState,
   LearningConfig,
   Migrate,
+  PendingEpisode,
   Prediction,
   RecordedDecision,
   RecorderRecord,

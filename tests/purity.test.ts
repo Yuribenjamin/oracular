@@ -99,6 +99,22 @@ describe('purity', () => {
     pure(episodeClosed, s1, s2);
   });
 
+  it('observe and endEpisode with attribution: an episode waits, the outcome credits it', () => {
+    const config = upgradeConfig({ episodeTimeout: 10 * MINUTE });
+    const attributed = {
+      ...config,
+      intents: { upgrade: { ...config.intents.upgrade!, attribution: 14 * 24 * 60 * MINUTE } },
+    };
+    const s0 = pure(createState, attributed);
+    const s1 = pure(observe, s0, { name: 'pricing.viewed', at: T });
+    const s2 = pure(endEpisode, s1, T + MINUTE);
+    pure(explain, s2, 'upgrade', T + 20 * 24 * 60 * MINUTE);
+    const s3 = pure(observe, s2, { name: 'upgrade.completed', at: T + 60 * MINUTE });
+    pure(observe, s2, { name: 'limit.hit', at: T + 20 * 24 * 60 * MINUTE });
+    pure(deserialize, pure(serialize, s2), { config: attributed });
+    pure(serialize, s3);
+  });
+
   it('validateConfig and ms', () => {
     pure(validateConfig, upgradeConfig({ episodeTimeout: 10 * MINUTE, reveal: { z: 1.64 } }));
     pure(ms.days, 7);
