@@ -24,6 +24,7 @@ const WRITTEN_VERSION: Record<string, number> = {
   '0.2.0': 1,
   '0.2.1': 1,
   '0.3.0': 2,
+  '0.4.0': 2,
 };
 
 /** The stored state exactly as the old version wrote it. */
