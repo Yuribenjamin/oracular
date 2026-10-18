@@ -29,6 +29,7 @@ export const INTENT_KEYS = [
   'outcome',
   'resetOnOutcome',
   'saturate',
+  'attribution',
   'reveal',
 ] as const;
 export const REVEAL_KEYS = ['threshold', 'z', 'cooldown'] as const;
@@ -180,6 +181,9 @@ export function normalizeIntentConfig(value: unknown, path: string): IntentConfi
   if (record.saturate !== undefined) {
     if (typeof record.saturate !== 'boolean') typeError(`${path}.saturate`, 'must be a boolean');
     out.saturate = record.saturate;
+  }
+  if (record.attribution !== undefined) {
+    out.attribution = expectPositive(record.attribution, `${path}.attribution`);
   }
   if (record.reveal !== undefined)
     out.reveal = normalizeRevealOptions(record.reveal, `${path}.reveal`);

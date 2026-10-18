@@ -24,6 +24,6 @@ it('exports exactly the public surface', () => {
       'validateConfig',
     ].sort(),
   );
-  expect(api.STATE_VERSION).toBe(2);
+  expect(api.STATE_VERSION).toBe(3);
   expect(api.RECORD_VERSION).toBe(1);
 });

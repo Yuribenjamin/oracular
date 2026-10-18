@@ -16,6 +16,10 @@ Learning is per user, on their device, from their own outcomes. The engine recor
 
 When the session ends: `pagehide` on the web, the app going to the background on mobile, sign-out. Also set `episodeTimeout` as a safety net. Without episodes ending there are no misses, and the engine cannot learn. See [Episodes & learning](/guide/concepts/episodes-and-learning#what-you-have-to-do).
 
+## Why did Monday's session get a miss for Tuesday's upgrade?
+
+Because learning is per episode: a signal earns a hit only when the outcome arrives in the same session. Set `attribution` on the intent and a session that ends without the outcome waits instead; when the outcome arrives inside the window, the session gets the share `2^(−age / halfLife)` of a hit, 0.906 for a day-old session with a one-week half-life. See [Episodes & learning](/guide/concepts/episodes-and-learning#credit-across-episodes).
+
 ## Can one event be a signal for several intents?
 
 Yes, with different weights, and it can be the outcome of one intent and a signal of another. Each intent takes what it declares.

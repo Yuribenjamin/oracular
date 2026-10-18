@@ -1,4 +1,5 @@
 import { expect } from 'vitest';
+import { MAX_PENDING } from '../src/attribution';
 import { priorCounts } from '../src/intent';
 import type { EngineConfig, EngineState } from '../src/types';
 import { STATE_VERSION } from '../src/version';
@@ -99,6 +100,26 @@ export function assertInvariants(state: EngineState): void {
     expectFinite(is.episodes.misses, `${name}.episodes.misses`);
     expect(is.episodes.hits).toBeGreaterThanOrEqual(0);
     expect(is.episodes.misses).toBeGreaterThanOrEqual(0);
+
+    // Waiting episodes: bounded, in order of close, each seen signal declared and listed once.
+    expect(Array.isArray(is.pending), `${name}.pending must be an array`).toBe(true);
+    expect(is.pending.length, `${name}.pending holds more than ${MAX_PENDING}`).toBeLessThanOrEqual(
+      MAX_PENDING,
+    );
+    let lastEnd = Number.NEGATIVE_INFINITY;
+    for (const [i, episode] of is.pending.entries()) {
+      expectFinite(episode.endedAt, `${name}.pending[${i}].endedAt`);
+      expect(episode.endedAt, `${name}.pending must be in order of close`).toBeGreaterThanOrEqual(
+        lastEnd,
+      );
+      lastEnd = episode.endedAt;
+      expect(new Set(episode.seen).size, `${name}.pending[${i}]: duplicate signals`).toBe(
+        episode.seen.length,
+      );
+      for (const signal of episode.seen) {
+        expect(signals, `undeclared signal ${signal} in ${name}.pending`).toContain(signal);
+      }
+    }
 
     expectNullOrFinite(is.updatedAt, `${name}.updatedAt`);
     expectNullOrFinite(is.learnedAt, `${name}.learnedAt`);

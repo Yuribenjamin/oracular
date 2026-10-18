@@ -14,6 +14,7 @@ describe('createState', () => {
       contributions: {},
       learned: {},
       episodes: { hits: 0, misses: 0 },
+      pending: [],
       lastRevealedAt: null,
       revealCount: 0,
     });
@@ -88,6 +89,13 @@ describe('createState', () => {
       ['empty signal name', () => patch(base(), (i) => ({ ...i, signals: { '': 1 } })), TypeError],
       ['empty outcome', () => patch(base(), (i) => ({ ...i, outcome: '' })), TypeError],
       ['saturate not boolean', () => patch(base(), (i) => ({ ...i, saturate: 'no' })), TypeError],
+      ['attribution 0', () => patch(base(), (i) => ({ ...i, attribution: 0 })), RangeError],
+      ['attribution negative', () => patch(base(), (i) => ({ ...i, attribution: -1 })), RangeError],
+      [
+        'attribution as string',
+        () => patch(base(), (i) => ({ ...i, attribution: '7d' })),
+        TypeError,
+      ],
       [
         'resetOnOutcome not boolean',
         () => patch(base(), (i) => ({ ...i, resetOnOutcome: 'yes' })),

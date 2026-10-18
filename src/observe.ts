@@ -1,3 +1,4 @@
+import { creditPending, deferEpisode, settlePending } from './attribution';
 import { expectTimestamp, resolveLearning, validateEvent } from './config';
 import {
   emptyEpisode,
@@ -9,7 +10,7 @@ import {
   timedOutAt,
 } from './episode';
 import { applySignal, decayIntent, resetToPrior } from './intent';
-import { decayLearned, recordEpisode, signalWeights } from './learning';
+import { recordEpisode, signalWeights } from './learning';
 import { repeatFactor } from './math';
 import { getIntentState, requireState } from './state';
 import type { EngineState, IntentEvent, IntentState } from './types';
@@ -24,10 +25,11 @@ import { hasOwn } from './util';
  * `w × log2(1 + 1/n)`, counted since the episode started or the intent's outcome last arrived.
  * That is the default when `config.episodeTimeout` is set, and `IntentConfig.saturate` overrides
  * it either way; otherwise every occurrence adds all of `w`. For every intent the event is the
- * outcome of: give the remembered signals a hit, count the episode toward the base rate, record
- * `lastOutcomeAt`, and (by default) reset the evidence to the prior. Any event opens or extends
- * the current episode; an idle gap longer than `config.episodeTimeout` closes the previous
- * episode first.
+ * outcome of: give the remembered signals a hit, count the episode toward the base rate, credit
+ * the closed episodes still waiting under `IntentConfig.attribution` by `2^(−age / halfLife)`
+ * each, record `lastOutcomeAt`, and (by default) reset the evidence to the prior. Any event opens
+ * or extends the current episode; an idle gap longer than `config.episodeTimeout` closes the
+ * previous episode first.
  *
  * @param state - The current state. Not mutated.
  * @param event - `name` is matched against every intent's signals and outcome; `at` is the
@@ -62,7 +64,7 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
 
     let is = getIntentState(s, intentName, intent);
     is = decayIntent(is, intent, at);
-    is = decayLearned(is, learning, at);
+    is = settlePending(is, intent, learning, at);
 
     if (isSignal) {
       const { effective } = signalWeights(is, intent, learning, name);
@@ -75,7 +77,8 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
     }
 
     if (isOutcome) {
-      is = recordEpisode(is, episodeRecord(episode, intentName).seen, true);
+      is = recordEpisode(is, episodeRecord(episode, intentName).seen, 1);
+      is = creditPending(is, intent, at);
       episode = markResolved(episode, intentName);
       is = { ...is, lastOutcomeAt: at };
       if (intent.resetOnOutcome ?? true) is = resetToPrior(is, intent);
@@ -89,7 +92,8 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
 
 /**
  * Ends the current episode at `at`. Every intent whose outcome did not arrive gives a miss to
- * each signal seen this episode and counts the episode toward its base rate. Call it when a
+ * each signal seen this episode and counts the episode toward its base rate, or, with
+ * `IntentConfig.attribution` set, holds the episode for the outcome instead. Call it when a
  * session ends: tab closed, app backgrounded, user signed out.
  *
  * @param state - The current state. Not mutated.
@@ -121,8 +125,11 @@ function closeEpisode(state: EngineState, at: number): EngineState {
     const record = episodeRecord(state.episode, intentName);
     if (record.resolved) continue;
     let is = getIntentState(state, intentName, intent);
-    is = decayLearned(is, learning, at);
-    is = recordEpisode(is, record.seen, false);
+    is = settlePending(is, intent, learning, at);
+    is =
+      intent.attribution === undefined
+        ? recordEpisode(is, record.seen, 0)
+        : deferEpisode(is, record.seen, at);
     intents[intentName] = is;
   }
   return { ...state, intents, episode: emptyEpisode() };
@@ -132,7 +139,8 @@ function closeEpisode(state: EngineState, at: number): EngineState {
  * Whether an episode closed between two states: `prev` had an open episode and `next` either
  * has none or has a different one. Useful after `observe` or `endEpisode` to react to a
  * session ending, for example to persist, or to read the misses it produced as
- * `next.intents[x].episodes.misses - prev.intents[x].episodes.misses`.
+ * `next.intents[x].episodes.misses - prev.intents[x].episodes.misses` (0 for an intent with
+ * `attribution` set, whose verdict waits).
  *
  * @param prev - The state before the operation.
  * @param next - The state after it.

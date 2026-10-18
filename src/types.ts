@@ -78,6 +78,17 @@ export interface IntentConfig {
    * weight.
    */
   saturate?: boolean;
+  /**
+   * How long a closed episode's signals wait for the outcome before they take a miss, in the same
+   * unit as `at`. With it set, an episode that ends without the outcome is held instead of
+   * counted. When the outcome arrives inside the window, each held episode gets a share
+   * `2^(−age / halfLife)` of a hit and the rest of a miss, with `age` measured from the episode's
+   * close: the sessions that built up to the outcome are credited by how much of their evidence
+   * still stands. When the window passes, the episode is a miss, recorded at the moment the window
+   * ended. Unset: an episode that ends without the outcome is a miss at once. A natural first value
+   * is the intent's `halfLife`, where the smallest share inside the window is one half.
+   */
+  attribution?: number;
   /** Reveal defaults for this intent. */
   reveal?: RevealOptions;
 }
@@ -112,10 +123,18 @@ export interface SignalContribution {
 
 /** What this user's history says about one signal. Decays with `learning.halfLife`. */
 export interface SignalRecord {
-  /** Episodes in which the signal was followed by the outcome. */
+  /** Episodes in which the signal was followed by the outcome. An episode credited by a later outcome under `attribution` adds its share here and the rest to `misses`. */
   hits: number;
   /** Episodes in which it was not. */
   misses: number;
+}
+
+/** A closed episode waiting for the intent's outcome inside its `attribution` window. */
+export interface PendingEpisode {
+  /** When the episode closed. Its wait ends `attribution` later. */
+  endedAt: number;
+  /** The signals seen in it, each once. */
+  seen: string[];
 }
 
 /**
@@ -133,6 +152,11 @@ export interface IntentState {
   learned: Record<string, SignalRecord>;
   /** Episodes that ended with (`hits`) or without (`misses`) the outcome: the base rate. */
   episodes: SignalRecord;
+  /**
+   * Closed episodes whose verdict waits for the outcome (see {@link IntentConfig.attribution}),
+   * in order of close, at most 32. Empty unless `attribution` is set.
+   */
+  pending: PendingEpisode[];
   /** Time `learned` and `episodes` were last decayed to. */
   learnedAt: number | null;
   lastRevealedAt: number | null;
@@ -293,7 +317,7 @@ export interface Evaluation {
 /**
  * Turns a stored state of a version this library cannot migrate itself into a current
  * `EngineState`. Receives the parsed JSON as-is and the version it declares. States saved by
- * oracular 0.1.0 to 0.2.x (version 1) never reach it: `deserialize` upgrades those on its own.
+ * oracular 0.1.0 to 0.5.x (versions 1 and 2) never reach it: `deserialize` upgrades those on its own.
  *
  * @example
  * ```ts
@@ -318,7 +342,7 @@ export interface DeserializeOptions {
   config?: EngineConfig;
   /**
    * Called when the stored version is neither `STATE_VERSION` nor one this library migrates
-   * itself (states from oracular 0.1.0 to 0.2.x are upgraded without it).
+   * itself (states from oracular 0.1.0 to 0.5.x are upgraded without it).
    */
   migrate?: Migrate;
 }

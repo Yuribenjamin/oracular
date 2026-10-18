@@ -62,6 +62,22 @@ describe('tuning tables in the docs', () => {
     expect(tables['independence-table']).toMatch(/then `a` \| 0\.321 \| 5 \|/);
     expect(tables['attribution-table']).toContain('| pricing.viewed | Monday | 0 | 1 |');
     expect(tables['attribution-table']).toContain('| export.clicked | Tuesday | 1 | 0 |');
+    // With attribution, Monday's signals get 2^(−age / 7d) of a hit: 0.906 after a day, 0.743
+    // after three, half after a week, a quarter after two; the base rate gets the same share.
+    expect(tables['attribution-on-table']).toContain('| pricing.viewed | Monday | 0.906 | 0.094 |');
+    expect(tables['attribution-on-table']).toContain('| export.clicked | Tuesday | 1 | 0 |');
+    expect(tables['attribution-credit-table']).toContain(
+      '| Tuesday 10:10 | 1 day | 0.906 | 0.906 / 0.094 | 1.906 / 0.094 |',
+    );
+    expect(tables['attribution-credit-table']).toContain(
+      '| next Monday 10:10 | 7 days | 0.500 | 0.500 / 0.500 | 1.500 / 0.500 |',
+    );
+    expect(tables['attribution-credit-table']).toContain(
+      '| two Mondays later | 14 days | 0.250 | 0.250 / 0.750 | 1.250 / 0.750 |',
+    );
+    expect(tables['attribution-credit-table']).toContain(
+      '| never: the window passes | – | – | 0.000 / 1.000 | 0.000 / 1.000 |',
+    );
     // The second departures.viewed (weight 2) adds 1.17; the README's 3.46 for ten repeats.
     expect((2 * Math.log2(3 / 2)).toFixed(2)).toBe('1.17');
     expect(Math.log2(11).toFixed(2)).toBe('3.46');

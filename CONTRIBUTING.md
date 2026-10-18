@@ -38,12 +38,13 @@ src/            the library (zero runtime dependencies, no I/O of any kind)
   math.ts       decay, Beta mean/variance, Laplace smoothing, lift
   intent.ts     α/β bookkeeping; withContributions is the only place α and β are written
   learning.ts   hit/miss records, episode counts, learned and effective weights
+  attribution.ts episodes waiting for the outcome under IntentConfig.attribution: hold, credit, settle
   episode.ts    episode bookkeeping (seen signals, resolution, timeout)
   observe.ts    observe and endEpisode
   predict.ts    predict, shouldReveal, markRevealed
   explain.ts    explain
   serialize.ts  serialize, deserialize, config swap
-  migrate.ts    the built-in state migrations (version 1 → 2)
+  migrate.ts    the built-in state migrations (version 1 → 2 → 3)
   recorder.ts   createRecord, createEndRecord: the recorder format
   validate.ts   validateConfig
   units.ts      ms, durations in milliseconds

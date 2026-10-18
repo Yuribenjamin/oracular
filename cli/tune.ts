@@ -328,6 +328,22 @@ function withoutLearnedDecay(config: EngineConfig): EngineConfig {
   return { ...config, learning };
 }
 
+/**
+ * The config with `attribution` off for every intent. Tune counts each episode's own verdict: the
+ * window is a rule for the device's learner, and the weights tune fits are the prior that learner
+ * starts from. The half-life grid keeps it on, since replay scores what the device would predict.
+ */
+function withoutAttribution(config: EngineConfig): EngineConfig {
+  const intents = Object.fromEntries(
+    Object.entries(config.intents).map(([name, intent]) => {
+      if (intent.attribution === undefined) return [name, intent];
+      const { attribution: _attribution, ...rest } = intent;
+      return [name, rest];
+    }),
+  );
+  return { ...config, intents };
+}
+
 /** The reveal cooldown exactly as the engine resolves it for the intent: the suppression a reveal at 0 starts. */
 function cooldownOf(base: EngineState, name: string): number {
   return predict(markRevealed(base, name, 0), name, 0).suppressedUntil ?? 0;
@@ -388,7 +404,7 @@ export function tune(
 
   // The engine counts for us. Learned counts must not decay, and candidates are probed as signals
   // of weight 1 (what a signal adds to p never changes what it learns).
-  let countConfig = withoutLearnedDecay(normalized);
+  let countConfig = withoutAttribution(withoutLearnedDecay(normalized));
   const plans = fitting.map((name) => {
     const intent = normalized.intents[name] as IntentConfig;
     const candidates = candidatesOf(intent);

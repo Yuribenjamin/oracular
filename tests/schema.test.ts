@@ -217,6 +217,13 @@ describe('the config JSON Schema', () => {
       },
     },
     {
+      path: 'intents.upgrade.attribution',
+      node: property(intentSchema, 'attribution'),
+      set: (c, v) => {
+        c.intents.upgrade.attribution = v;
+      },
+    },
+    {
       path: 'intents.upgrade.signals["pricing.viewed"]',
       node: weightSchema,
       set: (c, v) => {
