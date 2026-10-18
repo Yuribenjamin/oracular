@@ -1,4 +1,4 @@
-import type { STATE_VERSION } from './version';
+import type { RECORD_VERSION, STATE_VERSION } from './version';
 
 /**
  * Options that decide when `shouldReveal` fires and how long cooldowns last. Resolved per call →
@@ -322,3 +322,94 @@ export interface DeserializeOptions {
    */
   migrate?: Migrate;
 }
+
+/**
+ * Whether the app acted on reveals when a record was made: `'shadow'` when it only computed them
+ * (nothing shown to the user), `'live'` when it showed them. Replay only measures shadow periods
+ * honestly: once a reveal is live, the reveal itself causes outcomes.
+ */
+export type RecordMode = 'shadow' | 'live';
+
+/**
+ * What every record needs from the app, for {@link createRecord} and {@link createEndRecord}.
+ *
+ * @example
+ * ```ts
+ * const recording: RecordOptions = { installId: storedInstallId, mode: 'shadow' };
+ * ```
+ */
+export interface RecordOptions {
+  /**
+   * A random id the app generates once, on first use, and stores (for example
+   * `crypto.randomUUID()`). It groups one install's records across exports and nothing else; never
+   * derive it from the device, the account or anything else about the user.
+   */
+  installId: string;
+  /** Whether reveals are shown to the user right now. */
+  mode: RecordMode;
+  /** How many signals to list in `top`, by size of impact. Default 3. */
+  top?: number;
+}
+
+/**
+ * What the engine decided for one intent at the moment of a record. It is there to compare what
+ * shipped with what a different config would have done; replay recomputes everything from the
+ * events and never reads it.
+ */
+export interface RecordedDecision {
+  /** As {@link Prediction.p}. */
+  p: number;
+  /** As {@link Prediction.lower}. */
+  lower: number;
+  /** What `shouldReveal` returned with the state's own reveal options. */
+  shouldReveal: boolean;
+  /** As {@link Prediction.suppressedUntil}. */
+  suppressedUntil: number | null;
+  /** Signals currently holding evidence, largest |impact| first, at most `RecordOptions.top`. */
+  top: { signal: string; impact: number }[];
+  /** Effective weight of every declared signal, in config order. */
+  weights: Record<string, number>;
+}
+
+/**
+ * One line of a recorder log: an event the app observed and what the engine decided right after
+ * it. The event (`name` and `at`, never `props`) is what replay recomputes from; the decisions
+ * are kept apart so they can never be mistaken for inputs.
+ *
+ * @example
+ * ```ts
+ * state = observe(state, event);
+ * log.append(JSON.stringify(createRecord(state, event, recording)));
+ * ```
+ */
+export interface EventRecord {
+  v: typeof RECORD_VERSION;
+  kind: 'event';
+  installId: string;
+  mode: RecordMode;
+  event: { name: string; at: number };
+  /** One entry per declared intent. */
+  decisions: Record<string, RecordedDecision>;
+}
+
+/**
+ * One line of a recorder log: the app ended the episode with {@link endEpisode}. Replay needs it
+ * to reproduce the misses that the episode's end records; episodes that end through
+ * `episodeTimeout` need no record.
+ *
+ * @example
+ * ```ts
+ * state = endEpisode(state, at);
+ * log.append(JSON.stringify(createEndRecord(at, recording)));
+ * ```
+ */
+export interface EndRecord {
+  v: typeof RECORD_VERSION;
+  kind: 'end';
+  installId: string;
+  mode: RecordMode;
+  at: number;
+}
+
+/** A line of a recorder log. */
+export type RecorderRecord = EventRecord | EndRecord;

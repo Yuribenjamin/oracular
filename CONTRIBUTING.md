@@ -44,6 +44,7 @@ src/            the library (zero runtime dependencies, no I/O of any kind)
   explain.ts    explain
   serialize.ts  serialize, deserialize, config swap
   migrate.ts    the built-in state migrations (version 1 → 2)
+  recorder.ts   createRecord, createEndRecord: the recorder format
 tests/          vitest suites, one per area, plus helpers.ts
   fixtures/     states saved by every published version, and the replay fixture logs
 examples/       quickstart.ts: the README's first code block, byte for byte

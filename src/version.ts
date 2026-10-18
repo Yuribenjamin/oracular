@@ -20,3 +20,19 @@
  * ```
  */
 export const STATE_VERSION = 2 as const;
+
+/**
+ * Version of the recorder format: the `v` field of every record that {@link createRecord} and
+ * {@link createEndRecord} produce. A new optional field does not change it; readers ignore fields
+ * they do not know and skip records of a `kind` they do not know. Anything a reader written for
+ * this version could misread bumps it.
+ *
+ * @example
+ * ```ts
+ * import { RECORD_VERSION } from 'oracular';
+ *
+ * const record = JSON.parse(line);
+ * if (record.v !== RECORD_VERSION) throw new Error(`unsupported recorder format ${record.v}`);
+ * ```
+ */
+export const RECORD_VERSION = 1 as const;

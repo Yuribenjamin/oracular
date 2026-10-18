@@ -244,9 +244,12 @@ explain(state, intent: string, at: number, opts?: { nonZero?: boolean; limit?: n
 evaluate(state, intent: string, at: number, opts?): { prediction, reveal, explanation }  // all three, one decay pass
 evidenceToReveal(intentConfig, opts?): number   // pseudo-counts at which shouldReveal first becomes true
 episodeClosed(prev, next): boolean               // did an episode close between two states?
+createRecord(state, event, { installId, mode }): EventRecord   // one recorder line: the event and what was decided
+createEndRecord(at, { installId, mode }): EndRecord           // one recorder line: the episode ended
 serialize(state): string
 deserialize(json: string, opts?: { config?: EngineConfig; migrate?: Migrate }): EngineState
 STATE_VERSION // 2
+RECORD_VERSION // 1
 ```
 
 ### Config
