@@ -44,6 +44,7 @@ Install with `npm install oracular`, then:
 ```ts
 import { createState, markRevealed, observe, shouldReveal } from 'oracular';
 let state = createState({
+  episodeTimeout: 30 * 60 * 1000, // 30 idle minutes end a session
   intents: {
     upgrade: {
       prior: 0.05, priorStrength: 10, halfLife: 7 * 24 * 60 * 60 * 1000, // one week, in ms
@@ -58,7 +59,7 @@ if (shouldReveal(state, 'upgrade', Date.now())) {
 }
 ```
 
-With these numbers the offer fires after roughly six strong signals inside a week (p must clear 0.5 with a 90% lower bound); lower `priorStrength` or raise the weights to fire sooner.
+With these numbers the offer fires after roughly six strong signals across separate sessions inside a week (p must clear 0.5 with a 90% lower bound); repeats within one session count for less. Lower `priorStrength` or raise the weights to fire sooner.
 
 That block is copied verbatim into the test suite, so it always runs.
 
@@ -86,6 +87,17 @@ You declare intents. Each has a `prior` probability and a `priorStrength` (how m
 ### Signals add evidence
 
 Each intent maps event names to weights. A positive weight is evidence *for* the intent and is added to α; a negative weight is evidence *against* and its magnitude is added to β. Events the config doesn't mention cost nothing.
+
+### Repeats within a session count for less
+
+Ten views of the pricing page in one sitting are one burst of interest, not ten independent pieces of evidence. Within an episode, the n-th occurrence of a signal adds less than the first:
+
+```
+n-th occurrence adds   w × log2(1 + 1/n)     1, 0.58, 0.42, 0.32 … of the weight
+n occurrences add      w × log2(1 + n)       every doubling adds one more weight; ten add 3.46, not 10
+```
+
+The count restarts when the episode ends or the intent's outcome arrives, so the same signal in a new session counts fully again. Saturation is on by default when `episodeTimeout` is set. Without it, episodes end only when you call `endEpisode`, so repeats add their full weight unless you set `saturate: true`. For intents where the repetition itself is the evidence (a user stuck on the same step), set `saturate: false` and every occurrence adds its full weight.
 
 ### Evidence decays toward the prior
 
@@ -142,6 +154,7 @@ const config = {
       halfLife: 10 * 60 * 1000, // ten minutes: being stuck is a short-lived state
       signals: { 'editor.undo': 1, 'search.empty': 2, 'help.opened': 3, 'task.completed': -4 },
       outcome: 'help.article.read',
+      saturate: false, // the fifth undo in a row is more evidence, not less
       reveal: { threshold: 0.6, cooldown: 60 * 60 * 1000 },
     },
   },
@@ -233,7 +246,7 @@ evidenceToReveal(intentConfig, opts?): number   // pseudo-counts at which should
 episodeClosed(prev, next): boolean               // did an episode close between two states?
 serialize(state): string
 deserialize(json: string, opts?: { config?: EngineConfig; migrate?: Migrate }): EngineState
-STATE_VERSION // 1
+STATE_VERSION // 2
 ```
 
 ### Config
@@ -257,6 +270,7 @@ interface IntentConfig {
   signals: Record<string, number>;  // event name → weight, non-zero
   outcome?: string;                 // event that confirms the intent
   resetOnOutcome?: boolean;         // default true
+  saturate?: boolean;               // repeats within an episode add less; default: episodeTimeout is set
   reveal?: RevealOptions;
 }
 
@@ -290,7 +304,7 @@ interface SignalExplanation {
   impact: number;          // p − p without this signal
   initialWeight: number;
   learnedWeight: number;
-  effectiveWeight: number; // what the next occurrence will add
+  effectiveWeight: number; // what the signal's first occurrence in an episode adds
   hits: number;
   misses: number;
 }
@@ -316,7 +330,7 @@ const state = deserialize(saved, { config });
 
 The new config is validated and swapped in. Intents and signals you no longer declare are dropped (α and β are recomputed from what remains), newly declared intents start at their prior, and everything learned about signals that still exist is kept.
 
-If you change the shape of the state itself across versions of this library, `deserialize` throws a `RangeError` unless you pass a `migrate` function, which receives the parsed object and its version and returns a current state:
+States saved by an older version of this library are upgraded on load: `deserialize` migrates the state shape written by oracular 0.1.0 to 0.2.x (`STATE_VERSION` 1) to the current one on its own. A `migrate` function is consulted only for a version the library does not know, such as a state written by a newer oracular before a rollback; without one, that throws a `RangeError`:
 
 ```ts
 deserialize(saved, {

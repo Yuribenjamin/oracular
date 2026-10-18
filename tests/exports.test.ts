@@ -19,5 +19,5 @@ it('exports exactly the public surface', () => {
       'shouldReveal',
     ].sort(),
   );
-  expect(api.STATE_VERSION).toBe(1);
+  expect(api.STATE_VERSION).toBe(2);
 });

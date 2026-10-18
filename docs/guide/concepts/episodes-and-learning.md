@@ -9,7 +9,7 @@ An **episode** is a session. Any event opens one if none is open and extends it 
 - your app calls [`endEpisode`](/api/functions/endEpisode) (tab closed, app backgrounded, user signed out), or
 - `config.episodeTimeout` is set and the next event arrives after a longer idle gap. The old episode is then closed at the moment it timed out, before the new event is applied.
 
-One episode is open at a time, shared by all intents. Within it, every intent remembers which of its signals it has **seen**.
+One episode is open at a time, shared by all intents. Within it, every intent remembers which of its signals it has **seen**, and how many times, so that [repeats within the episode add less](/guide/concepts/signals-and-weights#repeats-within-an-episode). Learning counts each seen signal once per episode, however often it occurred.
 
 ## Hits and misses
 

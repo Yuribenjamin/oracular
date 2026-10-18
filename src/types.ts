@@ -67,6 +67,17 @@ export interface IntentConfig {
   outcome?: string;
   /** Reset α, β and contributions to the prior when the outcome arrives. Default true. */
   resetOnOutcome?: boolean;
+  /**
+   * Repeats of a signal within one episode add less: the n-th occurrence adds
+   * `w × log2(1 + 1/n)`, so ten occurrences add 3.46 weights, not ten. The count restarts when
+   * the episode ends or this intent's outcome arrives. Default: true when `episodeTimeout` is
+   * set, false otherwise, because without an idle timeout episodes end only when the app calls
+   * `endEpisode`, and if it never does the count would never restart. Set true to saturate
+   * anyway (your app ends every episode itself), or false for intents where the repetition
+   * itself is the evidence (a user stuck on the same step), so every occurrence adds its full
+   * weight.
+   */
+  saturate?: boolean;
   /** Reveal defaults for this intent. */
   reveal?: RevealOptions;
 }
@@ -134,6 +145,11 @@ export interface IntentState {
 export interface EpisodeIntentRecord {
   /** Signals seen since the episode started (or since this intent's last outcome). */
   seen: string[];
+  /**
+   * How many times each signal in `seen` has occurred over the same span; its keys are exactly the
+   * signals in `seen`. Repeats saturate: the n-th occurrence adds less than the first.
+   */
+  counts: Record<string, number>;
   /** Whether the outcome arrived in this episode. */
   resolved: boolean;
 }
@@ -232,7 +248,10 @@ export interface SignalExplanation {
   initialWeight: number;
   /** What this user's history alone says the weight should be. */
   learnedWeight: number;
-  /** The blend the next occurrence of the signal will actually add. */
+  /**
+   * The blend of initial and learned weight: what the signal adds the first time it occurs in an
+   * episode. Repeats within the episode add less (see {@link IntentConfig.saturate}).
+   */
   effectiveWeight: number;
   hits: number;
   misses: number;
@@ -272,8 +291,9 @@ export interface Evaluation {
 }
 
 /**
- * Turns a stored state of an older version into a current `EngineState`. Receives the parsed
- * JSON as-is and the version it declares.
+ * Turns a stored state of a version this library cannot migrate itself into a current
+ * `EngineState`. Receives the parsed JSON as-is and the version it declares. States saved by
+ * oracular 0.1.0 to 0.2.x (version 1) never reach it: `deserialize` upgrades those on its own.
  *
  * @example
  * ```ts
@@ -296,6 +316,9 @@ export type Migrate = (stored: unknown, version: number) => EngineState;
 export interface DeserializeOptions {
   /** The app's current config. Validated, swapped in, and used to prune signals and intents no longer declared. */
   config?: EngineConfig;
-  /** Called when the stored version differs from `STATE_VERSION`. */
+  /**
+   * Called when the stored version is neither `STATE_VERSION` nor one this library migrates
+   * itself (states from oracular 0.1.0 to 0.2.x are upgraded without it).
+   */
   migrate?: Migrate;
 }

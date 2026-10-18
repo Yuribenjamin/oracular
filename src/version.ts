@@ -1,18 +1,22 @@
 /**
- * Version of the serialized state shape, stored in every state as `state.version`.
- * {@link deserialize} compares it with the stored value and calls your `migrate` function when
- * they differ. Bumped only when `EngineState` changes incompatibly.
+ * Version of the serialized state shape, stored in every state as `state.version`. Bumped only
+ * when `EngineState` changes incompatibly, and every bump ships its migration: {@link deserialize}
+ * upgrades states saved by earlier versions of this library on its own (version 1, written by
+ * oracular 0.1.0 to 0.2.x, becomes version 2) and calls your `migrate` function only for a version
+ * it does not know.
  *
  * @example
  * ```ts
  * import { STATE_VERSION, deserialize } from 'oracular';
  *
  * const state = deserialize(saved, {
+ *   config,
+ *   // Only reached for versions this library cannot migrate itself, such as a state written by a
+ *   // newer oracular before a rollback.
  *   migrate: (stored, version) => {
- *     if (version === 0) return upgradeFromV0(stored);
- *     throw new Error(`cannot migrate version ${version} to ${STATE_VERSION}`);
+ *     throw new Error(`cannot read oracular state version ${version} (this build reads ${STATE_VERSION})`);
  *   },
  * });
  * ```
  */
-export const STATE_VERSION = 1 as const;
+export const STATE_VERSION = 2 as const;

@@ -21,6 +21,7 @@ const INTENT_KEYS = [
   'signals',
   'outcome',
   'resetOnOutcome',
+  'saturate',
   'reveal',
 ] as const;
 const REVEAL_KEYS = ['threshold', 'z', 'cooldown'] as const;
@@ -155,6 +156,10 @@ export function normalizeIntentConfig(value: unknown, path: string): IntentConfi
       typeError(`${path}.resetOnOutcome`, 'must be a boolean');
     }
     out.resetOnOutcome = record.resetOnOutcome;
+  }
+  if (record.saturate !== undefined) {
+    if (typeof record.saturate !== 'boolean') typeError(`${path}.saturate`, 'must be a boolean');
+    out.saturate = record.saturate;
   }
   if (record.reveal !== undefined)
     out.reveal = normalizeRevealOptions(record.reveal, `${path}.reveal`);

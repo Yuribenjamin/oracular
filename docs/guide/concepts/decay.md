@@ -14,7 +14,7 @@ d  = 2^(−Δt / halfLife)
 
 Each per-signal contribution is scaled by the same `d`. Only the **excess over the prior** decays, so with no events p returns to `prior` and evidence (α + β) returns to `priorStrength`, never to zero.
 
-After six `pricing.viewed` signals in the quickstart config (α = 18.5, β = 9.5, half-life one week):
+After six full-weight `pricing.viewed` signals in the quickstart config (α = 18.5, β = 9.5, half-life one week):
 
 | time since | p     | lower | evidence |
 | ---------- | ----- | ----- | -------- |
@@ -37,7 +37,7 @@ Because evidence decays while it accumulates, a signal that arrives regularly se
 w / (1 − 2^(−τ / halfLife))
 ```
 
-in the long run. With the quickstart config, one `pricing.viewed` (+3) every three days with a one-week half-life settles near α ≈ 12, p ≈ 0.56, lower ≈ 0.44: **it never fires** at the default threshold. The same signal daily fires after seven, and six at once fire immediately. Half-life, weights and threshold have to be chosen together; the [Tuning guide](/guide/tuning) walks through it.
+in the long run. With the quickstart config, one `pricing.viewed` (+3) every three days with a one-week half-life settles near α ≈ 12, p ≈ 0.56, lower ≈ 0.44: **it never fires** at the default threshold. The same signal daily fires after seven (each day is a new session, so each adds its full weight), while repeating it within one session [adds less each time](/guide/concepts/signals-and-weights#repeats-within-an-episode). Half-life, weights and threshold have to be chosen together; the [Tuning guide](/guide/tuning) walks through it.
 
 ## Choosing a half-life
 

@@ -23,6 +23,15 @@ export function clamp01(x: number): number {
   return x;
 }
 
+/**
+ * What the n-th occurrence of a signal within one episode adds, as a fraction of its weight:
+ * log2(1 + 1/n), so that n occurrences add log2(1 + n) weights in total. 1 for the first
+ * occurrence, 0.585 for the second, 0.415 for the third; every doubling adds one more weight.
+ */
+export function repeatFactor(n: number): number {
+  return Math.log1p(1 / n) / Math.LN2;
+}
+
 /** Laplace-smoothed rate: (successes + 1) / (total + 2). Always strictly inside (0, 1). */
 export function laplace(successes: number, total: number): number {
   return (successes + 1) / (total + 2);

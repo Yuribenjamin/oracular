@@ -1,5 +1,6 @@
 import { createState, markRevealed, observe, shouldReveal } from 'oracular';
 let state = createState({
+  episodeTimeout: 30 * 60 * 1000, // 30 idle minutes end a session
   intents: {
     upgrade: {
       prior: 0.05, priorStrength: 10, halfLife: 7 * 24 * 60 * 60 * 1000, // one week, in ms

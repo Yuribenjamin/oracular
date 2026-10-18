@@ -1,5 +1,6 @@
 import { normalizeConfig } from './config';
 import { initIntent, withContributions } from './intent';
+import { canMigrate, migrateStored } from './migrate';
 import { requireState } from './state';
 import type {
   DeserializeOptions,
@@ -35,18 +36,19 @@ export function serialize(state: EngineState): string {
  *
  * Always pass the app's current `config`: it is validated and replaces the stored snapshot,
  * intents and signals no longer declared are dropped (α and β are recomputed from the kept
- * contributions), and newly declared intents start at their prior. Pass `migrate` to upgrade a
- * state saved by an older version of this library.
+ * contributions), and newly declared intents start at their prior. States saved by oracular
+ * 0.1.0 to 0.2.x are upgraded to the current shape on their own; `migrate` is only for a version
+ * this library does not know.
  *
  * @param json - A string produced by {@link serialize}.
  * @param opts - `config`: the app's current config. `migrate`: called as
- *   `migrate(stored, version)` when the stored version differs from {@link STATE_VERSION};
- *   it must return a state of the current version.
+ *   `migrate(stored, version)` when the stored version is neither {@link STATE_VERSION} nor one
+ *   this library migrates itself; it must return a state of the current version.
  * @returns A validated state that satisfies the engine's invariants.
  * @throws `SyntaxError` when `json` is not valid JSON.
  * @throws `TypeError` when the stored data, the result of `migrate`, `opts` or `opts.config`
  *   has the wrong shape.
- * @throws `RangeError` when the stored version differs and no `migrate` is given, when
+ * @throws `RangeError` when the stored version is unknown and no `migrate` is given, when
  *   `migrate` does not return the current version, or when a stored number is out of range.
  * @example
  * ```ts
@@ -80,12 +82,15 @@ export function deserialize(json: string, opts: DeserializeOptions = {}): Engine
 
   let stored: unknown = parsed;
   if (parsed.version !== STATE_VERSION) {
-    if (opts.migrate === undefined) {
+    if (canMigrate(parsed.version)) {
+      stored = migrateStored(parsed);
+    } else if (opts.migrate === undefined) {
       throw new RangeError(
-        `oracular: stored state is version ${parsed.version} but this library reads version ${STATE_VERSION}; pass a migrate function`,
+        `oracular: stored state is version ${parsed.version} but this library reads versions 1 to ${STATE_VERSION}; pass a migrate function`,
       );
+    } else {
+      stored = opts.migrate(parsed, parsed.version);
     }
-    stored = opts.migrate(parsed, parsed.version);
   }
 
   const raw = parseState(stored);
@@ -170,13 +175,22 @@ function intentState(value: unknown, path: string): IntentState {
   };
 }
 
+function occurrenceCount(value: unknown, path: string): number {
+  const n = finite(value, path);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new RangeError(`oracular: ${path} must be a positive integer`);
+  }
+  return n;
+}
+
 function episodeIntent(value: unknown, path: string): EpisodeIntentRecord {
   const r = record(value, path);
   if (!Array.isArray(r.seen) || !r.seen.every((s) => typeof s === 'string')) {
     typeError(`${path}.seen`, 'must be an array of strings');
   }
+  const counts = mapOwn(r.counts, `${path}.counts`, occurrenceCount);
   if (typeof r.resolved !== 'boolean') typeError(`${path}.resolved`, 'must be a boolean');
-  return { seen: r.seen as string[], resolved: r.resolved };
+  return { seen: r.seen as string[], counts, resolved: r.resolved };
 }
 
 function episodeState(value: unknown, path: string): EpisodeState {
@@ -235,7 +249,10 @@ function reconcile(raw: EngineState, config: EngineConfig): EngineState {
       const seen = episode.seen.filter(
         (s, i) => hasOwn(intent.signals, s) && episode.seen.indexOf(s) === i,
       );
-      episodeIntents[name] = { seen, resolved: episode.resolved };
+      // One count per seen signal and no other: a seen signal without one counts once.
+      const counts: Record<string, number> = {};
+      for (const s of seen) counts[s] = getOwn(episode.counts, s) ?? 1;
+      episodeIntents[name] = { seen, counts, resolved: episode.resolved };
     }
   }
 

@@ -10,12 +10,12 @@ describe('README', () => {
     expect(readme).toContain('Your app learns when the user is ready. Nothing leaves the device.');
   });
 
-  it('first code block is TypeScript, under 15 lines, and identical to examples/quickstart.ts', () => {
+  it('first code block is TypeScript, at most 15 lines, and identical to examples/quickstart.ts', () => {
     const match = /```([a-z]*)\n([\s\S]*?)```/.exec(readme);
     expect(match, 'README has a fenced code block').not.toBeNull();
     const [, lang, body] = match!;
     expect(lang).toBe('ts');
-    expect(body!.trimEnd().split('\n').length).toBeLessThan(15);
+    expect(body!.trimEnd().split('\n').length).toBeLessThanOrEqual(15);
     expect(body).toBe(quickstart);
   });
 

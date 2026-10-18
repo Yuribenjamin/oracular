@@ -87,6 +87,7 @@ describe('createState', () => {
       ['NaN weight', () => patch(base(), (i) => ({ ...i, signals: { x: Number.NaN } })), TypeError],
       ['empty signal name', () => patch(base(), (i) => ({ ...i, signals: { '': 1 } })), TypeError],
       ['empty outcome', () => patch(base(), (i) => ({ ...i, outcome: '' })), TypeError],
+      ['saturate not boolean', () => patch(base(), (i) => ({ ...i, saturate: 'no' })), TypeError],
       [
         'resetOnOutcome not boolean',
         () => patch(base(), (i) => ({ ...i, resetOnOutcome: 'yes' })),

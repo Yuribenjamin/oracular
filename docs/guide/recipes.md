@@ -17,11 +17,12 @@ stuck: {
   halfLife: 10 * MINUTE,
   signals: { 'editor.undo': 1, 'search.empty': 2, 'help.opened': 3, 'task.completed': -4 },
   outcome: 'help.article.read',
+  saturate: false, // the fifth undo in a row is more evidence, not less
   reveal: { threshold: 0.6, cooldown: HOUR },
 }
 ```
 
-Emit `editor.undo`, `search.empty`, `help.opened`, `task.completed` from the UI; `help.article.read` when a help article is actually read. When `shouldReveal(state, 'stuck', now)` is true, show a contextual tip and call `markRevealed`. With `priorStrength: 5`, two empty searches and an undo (weight 5) already clear p = 0.5; the lower bound needs a little more.
+`saturate: false` because here the repetition is the evidence: by default the n-th repeat of a signal within a session adds less than the first (see [Signals & weights](/guide/concepts/signals-and-weights#repeats-within-an-episode)), which suits "viewed pricing ten times" but not "undid ten times". Emit `editor.undo`, `search.empty`, `help.opened`, `task.completed` from the UI; `help.article.read` when a help article is actually read. When `shouldReveal(state, 'stuck', now)` is true, show a contextual tip and call `markRevealed`. With `priorStrength: 5`, two empty searches and an undo (weight 5) already clear p = 0.5; the lower bound needs a little more.
 
 ## Upgrade offer
 

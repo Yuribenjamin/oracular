@@ -5,10 +5,12 @@ import {
   extendEpisode,
   markResolved,
   markSeen,
+  occurrences,
   timedOutAt,
 } from './episode';
 import { applySignal, decayIntent, resetToPrior } from './intent';
 import { decayLearned, recordEpisode, signalWeights } from './learning';
+import { repeatFactor } from './math';
 import { getIntentState, requireState } from './state';
 import type { EngineState, IntentEvent, IntentState } from './types';
 import { hasOwn } from './util';
@@ -18,10 +20,14 @@ import { hasOwn } from './util';
  *
  * For every intent the event is a signal of: decay its evidence to `event.at`, then add the
  * signal's effective weight to α (positive) or β (negative) and remember the signal for this
- * episode. For every intent the event is the outcome of: give the remembered signals a hit,
- * count the episode toward the base rate, record `lastOutcomeAt`, and (by default) reset the
- * evidence to the prior. Any event opens or extends the current episode; an idle gap longer
- * than `config.episodeTimeout` closes the previous episode first.
+ * episode. Repeats within an episode saturate: the n-th occurrence of a signal adds
+ * `w × log2(1 + 1/n)`, counted since the episode started or the intent's outcome last arrived.
+ * That is the default when `config.episodeTimeout` is set, and `IntentConfig.saturate` overrides
+ * it either way; otherwise every occurrence adds all of `w`. For every intent the event is the
+ * outcome of: give the remembered signals a hit, count the episode toward the base rate, record
+ * `lastOutcomeAt`, and (by default) reset the evidence to the prior. Any event opens or extends
+ * the current episode; an idle gap longer than `config.episodeTimeout` closes the previous
+ * episode first.
  *
  * @param state - The current state. Not mutated.
  * @param event - `name` is matched against every intent's signals and outcome; `at` is the
@@ -60,7 +66,10 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
 
     if (isSignal) {
       const { effective } = signalWeights(is, intent, learning, name);
-      is = applySignal(is, intent, name, effective);
+      const n = occurrences(episode, intentName, name) + 1;
+      const saturate = intent.saturate ?? s.config.episodeTimeout !== undefined;
+      const factor = saturate ? repeatFactor(n) : 1;
+      is = applySignal(is, intent, name, effective * factor);
       // An event that is also the intent's outcome must not learn from itself.
       if (!isOutcome) episode = markSeen(episode, intentName, name);
     }

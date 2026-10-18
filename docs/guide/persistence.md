@@ -36,19 +36,20 @@ Everything learned about signals that still exist is kept. Loading **without** `
 
 ## Migrating the state shape
 
-The stored state carries [`STATE_VERSION`](/api/variables/STATE_VERSION). When a future release of oracular changes the shape of the state, `deserialize` refuses a stored state of a different version unless you pass a `migrate` function, which receives the parsed JSON and its version and returns a current state:
+The stored state carries [`STATE_VERSION`](/api/variables/STATE_VERSION). A release that changes the shape of the state ships the migration with it, and `deserialize` applies it on its own: oracular 0.3 reads states saved by 0.1.0 to 0.2.x (version 1) and upgrades them to version 2, in which the open episode also counts how often each signal occurred (each signal seen before the upgrade counts once). Every estimate is exactly what it was before the upgrade. The test suite keeps a state saved by every published version and checks that each one loads and migrates.
+
+`migrate` is only for a version the library does not know, such as a state written by a newer oracular and read after a rollback. It receives the parsed JSON and its version and returns a current state; without it, such a state throws a `RangeError`.
+
+**Rolling back.** oracular 0.2.x cannot read a version 2 state; it throws a `RangeError`. If you might roll back, or simply want a launch never to fail on stored data, catch and start fresh:
 
 ```ts
-const state = deserialize(saved, {
-  config,
-  migrate: (stored, version) => {
-    if (version === 1) return upgradeFromV1(stored); // provided with the release that bumps the version
-    throw new Error(`unknown oracular state version ${version}`);
-  },
-});
+let state: EngineState;
+try {
+  state = saved ? deserialize(saved, { config }) : createState(config);
+} catch {
+  state = createState(config); // unreadable, tampered, or from a newer oracular
+}
 ```
-
-The release notes for any version bump will include the migration. Until then, `migrate` is never called.
 
 ## Validation and errors
 

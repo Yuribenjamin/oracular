@@ -116,6 +116,17 @@ export function assertInvariants(state: EngineState): void {
       for (const signal of episode.seen) {
         expect(signals, `undeclared signal ${signal} in ${name} episode.seen`).toContain(signal);
       }
+      // Every seen signal has a count, and nothing else does; counts are whole occurrences.
+      expect(
+        Object.keys(episode.counts).sort(),
+        `${name}: episode.counts keys must be exactly episode.seen`,
+      ).toStrictEqual([...episode.seen].sort());
+      for (const [signal, n] of Object.entries(episode.counts)) {
+        expect(
+          Number.isInteger(n) && n >= 1,
+          `${name}: episode.counts.${signal} must be a positive integer, got ${String(n)}`,
+        ).toBe(true);
+      }
       expect(typeof episode.resolved).toBe('boolean');
     }
   }

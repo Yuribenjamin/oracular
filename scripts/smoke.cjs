@@ -19,7 +19,7 @@ const after = observe(before, { name: 'pricing.viewed', at: 1 });
 const p0 = predict(before, 'upgrade', 2).p;
 const p1 = predict(after, 'upgrade', 2).p;
 
-assert.equal(STATE_VERSION, 1);
+assert.equal(STATE_VERSION, 2);
 // Through the exports map, require() must land on the CommonJS build.
 const resolved = require.resolve('oracular');
 assert.ok(resolved.endsWith('/dist/index.cjs'), `require.resolve('oracular') → ${resolved}`);

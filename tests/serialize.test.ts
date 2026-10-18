@@ -186,7 +186,8 @@ describe('serialize / deserialize', () => {
     tampered.intents.upgrade.extraField = 'ignored';
     tampered.intents.ghost = tampered.intents.upgrade;
     tampered.episode.intents.upgrade.seen.push('old.signal');
-    tampered.episode.intents.ghost = { seen: [], resolved: false };
+    tampered.episode.intents.upgrade.counts['old.signal'] = 2;
+    tampered.episode.intents.ghost = { seen: [], counts: {}, resolved: false };
     expect(load(JSON.stringify(tampered))).toStrictEqual(s);
   });
 });
