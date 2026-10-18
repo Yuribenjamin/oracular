@@ -3,7 +3,15 @@
 // tests/tuning-tables.test.ts fails when a region differs from what this renders.
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createState, evidenceToReveal, observe, predict, shouldReveal } from 'oracular';
+import {
+  createState,
+  endEpisode,
+  evidenceToReveal,
+  explain,
+  observe,
+  predict,
+  shouldReveal,
+} from 'oracular';
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -133,6 +141,116 @@ function rideRows() {
   });
 }
 
+// ---- What oracular can and cannot learn ----
+
+/** One session: the given events a minute apart, then the session ends. */
+function session(state, at, events) {
+  let s = state;
+  let t = at;
+  for (const name of events) {
+    s = observe(s, { name, at: t });
+    t += MINUTE;
+  }
+  return endEpisode(s, t);
+}
+
+const row = (state, intent, signal, at) =>
+  explain(state, intent, at).find((r) => r.signal === signal);
+
+/**
+ * A repeating outcome: checkout, once a day for 30 days. cart.added is seen in three sessions out
+ * of five and is followed by a checkout in two of those three; product.viewed is seen every other
+ * session whatever happens. Both start at weight 2.
+ */
+function repeatingRows() {
+  const intent = {
+    prior: 0.2,
+    priorStrength: 5,
+    halfLife: 2 * HOUR,
+    signals: { 'cart.added': 2, 'product.viewed': 2 },
+    outcome: 'checkout.completed',
+  };
+  let s = createState({ intents: { checkout: intent } });
+  const rows = [];
+  for (let day = 0; day < 30; day++) {
+    const events = ['app.opened'];
+    const cart = day % 5 < 3;
+    if (cart) events.push('cart.added');
+    if (day % 2 === 0) events.push('product.viewed');
+    if ((cart && day % 5 !== 2) || day % 10 === 9) events.push('checkout.completed');
+    s = session(s, T + day * DAY, events);
+    if ([5, 10, 20, 30].includes(day + 1)) {
+      const at = T + (day + 1) * DAY;
+      const cell = (signal) => {
+        const r = row(s, 'checkout', signal, at);
+        return `${fixed(r.hits, 0)} / ${fixed(r.misses, 0)} | ${fixed(r.effectiveWeight, 2)}`;
+      };
+      rows.push(`| ${day + 1} | ${cell('cart.added')} | ${cell('product.viewed')} |`);
+    }
+  }
+  return rows;
+}
+
+/**
+ * A once-per-user outcome: the quickstart upgrade. Ten sessions without an upgrade, the signal
+ * seen in the first k of them; then an eleventh session with the signal and the upgrade.
+ */
+function oncePerUserRows() {
+  return [1, 3, 5, 7, 9, 10].map((k) => {
+    let s = createState({ intents: { upgrade: quickstart } });
+    for (let i = 0; i < 10; i++) {
+      s = session(s, T + i * DAY, i < k ? ['pricing.viewed'] : ['app.opened']);
+    }
+    const before = row(s, 'upgrade', 'pricing.viewed', T + 10 * DAY).effectiveWeight;
+    s = session(s, T + 10 * DAY, ['pricing.viewed', 'upgrade.completed']);
+    const after = row(s, 'upgrade', 'pricing.viewed', T + 11 * DAY).effectiveWeight;
+    return `| ${k} of 10 | ${fixed(before, 2)} | ${fixed(after, 2)} |`;
+  });
+}
+
+/** Signals add: two that always fire together count twice, and their order does not matter. */
+function independenceRows() {
+  const intent = (signals) => ({ prior: 0.05, priorStrength: 10, halfLife: 7 * DAY, signals });
+  const daysToReveal = (signals, events) => {
+    let s = createState({ episodeTimeout: 30 * MINUTE, intents: { x: intent(signals) } });
+    for (let day = 0; day < 60; day++) {
+      let at = T + day * DAY;
+      for (const name of events) {
+        s = observe(s, { name, at });
+        at += MINUTE;
+      }
+      if (shouldReveal(s, 'x', at)) return `${day + 1}`;
+    }
+    return 'never';
+  };
+  const pAfter = (events) => {
+    let s = createState({ intents: { x: intent({ a: 2, b: 2 }) } });
+    for (const name of events) s = observe(s, { name, at: T });
+    return fixed(predict(s, 'x', T).p, 3);
+  };
+  return [
+    `| \`a\` alone, weight 2 | ${pAfter(['a'])} | ${daysToReveal({ a: 2 }, ['a'])} |`,
+    `| \`a\` then \`b\`, weight 2 each, always together | ${pAfter(['a', 'b'])} | ${daysToReveal({ a: 2, b: 2 }, ['a', 'b'])} |`,
+    `| \`b\` then \`a\` | ${pAfter(['b', 'a'])} | ${daysToReveal({ a: 2, b: 2 }, ['b', 'a'])} |`,
+  ];
+}
+
+/** Per-episode attribution: Monday's signals get a miss when the upgrade comes on Tuesday. */
+function attributionRows() {
+  let s = createState({ intents: { upgrade: quickstart } });
+  s = session(s, T, ['pricing.viewed', 'limit.hit']);
+  s = session(s, T + DAY, ['export.clicked', 'upgrade.completed']);
+  const at = T + 2 * DAY;
+  return [
+    ['pricing.viewed', 'Monday'],
+    ['limit.hit', 'Monday'],
+    ['export.clicked', 'Tuesday'],
+  ].map(([signal, day]) => {
+    const r = row(s, 'upgrade', signal, at);
+    return `| ${signal} | ${day} | ${fixed(r.hits, 0)} | ${fixed(r.misses, 0)} |`;
+  });
+}
+
 /** Every table, keyed by the marker name used in the docs. */
 export function renderTables() {
   const strengths = [5, 10, 20, 50];
@@ -196,7 +314,32 @@ export function renderTables() {
     ...rideRows(),
   ];
 
+  const repeating = [
+    '| sessions | `cart.added` hits / misses | effective | `product.viewed` hits / misses | effective |',
+    '| -------- | -------------------------- | --------- | ------------------------------ | --------- |',
+    ...repeatingRows(),
+  ];
+  const oncePerUser = [
+    '| sessions with `pricing.viewed` | effective weight, no upgrade yet | after one upgrade |',
+    '| ----------------------------- | -------------------------------- | ----------------- |',
+    ...oncePerUserRows(),
+  ];
+  const independence = [
+    '| signals in each session | p after one session | sessions to the reveal, one a day |',
+    '| ----------------------- | ------------------- | --------------------------------- |',
+    ...independenceRows(),
+  ];
+  const attribution = [
+    '| signal | seen on | hits | misses |',
+    '| ------ | ------- | ---- | ------ |',
+    ...attributionRows(),
+  ];
+
   return {
+    'repeating-outcome-table': repeating.join('\n'),
+    'once-per-user-table': oncePerUser.join('\n'),
+    'independence-table': independence.join('\n'),
+    'attribution-table': attribution.join('\n'),
     'priorStrength-table': byStrength.join('\n'),
     'threshold-z-table': byGate.join('\n'),
     'saturation-table': saturation.join('\n'),
