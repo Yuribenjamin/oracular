@@ -11,13 +11,9 @@ import {
   predict,
   shouldReveal,
 } from 'oracular';
+import { groupByInstall, type LogEntry } from './log';
 
-export type Mode = 'shadow' | 'live';
-
-/** One usable line of a recorder log. Decisions are not here: replay never reads them. */
-export type LogEntry =
-  | { kind: 'event'; installId: string; mode: Mode; name: string; at: number }
-  | { kind: 'end'; installId: string; mode: Mode; at: number };
+export type { LogEntry, Mode } from './log';
 
 export interface ReplayOptions {
   /** Thresholds to score. Default: 0.3 to 0.9 by 0.1, plus each intent's configured threshold. */
@@ -160,29 +156,7 @@ export function replay(
   });
   const allThresholds = [...new Set(plans.flatMap((p) => p.thresholds))].sort((a, b) => a - b);
 
-  // Group by install, keeping file order, then order each install's records by time (stable).
-  const byInstall = new Map<string, LogEntry[]>();
-  for (const entry of entries) {
-    const list = byInstall.get(entry.installId);
-    if (list === undefined) byInstall.set(entry.installId, [entry]);
-    else list.push(entry);
-  }
-  let start: number | null = null;
-  let end: number | null = null;
-  let shadow = 0;
-  let live = 0;
-  let mixedInstalls = 0;
-  for (const list of byInstall.values()) {
-    list.sort((a, b) => a.at - b.at);
-    const modes = new Set(list.map((e) => e.mode));
-    if (modes.size > 1) mixedInstalls++;
-    for (const e of list) {
-      if (e.mode === 'shadow') shadow++;
-      else live++;
-      start = start === null ? e.at : Math.min(start, e.at);
-      end = end === null ? e.at : Math.max(end, e.at);
-    }
-  }
+  const { byInstall, start, end, shadow, live, mixedInstalls } = groupByInstall(entries);
   const logEnd = end ?? 0;
 
   /** Running totals for one threshold of one intent, across installs. */
