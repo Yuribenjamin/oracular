@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yuribenjamin.github.io/oracular/config.schema.json",
+  "title": "oracular config",
+  "description": "Everything createState needs: intents with their priors and signals, plus engine-wide options. Every duration is in the unit of the timestamps you pass as `at` (milliseconds when you use Date.now()). The engine checks the same rules at run time and rejects unknown keys; `$schema` is allowed here so a JSON file can point at this schema, and `oracular replay` drops it before handing the file to the engine.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intents"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Where this schema lives, for editors. Not part of the config: strip it before calling createState, or let `oracular replay` do it."
+    },
+    "intents": {
+      "type": "object",
+      "description": "One entry per thing the user might be about to do, keyed by the intent's name.",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/name" },
+      "additionalProperties": { "$ref": "#/$defs/intent" }
+    },
+    "episodeTimeout": {
+      "$ref": "#/$defs/duration",
+      "description": "Idle gap after which the current episode ends on its own. Omit to end episodes only through endEpisode."
+    },
+    "learning": {
+      "$ref": "#/$defs/learning",
+      "description": "How the engine learns from the user's own outcomes."
+    },
+    "reveal": {
+      "$ref": "#/$defs/reveal",
+      "description": "Reveal defaults for every intent."
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "const": "__proto__" }
+    },
+    "duration": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "bounded": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 1000000
+    },
+    "weight": {
+      "type": "number",
+      "minimum": -1000000,
+      "maximum": 1000000,
+      "not": { "const": 0 },
+      "description": "Initial weight of a signal, in pseudo-counts. Positive is evidence for the intent, negative against."
+    },
+    "intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prior", "priorStrength", "halfLife", "signals"],
+      "properties": {
+        "prior": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1,
+          "description": "Prior probability of the intent, strictly between 0 and 1."
+        },
+        "priorStrength": {
+          "$ref": "#/$defs/bounded",
+          "description": "Strength of the prior as a pseudo-count."
+        },
+        "halfLife": {
+          "$ref": "#/$defs/duration",
+          "description": "Half-life of evidence. Evidence decays back toward the prior."
+        },
+        "signals": {
+          "type": "object",
+          "description": "Event name → initial weight.",
+          "propertyNames": { "$ref": "#/$defs/name" },
+          "additionalProperties": { "$ref": "#/$defs/weight" }
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event name that confirms the intent happened, e.g. checkout.completed."
+        },
+        "resetOnOutcome": {
+          "type": "boolean",
+          "description": "Reset the evidence to the prior when the outcome arrives. Default true."
+        },
+        "saturate": {
+          "type": "boolean",
+          "description": "Repeats of a signal within one episode add less. Default: true when episodeTimeout is set, false otherwise."
+        },
+        "reveal": {
+          "$ref": "#/$defs/reveal",
+          "description": "Reveal defaults for this intent."
+        }
+      }
+    },
+    "reveal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Probability the intent must reach. Default 0.5."
+        },
+        "z": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How many standard deviations below p must still clear the threshold. Default 1.28."
+        },
+        "cooldown": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How long after a reveal or the outcome the intent stays quiet. Default: the intent's halfLife."
+        }
+      }
+    },
+    "learning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "halfLife": {
+          "$ref": "#/$defs/duration",
+          "description": "Half-life of learned hit/miss counts. Omit for no forgetting."
+        },
+        "gain": {
+          "$ref": "#/$defs/bounded",
+          "description": "A perfectly predictive signal converges to gain × |initial weight|. Default 2."
+        },
+        "priorEpisodes": {
+          "$ref": "#/$defs/bounded",
+          "description": "Pseudo-count behind the developer's initial weight: how many observed episodes it takes to weigh as much as the prior. Default 10."
+        }
+      }
+    }
+  }
+}

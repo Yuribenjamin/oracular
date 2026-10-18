@@ -42,10 +42,12 @@
       },
       "default": "./dist/index.cjs"
     },
+    "./config.schema.json": "./schema/config.schema.json",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "schema",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

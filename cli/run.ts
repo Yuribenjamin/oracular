@@ -3,7 +3,7 @@
 import { createRequire } from 'node:module';
 import { extname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createState, type EngineConfig } from 'oracular';
+import { type EngineConfig, validateConfig } from 'oracular';
 import { parseLog } from './log';
 import { type LogEntry, type ReplayOptions, type ReplayReport, replay } from './replay';
 import { formatJson, formatText } from './report';
@@ -26,7 +26,8 @@ reveals per user, and a reliability table with a Brier score.
 
 Options:
   --config <file>        the config to replay under: a .json file, or a .js, .mjs or .cjs
-                         module whose default (or \`config\`) export is the config
+                         module whose default (or \`config\`) export is the config. A top-level
+                         "$schema" key in a .json file is ignored
   --thresholds <list>    thresholds to score, comma separated
                          (default: 0.3 to 0.9 by 0.1, plus each intent's configured threshold)
   --window <duration>    how long after a reveal an outcome still counts for it: 3d, 12h, 90m
@@ -164,6 +165,11 @@ async function loadConfig(path: string, io: Io): Promise<EngineConfig> {
     } catch (error) {
       throw new Error(`${path}: ${(error as Error).message}`);
     }
+    // A JSON config may point at the published schema for editor support. The engine rejects
+    // unknown keys, so the pointer is dropped here and nowhere else.
+    if (typeof value === 'object' && value !== null && '$schema' in value) {
+      value = Object.fromEntries(Object.entries(value).filter(([key]) => key !== '$schema'));
+    }
   } else if (ext === '.js' || ext === '.mjs' || ext === '.cjs') {
     const mod = (await import(pathToFileURL(path).href)) as Record<string, unknown>;
     value = mod.default ?? mod.config;
@@ -190,7 +196,7 @@ async function replayCommand(argv: readonly string[], io: Io): Promise<number> {
   const config = await loadConfig(configPath, io);
   let declared: string[];
   try {
-    declared = Object.keys(createState(config).config.intents);
+    declared = Object.keys(validateConfig(config).intents);
   } catch (error) {
     throw new Error(
       `${configPath} is not a valid config: ${(error as Error).message.replace(/^oracular: /, '')}`,
