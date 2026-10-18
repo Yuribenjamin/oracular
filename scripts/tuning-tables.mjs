@@ -251,6 +251,61 @@ function attributionRows() {
   });
 }
 
+/** Monday's two signals with `attribution` of two weeks; the upgrade follows on Tuesday. */
+function attributionOnRows() {
+  const plain = (x) => (Number.isInteger(x) ? String(x) : fixed(x, 3));
+  let s = createState({ intents: { upgrade: { ...quickstart, attribution: 14 * DAY } } });
+  s = session(s, T, ['pricing.viewed', 'limit.hit']);
+  s = session(s, T + DAY, ['export.clicked', 'upgrade.completed']);
+  const at = T + 2 * DAY;
+  return [
+    ['pricing.viewed', 'Monday'],
+    ['limit.hit', 'Monday'],
+    ['export.clicked', 'Tuesday'],
+  ].map(([signal, day]) => {
+    const r = row(s, 'upgrade', signal, at);
+    return `| ${signal} | ${day} | ${plain(r.hits)} | ${plain(r.misses)} |`;
+  });
+}
+
+/**
+ * The quickstart intent with `attribution` of two weeks: a Monday 10:00 session with
+ * pricing.viewed and limit.hit, ended at 10:10; the upgrade arrives later in a session of its own,
+ * or never. What Monday's signals and the base rate record, by the age of Monday's session.
+ */
+function attributionCreditRows() {
+  const start = () => {
+    let s = createState({
+      episodeTimeout: 30 * MINUTE,
+      intents: { upgrade: { ...quickstart, attribution: 14 * DAY } },
+    });
+    s = observe(s, { name: 'pricing.viewed', at: T });
+    s = observe(s, { name: 'limit.hit', at: T + MINUTE });
+    return endEpisode(s, T + 10 * MINUTE);
+  };
+  const close = T + 10 * MINUTE;
+  const cell = (s, at) => {
+    const r = row(s, 'upgrade', 'pricing.viewed', at);
+    const { hits, misses } = s.intents.upgrade.episodes;
+    return `${fixed(r.hits, 3)} / ${fixed(r.misses, 3)} | ${fixed(hits, 3)} / ${fixed(misses, 3)}`;
+  };
+  const rows = [
+    ['Tuesday 10:10', 1],
+    ['Thursday 10:10', 3],
+    ['next Monday 10:10', 7],
+    ['two Mondays later', 14],
+  ].map(([label, days]) => {
+    const at = close + days * DAY;
+    const s = observe(start(), { name: 'upgrade.completed', at });
+    const share = s.intents.upgrade.learned['pricing.viewed'].hits;
+    return `| ${label} | ${days} day${days === 1 ? '' : 's'} | ${fixed(share, 3)} | ${cell(s, at)} |`;
+  });
+  const at = close + 14 * DAY + MINUTE;
+  const never = observe(start(), { name: 'export.clicked', at });
+  rows.push(`| never: the window passes | – | – | ${cell(never, at)} |`);
+  return rows;
+}
+
 /** Every table, keyed by the marker name used in the docs. */
 export function renderTables() {
   const strengths = [5, 10, 20, 50];
@@ -334,12 +389,24 @@ export function renderTables() {
     '| ------ | ------- | ---- | ------ |',
     ...attributionRows(),
   ];
+  const attributionOn = [
+    '| signal | seen on | hits | misses |',
+    '| ------ | ------- | ---- | ------ |',
+    ...attributionOnRows(),
+  ];
+  const attributionCredit = [
+    "| the upgrade arrives | age of Monday's session | share of a hit | `pricing.viewed` hits / misses | episodes with / without the outcome |",
+    '| ------------------- | ----------------------- | -------------- | ------------------------------ | ----------------------------------- |',
+    ...attributionCreditRows(),
+  ];
 
   return {
     'repeating-outcome-table': repeating.join('\n'),
     'once-per-user-table': oncePerUser.join('\n'),
     'independence-table': independence.join('\n'),
     'attribution-table': attribution.join('\n'),
+    'attribution-on-table': attributionOn.join('\n'),
+    'attribution-credit-table': attributionCredit.join('\n'),
     'priorStrength-table': byStrength.join('\n'),
     'threshold-z-table': byGate.join('\n'),
     'saturation-table': saturation.join('\n'),

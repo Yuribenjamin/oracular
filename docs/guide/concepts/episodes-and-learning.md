@@ -20,10 +20,35 @@ upgrade: { signals: { 'pricing.viewed': 3, 'limit.hit': 2 }, outcome: 'upgrade.c
 ```
 
 - When the outcome arrives, every signal seen in the episode gets a **hit**, the intent counts one episode *with* the outcome toward its **base rate**, the seen list is cleared and the intent is marked resolved for this episode. By default the intent's evidence is also reset; see [Outcomes & cooldowns](/guide/concepts/outcomes-and-cooldowns).
-- When the episode ends without the outcome, every seen signal gets a **miss** and the intent counts one episode *without* the outcome. Episodes in which the intent saw no signal at all still count toward the base rate, because they are sessions in which the outcome did not happen.
+- When the episode ends without the outcome, every seen signal gets a **miss** and the intent counts one episode *without* the outcome. Episodes in which the intent saw no signal at all still count toward the base rate, because they are sessions in which the outcome did not happen. With `attribution` set, the episode waits for the outcome instead; see [Credit across episodes](#credit-across-episodes).
 - Signals seen *after* an outcome in the same episode are neutral at episode end: they get a hit if a second outcome arrives, nothing otherwise.
 
 An outcome event that no episode preceded still counts toward the base rate. An event that is both a signal and the outcome of the same intent is never remembered as seen, so it cannot learn from itself.
+
+## Credit across episodes
+
+By default a signal earns a hit only when the outcome arrives in the same episode. For an intent that builds over days, the sessions that built it take misses and the session where the user finally acts gets all the credit ([What oracular can and cannot learn](/guide/can-and-cannot-learn#credit-stays-inside-the-episode)). `IntentConfig.attribution`, a duration, changes the verdict on a closed episode from "a miss, now" to "wait and see":
+
+- When an episode ends without the outcome, the intent **holds** it (`IntentState.pending`: when it closed and which signals it saw) instead of counting it.
+- When the outcome arrives, the current episode's signals get a full hit as before, and every held episode gets a **share** of a hit, `c = 2^(−age / halfLife)` with `age` counted from its close, and `1 − c` of a miss. The base rate gets the same shares. The list is then empty.
+- When a held episode's window passes without the outcome, it is a **miss**, recorded at the moment the window ended. With `learning.halfLife` set, that miss is decayed from that moment, as a timed-out episode's miss is decayed from the timeout.
+- At most 32 episodes wait per intent; past that the oldest is a miss at once.
+
+The share is the intent's own evidence decay: the credit a Monday signal gets for a Thursday upgrade equals the fraction of its weight the engine still counts toward p on Thursday. Prediction and learning run on one clock, and there is no second knob to tune. `hits + misses` still counts each episode once, so everything in the next section holds unchanged.
+
+The quickstart `upgrade` intent (half-life one week) with `attribution` of two weeks. Monday 10:00, a session with `pricing.viewed` and `limit.hit` ends at 10:10; the upgrade arrives later, in a session of its own. What Monday's signals and the base rate record, generated from the engine:
+
+<!-- generated:attribution-credit-table -->
+| the upgrade arrives | age of Monday's session | share of a hit | `pricing.viewed` hits / misses | episodes with / without the outcome |
+| ------------------- | ----------------------- | -------------- | ------------------------------ | ----------------------------------- |
+| Tuesday 10:10 | 1 day | 0.906 | 0.906 / 0.094 | 1.906 / 0.094 |
+| Thursday 10:10 | 3 days | 0.743 | 0.743 / 0.257 | 1.743 / 0.257 |
+| next Monday 10:10 | 7 days | 0.500 | 0.500 / 0.500 | 1.500 / 0.500 |
+| two Mondays later | 14 days | 0.250 | 0.250 / 0.750 | 1.250 / 0.750 |
+| never: the window passes | – | – | 0.000 / 1.000 | 0.000 / 1.000 |
+<!-- /generated:attribution-credit-table -->
+
+Resolved episodes are untouched: signals seen after an outcome in the same episode stay neutral at the close, as before. Reads (`explain`, `evaluate`, `predict`) settle episodes whose window has passed in what they show, and store nothing; the next `observe` stores the same verdict. `attribution` is off unless set. A natural first value is the intent's `halfLife`, where the smallest share inside the window is one half; leave it unset for intents measured in minutes, whose sessions rightly end as misses.
 
 ## From hits and misses to a weight
 
@@ -107,7 +132,7 @@ An episode closed between two states when the previous one had an episode open a
 prev.episode.startedAt !== null && next.episode.startedAt !== prev.episode.startedAt
 ```
 
-[`episodeClosed(prev, next)`](/api/functions/episodeClosed) is that rule as a function. It is true across `endEpisode`, and across an `observe` whose event arrived after the idle gap of `episodeTimeout` (the old episode closes before the new event opens the next one). The misses an intent took from the close are `next.intents[x].episodes.misses - prev.intents[x].episodes.misses`, and the same difference on `next.intents[x].learned[signal].misses` tells you which signals took them. A natural use is to persist immediately when an episode closes, instead of waiting for a debounced save.
+[`episodeClosed(prev, next)`](/api/functions/episodeClosed) is that rule as a function. It is true across `endEpisode`, and across an `observe` whose event arrived after the idle gap of `episodeTimeout` (the old episode closes before the new event opens the next one). The misses an intent took from the close are `next.intents[x].episodes.misses - prev.intents[x].episodes.misses`, and the same difference on `next.intents[x].learned[signal].misses` tells you which signals took them; for an intent with `attribution` set the difference is 0 at the close, because its verdict waits. A natural use is to persist immediately when an episode closes, instead of waiting for a debounced save.
 
 ## What you have to do
 
@@ -118,4 +143,4 @@ Two things, and the first is the one people forget:
 
 ## Reference
 
-- [`endEpisode`](/api/functions/endEpisode), [`episodeClosed`](/api/functions/episodeClosed), [`EngineConfig.episodeTimeout`](/api/interfaces/EngineConfig), [`LearningConfig`](/api/interfaces/LearningConfig), [`SignalRecord`](/api/interfaces/SignalRecord), [`EpisodeState`](/api/interfaces/EpisodeState).
+- [`endEpisode`](/api/functions/endEpisode), [`episodeClosed`](/api/functions/episodeClosed), [`EngineConfig.episodeTimeout`](/api/interfaces/EngineConfig), [`IntentConfig.attribution`](/api/interfaces/IntentConfig), [`LearningConfig`](/api/interfaces/LearningConfig), [`SignalRecord`](/api/interfaces/SignalRecord), [`PendingEpisode`](/api/interfaces/PendingEpisode), [`EpisodeState`](/api/interfaces/EpisodeState).

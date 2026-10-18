@@ -68,7 +68,17 @@ A signal earns a hit only when the outcome arrives in the same episode. When int
 | export.clicked | Tuesday | 1 | 0 |
 <!-- /generated:attribution-table -->
 
-Monday's pricing visit is recorded as a session that did *not* lead to an upgrade. For intents measured in minutes or one session this is exactly right; for intents that build over days it is the biggest limit on learning today. Cross-episode attribution, which lets recent episodes share the credit with decay, is planned for 0.4 ([roadmap](/guide/roadmap)).
+Monday's pricing visit is recorded as a session that did *not* lead to an upgrade. For intents measured in minutes or one session this is exactly right. For intents that build over days, set `attribution`: a session that ends without the outcome then waits for it, and an outcome inside the window gives the session the share `2^(−age / halfLife)` of a hit that its evidence still holds. The same two sessions with `attribution` of two weeks:
+
+<!-- generated:attribution-on-table -->
+| signal | seen on | hits | misses |
+| ------ | ------- | ---- | ------ |
+| pricing.viewed | Monday | 0.906 | 0.094 |
+| limit.hit | Monday | 0.906 | 0.094 |
+| export.clicked | Tuesday | 1 | 0 |
+<!-- /generated:attribution-on-table -->
+
+Monday's signals earn 0.906 of a hit, the fraction of their weight still standing on Tuesday with a one-week half-life, and 0.094 of a miss, so each session still counts once. [Episodes & learning](/guide/concepts/episodes-and-learning#credit-across-episodes) has the rules and a table over longer gaps. The window is off unless set, and the right one depends on the intent's horizon; `tune` on a shadow log can show whether one is justified.
 
 ## What it never sees
 
@@ -82,7 +92,8 @@ Monday's pricing visit is recorded as a session that did *not* lead to an upgrad
 | oracular can | oracular cannot |
 | ------------ | --------------- |
 | learn per user which signals precede an outcome that repeats | learn weights for an outcome that happens once per user |
-| discount a signal repeated within one session | tell two different but redundant signals apart |
-| forget, with decay, what is no longer recent | see order, sequences or combinations of signals |
-| explain every estimate signal by signal | credit an earlier session for a later outcome (until 0.4) |
-| run with no data leaving the device | learn from other users |
+| discount a signal repeated within one session | learn from other users |
+| forget, with decay, what is no longer recent | tell two different but redundant signals apart |
+| explain every estimate signal by signal | see order, sequences or combinations of signals |
+| credit recent sessions for a later outcome, with `attribution` | learn anything about a session it never saw end |
+| run with no data leaving the device | pool anything across devices |

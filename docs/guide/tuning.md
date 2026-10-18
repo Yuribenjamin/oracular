@@ -113,6 +113,10 @@ How long to stay quiet after a reveal and after the outcome. Defaults to `halfLi
 
 The idle gap that ends a session on its own. 30 minutes is the usual web convention; on mobile, call `endEpisode` when the app goes to the background and keep a timeout as a safety net. Without episodes ending, nothing is ever a miss and learning cannot work.
 
+## `attribution`
+
+Off by default. How long a session's signals wait for the outcome after the session ends, in the unit of `at`. Set it for intents that build over days: the Monday pricing visit then earns a share of Tuesday's upgrade instead of a miss, the share being what its evidence is still worth on Tuesday, `2^(−age / halfLife)` ([Episodes & learning](/guide/concepts/episodes-and-learning#credit-across-episodes)). Start at the intent's `halfLife`: inside that window every share is at least one half, and a session older than that would add little to p anyway. Leave it unset for intents measured in minutes or one session; a session that ends without the outcome is then rightly a miss. The state holds at most 32 waiting sessions per intent.
+
 ## `learning.priorEpisodes` and `learning.gain`
 
 `priorEpisodes` (default 10): how much contrast it takes before the user's history weighs as much as your initial weight. Contrast is counted as `nEff = (sessions with the signal × sessions without) / (both)`, so ten sessions on each side count as five. Lower `priorEpisodes` for apps with many short sessions where you trust the data more than your guess; raise it when outcomes are rare and noisy.

@@ -107,7 +107,7 @@ Before any update or reading, the evidence decays by 2^(−Δt / halfLife), wher
 
 ### The user's history corrects your weights
 
-Events happen inside **episodes** (sessions). An episode ends when you call `endEpisode`, or on its own after `episodeTimeout` of inactivity. Signals seen in the episode are remembered per intent. When the intent's `outcome` event arrives, each remembered signal gets a **hit**; when the episode ends without it, each gets a **miss**. The engine also counts, per intent, how many episodes ended with and without the outcome: the intent's **base rate**.
+Events happen inside **episodes** (sessions). An episode ends when you call `endEpisode`, or on its own after `episodeTimeout` of inactivity. Signals seen in the episode are remembered per intent. When the intent's `outcome` event arrives, each remembered signal gets a **hit**; when the episode ends without it, each gets a **miss**, or, with `attribution` set on the intent, the episode waits and takes the share `2^(−age / halfLife)` of a hit if the outcome arrives inside the window. The engine also counts, per intent, how many episodes ended with and without the outcome: the intent's **base rate**.
 
 A signal's weight is then a blend of your prior and the learned estimate:
 
@@ -252,7 +252,7 @@ serialize(state): string
 deserialize(json: string, opts?: { config?: EngineConfig; migrate?: Migrate }): EngineState
 validateConfig(config: unknown): EngineConfig   // the checks createState runs, without a state; returns the normalized copy
 ms.seconds(n), ms.minutes(n), ms.hours(n), ms.days(n), ms.weeks(n)   // durations in milliseconds
-STATE_VERSION // 2
+STATE_VERSION // 3
 RECORD_VERSION // 1
 ```
 
@@ -278,6 +278,7 @@ interface IntentConfig {
   outcome?: string;                 // event that confirms the intent
   resetOnOutcome?: boolean;         // default true
   saturate?: boolean;               // repeats within an episode add less; default: episodeTimeout is set
+  attribution?: number;             // how long a closed episode waits for the outcome before it is a miss; off if omitted
   reveal?: RevealOptions;
 }
 
@@ -337,7 +338,7 @@ const state = deserialize(saved, { config });
 
 The new config is validated and swapped in. Intents and signals you no longer declare are dropped (α and β are recomputed from what remains), newly declared intents start at their prior, and everything learned about signals that still exist is kept.
 
-States saved by an older version of this library are upgraded on load: `deserialize` migrates the state shape written by oracular 0.1.0 to 0.2.x (`STATE_VERSION` 1) to the current one on its own. A `migrate` function is consulted only for a version the library does not know, such as a state written by a newer oracular before a rollback; without one, that throws a `RangeError`:
+States saved by an older version of this library are upgraded on load: `deserialize` migrates the state shapes written by oracular 0.1.0 to 0.5.x (`STATE_VERSION` 1 and 2) to the current one on its own. A `migrate` function is consulted only for a version the library does not know, such as a state written by a newer oracular before a rollback; without one, that throws a `RangeError`:
 
 ```ts
 deserialize(saved, {
@@ -393,7 +394,7 @@ npx oracular tune shadow.ndjson --config oracular.config.json
 
 ## Roadmap
 
-Now is 0.4, themed **learning that matches how people behave**: cross-episode attribution, so a session's signals can earn credit for an outcome days later, and presets. Shipped so far: `npx oracular tune` to seed a config from a shadow log, and small ergonomics (`validateConfig`, `ms`, a JSON Schema for the config). 0.3 shipped shadow mode, `npx oracular replay` and per-episode saturation. Then a written stability policy before 1.0. Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
+Now is 0.4, themed **learning that matches how people behave**. Shipped so far: cross-episode attribution (`attribution` on an intent, so a session's signals earn a share of an outcome days later), `npx oracular tune` to seed a config from a shadow log, and small ergonomics (`validateConfig`, `ms`, a JSON Schema for the config). Presets come once tune has run on more real logs. 0.3 shipped shadow mode, `npx oracular replay` and per-episode saturation. Then a written stability policy before 1.0. Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
 
 ## Contributing
 
