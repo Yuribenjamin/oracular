@@ -16,10 +16,12 @@ it('exports exactly the public surface', () => {
       'evidenceToReveal',
       'explain',
       'markRevealed',
+      'ms',
       'observe',
       'predict',
       'serialize',
       'shouldReveal',
+      'validateConfig',
     ].sort(),
   );
   expect(api.STATE_VERSION).toBe(2);

@@ -1,6 +1,14 @@
 // Runs the built ESM output through the package's own `exports` map.
 import assert from 'node:assert/strict';
-import { createState, observe, predict, STATE_VERSION, shouldReveal } from 'oracular';
+import {
+  createState,
+  ms,
+  observe,
+  predict,
+  STATE_VERSION,
+  shouldReveal,
+  validateConfig,
+} from 'oracular';
 
 const config = {
   intents: {
@@ -30,5 +38,7 @@ assert.ok(p0 >= 0 && p0 <= 1, 'p0 in [0,1]');
 assert.ok(p1 >= 0 && p1 <= 1, 'p1 in [0,1]');
 assert.ok(p1 > p0, 'a positive signal raises p');
 assert.equal(typeof shouldReveal(after, 'upgrade', 2), 'boolean');
+assert.deepEqual(validateConfig(config), before.config);
+assert.equal(ms.days(1), 86_400_000);
 
 console.log(`smoke ok (esm, node ${process.version})`);
