@@ -581,6 +581,48 @@ describe('oracular replay', () => {
   });
 });
 
+describe('a log of hundreds of thousands of records', () => {
+  it("is read whole: spreading one file's entries into push overflowed the call stack", async () => {
+    // 150,000 records over 50,000 installs. V8 refuses a spread of that many arguments, so before
+    // the fix `oracular replay` and `oracular tune` died with "Maximum call stack size exceeded"
+    // on any log past a hundred thousand lines or so, which a real shadow export reaches quickly.
+    const lines: string[] = [];
+    for (let j = 0; j < 50_000; j++) {
+      const at = j * 1_000;
+      const record = (name: string, t: number) =>
+        JSON.stringify({
+          v: 1,
+          kind: 'event',
+          installId: `u${j}`,
+          mode: 'shadow',
+          event: { name, at: t },
+          decisions: {},
+        });
+      lines.push(
+        record('x', at),
+        record('x', at + 10),
+        record(j % 2 === 0 ? 'buy.done' : 'noise', at + 50),
+      );
+    }
+    const { io: real, out } = io();
+    const virtual: Io = {
+      ...real,
+      readFile: (path) =>
+        path.endsWith('big.ndjson')
+          ? lines.join('\n')
+          : path.endsWith('big.json')
+            ? JSON.stringify(buyConfig)
+            : real.readFile(path),
+    };
+    const args = ['replay', 'big.ndjson', '--config', 'big.json', '--thresholds', '0.5', '--json'];
+    expect(await run(args, virtual)).toBe(0);
+    expect(out.stderr).toBe('');
+    const report = JSON.parse(out.stdout);
+    expect(report.installs).toBe(50_000);
+    expect(report.records).toBe(150_000);
+  });
+});
+
 describe('DEFAULT_THRESHOLD', () => {
   it('is the reveal threshold the engine applies when none is configured', () => {
     // The CLI only sees the public API, so it keeps its own copy of the default to mark the
