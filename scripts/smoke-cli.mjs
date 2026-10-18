@@ -26,4 +26,16 @@ assert.match(live.stderr, /every record in the log is live/);
 
 assert.equal(cli('replay').status, 2, 'a usage error exits with 2');
 
+const tune = cli(
+  'tune',
+  fixture('shadow.ndjson'),
+  '--config',
+  fixture('config.json'),
+  '--intent',
+  'upgrade',
+);
+assert.equal(tune.status, 0, tune.stderr);
+assert.match(tune.stdout, /^oracular tune: 3 installs/);
+assert.match(tune.stdout, /"priorStrength"/);
+
 console.log(`smoke ok (cli, node ${process.version})`);
