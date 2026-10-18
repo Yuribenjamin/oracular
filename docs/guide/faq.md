@@ -22,7 +22,7 @@ Yes, with different weights, and it can be the outcome of one intent and a signa
 
 ## What unit is time in?
 
-Whatever you choose. `at` is a timestamp and every duration (`halfLife`, `cooldown`, `episodeTimeout`, `learning.halfLife`) is in the same unit. Milliseconds from `Date.now()` are the natural choice. The library never reads a clock.
+Whatever you choose. `at` is a timestamp and every duration (`halfLife`, `cooldown`, `episodeTimeout`, `learning.halfLife`) is in the same unit. Milliseconds from `Date.now()` are the natural choice, and [`ms`](/api/variables/ms) spells them: `halfLife: ms.days(7)`. The library never reads a clock.
 
 ## What if the clock goes backwards?
 
@@ -31,6 +31,10 @@ Nothing breaks. Events with an `at` earlier than the last update are applied wit
 ## Can I change the config after shipping?
 
 Yes. Pass the new config to `deserialize` on load. New weights apply, removed signals and intents are pruned (α and β are recomputed from what remains), new intents start at their prior, and everything learned about signals that still exist is kept. Loading without a config restores the old snapshot. See [Persistence](/guide/persistence#load-pass-your-current-config).
+
+## How do I check a config before shipping it?
+
+[`validateConfig(config)`](/api/functions/validateConfig) runs exactly the checks `createState` runs and returns the normalized copy, so call it in a test or at startup and a bad weight fails there, with the offending path in the message. For a config kept as JSON, point your editor at the published schema, <https://yuribenjamin.github.io/oracular/config.schema.json> (also shipped in the package as `oracular/config.schema.json`); `oracular replay` ignores the `$schema` key the file then carries, the engine does not.
 
 ## Why do I see `shouldReveal` false when p is high?
 
