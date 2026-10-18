@@ -351,7 +351,7 @@ Rows are sorted by the size of their impact. `limit.hit` has no history yet, so 
 
 ## Roadmap
 
-Not in 0.1, deliberately left room for: a React hook, a Vue composable, a devtools panel for watching `explain` live, and presets for common intents. Details and how to propose more on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
+Next is 0.3, themed **proof**: a recorder format for shadow mode, `npx oracular replay` to measure a config offline, per-episode saturation, and state robustness tests. Then cross-episode attribution and `tune` in 0.4, and a written stability policy before 1.0. Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
 
 ## Contributing
 
