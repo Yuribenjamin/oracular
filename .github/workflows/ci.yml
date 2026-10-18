@@ -25,6 +25,9 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run smoke
+      # Bundle budget, then the packed tarball itself: exact file list, publint, attw.
+      - run: npm run size
+      - run: npm run pack:check
       - if: matrix.node == 22
         uses: actions/upload-artifact@v7
         with:

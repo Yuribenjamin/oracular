@@ -11,7 +11,7 @@ needs Node 22 or newer. `.nvmrc` pins it.
 ```sh
 nvm use          # Node 22
 npm ci           # exact versions from package-lock.json
-npm run check    # lint, typecheck, tests, build, smoke: everything CI runs
+npm run check    # lint, typecheck, tests, build, smoke, size, pack check: everything CI runs
 ```
 
 Individual steps:
@@ -23,6 +23,8 @@ Individual steps:
 | `npm test`              | vitest, once (`npm run test:watch` to iterate)                |
 | `npm run build`         | tsup → `dist/` (ESM, CJS, `.d.ts`)                            |
 | `npm run smoke`         | runs the built output through the `exports` map in CJS and ESM |
+| `npm run size`          | size-limit: min+gzip size of the ESM build against the budget in `.size-limit.json` |
+| `npm run pack:check`    | packs the package, asserts the exact file list, runs publint (strict) and attw on the tarball |
 | `npm run docs:dev`      | the documentation site locally (regenerates the API reference first) |
 | `npm run docs:build`    | builds the site; dead links fail the build                    |
 
@@ -110,7 +112,10 @@ Plain [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fi
 - [ ] README and concept pages updated if the model changed
 - [ ] a changeset if behaviour changed (`npm run changeset`)
 - [ ] no new runtime dependency, no I/O, no `Date.now()` inside `src/`
-- [ ] `npm pack --dry-run` still lists only `dist`, README, CHANGELOG, LICENSE and package.json
+- [ ] `npm run size` passes. The budgets in `.size-limit.json` are the size at the last release
+      plus about 10%; raising one is a decision to state, with the numbers, in the PR
+- [ ] `npm run pack:check` passes; if the published file list changes on purpose, update
+      `EXPECTED_FILES` in `scripts/pack-check.mjs` and say why in the PR
 
 ## Documentation site
 
