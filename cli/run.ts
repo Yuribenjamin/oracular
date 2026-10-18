@@ -337,7 +337,9 @@ function readLogs(files: readonly string[], io: Io): LogEntry[] {
   for (const file of files) {
     const parsed = parseLog(io.readFile(resolve(io.cwd, file)), file);
     for (const warning of parsed.warnings) io.stderr(`oracular: warning: ${warning}\n`);
-    entries.push(...parsed.entries);
+    // Not `push(...parsed.entries)`: spreading a large log's entries as arguments overflows the
+    // call stack somewhere past a hundred thousand records.
+    for (const entry of parsed.entries) entries.push(entry);
   }
   if (entries.length === 0) throw new Error('the log holds no records');
   return entries;
