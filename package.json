@@ -1,6 +1,6 @@
 {
   "name": "oracular",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "On-device intent engine. Your app learns when the user is ready. Nothing leaves the device.",
   "keywords": [
     "oracular",
