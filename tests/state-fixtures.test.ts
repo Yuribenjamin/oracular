@@ -16,6 +16,16 @@ import { assertInvariants } from './helpers';
 const dir = new URL('./fixtures/state/', import.meta.url);
 const read = (version: string) => readFileSync(new URL(`${version}.json`, dir), 'utf8');
 
+/** The state version each published release wrote. Adding a release here is a conscious step. */
+const WRITTEN_VERSION: Record<string, number> = {
+  '0.1.0': 1,
+  '0.1.1': 1,
+  '0.1.2': 1,
+  '0.2.0': 1,
+  '0.2.1': 1,
+  '0.3.0': 2,
+};
+
 /** The stored state exactly as the old version wrote it. */
 type Stored = {
   version: number;
@@ -23,13 +33,14 @@ type Stored = {
   episode: {
     startedAt: number | null;
     lastEventAt: number | null;
-    intents: Record<string, { seen: string[]; resolved: boolean }>;
+    intents: Record<string, { seen: string[]; counts?: Record<string, number>; resolved: boolean }>;
   };
 };
 
 describe('states saved by every published version', () => {
   it('has one fixture per published version, produced by scripts/state-fixtures.mjs', () => {
     expect(readdirSync(dir).sort()).toStrictEqual(VERSIONS.map((v) => `${v}.json`).sort());
+    expect(Object.keys(WRITTEN_VERSION).sort()).toStrictEqual([...VERSIONS].sort());
   });
 
   for (const version of VERSIONS) {
@@ -37,23 +48,26 @@ describe('states saved by every published version', () => {
       const text = read(version);
       const raw = JSON.parse(text) as Stored;
 
-      it('was written as state version 1', () => {
-        expect(raw.version).toBe(1);
+      it('was written as the state version that release used', () => {
+        expect(raw.version).toBe(WRITTEN_VERSION[version]);
       });
 
-      it('is migrated to the current version without a migrate function', () => {
+      it('loads as the current version without a migrate function', () => {
         const migrate = vi.fn();
         const s = deserialize(text, { migrate });
         assertInvariants(s);
         expect(s.version).toBe(STATE_VERSION);
         expect(STATE_VERSION).toBe(2);
-        // The library knows version 1; the app's migrate is for versions it does not know.
+        // The library knows every version it ever wrote; the app's migrate is for versions it
+        // does not know.
         expect(migrate).not.toHaveBeenCalled();
-        // Version 2 counts occurrences per episode. Version 1 only knew which signals were seen,
-        // so each counts once.
         for (const [name, record] of Object.entries(raw.episode.intents)) {
+          // Version 2 counts occurrences per episode. Version 1 only knew which signals were
+          // seen, so each counts once; a version 2 state keeps the counts it stored.
           expect(s.episode.intents[name]!.counts).toStrictEqual(
-            Object.fromEntries(record.seen.map((signal) => [signal, 1])),
+            raw.version === 1
+              ? Object.fromEntries(record.seen.map((signal) => [signal, 1]))
+              : record.counts,
           );
         }
         expect(Object.values(raw.episode.intents).some((r) => r.seen.length > 0)).toBe(true);
