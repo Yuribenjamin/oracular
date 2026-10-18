@@ -525,6 +525,25 @@ describe('the base rate check', () => {
   });
 });
 
+describe('attribution', () => {
+  it('is switched off while counting, kept on for the grid and in the printed config', () => {
+    // The verdict on each episode is its own: Monday's miss is Monday's, however the device
+    // later credits it. So the counts match the config without the window, and the window stays.
+    const withWindow: EngineConfig = {
+      intents: { buy: { ...buyConfig.intents.buy!, attribution: 1e15 } },
+    };
+    const plain = tune(handLog(), buyConfig, { halfLives: [1e15] });
+    const windowed = tune(handLog(), withWindow, { halfLives: [1e15] });
+    const counts = (fit: (typeof plain.intents)[number] | undefined) =>
+      fit?.signals.map((f) => [f.signal, f.hits, f.misses, f.without, f.outcomesWithout]);
+    expect(counts(windowed.intents[0])).toStrictEqual(counts(plain.intents[0]));
+    expect(windowed.intents[0]?.episodes).toBe(plain.intents[0]?.episodes);
+    expect(windowed.config.intents.buy?.attribution).toBe(1e15);
+    // Replay runs the engine as the device would, window included, so the grid may differ.
+    expect(windowed.intents[0]?.halfLife.curve).toHaveLength(1);
+  });
+});
+
 describe('wilson', () => {
   it('is the Wilson score interval', () => {
     expect(wilson(0, 0, 1.6449)).toStrictEqual([0, 1]);
