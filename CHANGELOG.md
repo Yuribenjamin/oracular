@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+### Patch Changes
+
+- [#28](https://github.com/Yuribenjamin/oracular/pull/28) [`250a32d`](https://github.com/Yuribenjamin/oracular/commit/250a32d9764aeabdff020f99074c0a512ea7194f) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - `oracular replay` and `oracular tune` read logs of any size. A log of more than about a hundred thousand records made both commands fail with "Maximum call stack size exceeded", because every file's entries were spread into one `push` call. Found by replaying the Retailrocket clickstream (2.7 million events).
+
 ## 0.5.0
 
 ### Minor Changes
