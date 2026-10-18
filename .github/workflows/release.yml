@@ -58,6 +58,12 @@ jobs:
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # npm reads package.json before prepublishOnly builds dist, and warns that the bin at
+      # dist/cli.js is missing. Build first so the rehearsal log stays clean.
+      - name: Build before the rehearsal
+        if: steps.registry.outputs.published == 'false'
+        run: npm run build
+
       # Rehearsal: runs prepublishOnly (npm run check) under the real publish environment, with
       # npm's own flags inherited by every nested npm call exactly as they are during the publish,
       # and prints the full output. A failure stops the job here with its cause in the log; inside
