@@ -16,11 +16,14 @@ import { run } from '../cli/run';
 import {
   DEFAULT_HALF_LIVES,
   DEFAULT_PRIOR_EPISODES,
+  FLAT_GRID_GAIN,
   MIN_INSTALLS_FOR_SPREAD,
   STRENGTH_RANGE,
   tune,
+  UBIQUITY_SHARE,
   wilson,
 } from '../cli/tune';
+import { formatTuneText } from '../cli/tune-report';
 import { DAY, deepFreeze, MINUTE } from './helpers';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -306,15 +309,17 @@ describe('tune, on a population with planted structure', () => {
     for (const f of [good, bad, noise]) expect(f?.thin).toBe(false);
   });
 
-  it('measures a signal that is never absent as no lift at all', () => {
+  it('leaves out a signal that is never absent: no contrast, and ubiquitous', () => {
     const opened = signal('app.opened');
     expect(opened?.current).toBeNull();
     expect(opened?.without).toBe(0);
     expect(opened?.contrast).toBe(0);
     expect(opened?.thin).toBe(true);
-    // Everything with the signal, nothing without it: the engine's lift of its rate over the smoothed empty contrast.
+    // Everything with the signal, nothing without it.
     expect(opened?.hits).toBe(outcomes);
-    expect(opened?.hits).toBe(outcomes);
+    expect(opened?.share).toBe(1);
+    expect(opened?.ubiquitous).toBe(true);
+    expect(opened?.weight).toBeNull();
   });
 
   it('reads the prior strength from the spread of per-install base rates, inside the range', () => {
@@ -327,12 +332,20 @@ describe('tune, on a population with planted structure', () => {
   it('tries every half-life in the grid plus the current one, and keeps the lowest Brier score', () => {
     const grid = [...new Set([...DEFAULT_HALF_LIVES, DAY])].sort((a, b) => a - b);
     expect(fit?.halfLife.curve.map((p) => p.halfLife)).toStrictEqual(grid);
-    expect(fit?.halfLife.source).toBe('grid');
     const briers = fit?.halfLife.curve.map((p) => p.brier as number) ?? [];
     const best = Math.min(...briers);
+    const atCurrent = fit?.halfLife.curve.find((p) => p.halfLife === DAY)?.brier as number;
     const chosen = fit?.halfLife.curve.find((p) => p.halfLife === fit.halfLife.value);
-    expect(chosen?.brier).toBe(best);
+    // The rule: the best point, unless it gains less than FLAT_GRID_GAIN on the current value.
+    if ((atCurrent - best) / atCurrent < FLAT_GRID_GAIN) {
+      expect(fit?.halfLife.source).toBe('kept');
+      expect(fit?.halfLife.value).toBe(DAY);
+    } else {
+      expect(fit?.halfLife.source).toBe('grid');
+      expect(chosen?.brier).toBe(best);
+    }
     expect(fit?.halfLife.window).toBe(DAY);
+    expect(fit?.beatsBaseRate).toBe(true);
   });
 
   it('emits a config the engine accepts, and replay scores it exactly as the grid did', () => {
@@ -352,6 +365,163 @@ describe('tune, on a population with planted structure', () => {
         .map((f) => f.signal)
         .sort(),
     );
+  });
+});
+
+// ---- the three rules learned from a real clickstream ----
+
+/**
+ * Twenty-one installs, one episode each, closed 200 ms after they open. `u` is seen in 19 of them
+ * (installs 1 to 19), `v` in 18 (installs 2 to 19); installs 0 and 20 see only an event of no
+ * intent. The outcome follows in installs 0 to 9 and 20. So: 21 episodes, 11 outcomes; u 9 hits,
+ * 10 misses, and both episodes without it end with the outcome; v 8 hits, 10 misses, and all three
+ * episodes without it end with the outcome.
+ */
+function ubiquityLog(): LogEntry[] {
+  const entries: LogEntry[] = [];
+  for (let i = 0; i <= 20; i++) {
+    const id = `u${i}`;
+    entries.push(ev(id, T, i === 0 || i === 20 ? 'other' : 'u'));
+    if (i >= 2 && i <= 19) entries.push(ev(id, T + 1, 'v'));
+    if (i <= 9 || i === 20) entries.push(ev(id, T + 50, 'buy.done'));
+    entries.push(end(id, T + 200));
+  }
+  return entries;
+}
+
+const withSignals = (signals: Record<string, number>): EngineConfig => ({
+  intents: { buy: { ...buyConfig.intents.buy!, signals } },
+});
+
+describe('ubiquitous signals', () => {
+  const report = tune(deepFreeze(ubiquityLog()), withSignals({ u: 1, v: 1 }), {
+    halfLives: [1e15],
+  });
+  const [fit] = report.intents;
+  const [u, v] = fit?.signals ?? [];
+
+  it('counts the log as described', () => {
+    expect([fit?.episodes, fit?.outcomes, fit?.installs]).toStrictEqual([21, 11, 21]);
+    expect([u?.hits, u?.misses, u?.without, u?.outcomesWithout]).toStrictEqual([9, 10, 2, 2]);
+    expect([v?.hits, v?.misses, v?.without, v?.outcomesWithout]).toStrictEqual([8, 10, 3, 3]);
+  });
+
+  it('leaves out a signal seen in more than 90% of episodes, whatever its lift', () => {
+    expect(UBIQUITY_SHARE).toBe(0.9);
+    expect(u?.share).toBeCloseTo(19 / 21, 12);
+    expect(u?.ubiquitous).toBe(true);
+    // The contrast would have called it negative: 10/21 with it against 3/4 without.
+    expect(u?.lift).toBeCloseTo((10 / 21 - 3 / 4) / (3 / 4), 12);
+    expect(u?.weight).toBeNull();
+    expect(report.config.intents.buy?.signals).not.toHaveProperty('u');
+  });
+
+  it('keeps fitting a signal at or below the share', () => {
+    expect(v?.share).toBeCloseTo(18 / 21, 12);
+    expect(v?.ubiquitous).toBe(false);
+    expect(v?.lift).toBeCloseTo((9 / 20 - 4 / 5) / (4 / 5), 12);
+    expect(v?.weight).toBe(
+      Math.round((fit?.priorStrength.value as number) * (v?.lift as number) * 100) / 100,
+    );
+    expect(report.config.intents.buy?.signals).toStrictEqual({ v: v?.weight });
+  });
+
+  it('is exactly at the boundary: 18 of 20 is not ubiquitous, 19 of 20 is', () => {
+    const twenty = ubiquityLog().filter((e) => e.installId !== 'u20');
+    const [fit20] = tune(twenty, withSignals({ u: 1, v: 1 }), { halfLives: [1e15] }).intents;
+    const [u20, v20] = fit20?.signals ?? [];
+    expect(fit20?.episodes).toBe(20);
+    expect(u20?.share).toBeCloseTo(0.95, 12);
+    expect(u20?.ubiquitous).toBe(true);
+    expect(v20?.share).toBeCloseTo(0.9, 12);
+    expect(v20?.ubiquitous).toBe(false);
+  });
+
+  it('says so in the report', () => {
+    const text = formatTuneText(report);
+    expect(text).toContain(
+      '| u      | –      | 1.00 | -1.20 to -0.26 | -0.37 | 9 / 10              | 2 / 2                        | in 90.5% of episodes, so it cannot tell them apart; left out of the config; thin: 1.8 of 10 contrast |',
+    );
+    expect(text).not.toContain('no measurable lift');
+  });
+});
+
+describe('a flat half-life grid', () => {
+  it('keeps the current value when the best point gains less than 1%, and says so', () => {
+    expect(FLAT_GRID_GAIN).toBe(0.01);
+    // Half-lives of 1e8 and 1e9 ms both dwarf the hand log's 200 ms span: the scores differ in
+    // the ninth decimal, beyond the exact-tie tolerance and far below 1%.
+    const config: EngineConfig = {
+      intents: { buy: { ...buyConfig.intents.buy!, halfLife: 1e8 } },
+    };
+    const [fit] = tune(handLog(), config, { halfLives: [1e9] }).intents;
+    expect(fit?.halfLife.curve.map((p) => p.halfLife)).toStrictEqual([1e8, 1e9]);
+    const [atCurrent, best] = fit?.halfLife.curve.map((p) => p.brier as number) ?? [];
+    expect(best).toBeLessThan(atCurrent as number);
+    expect((atCurrent as number) - (best as number)).toBeGreaterThan(1e-12);
+    expect(fit?.halfLife.source).toBe('kept');
+    expect(fit?.halfLife.value).toBe(1e8);
+    expect(fit?.halfLife.note).toBe(
+      'kept: the grid is flat, the best point (11d 13h, 0.1966) improves on the current value (0.1966) by 0.00%, less than 1% (always predicting the base rate: 0.2400)',
+    );
+    const text = formatTuneText(tune(handLog(), config, { halfLives: [1e9] }));
+    expect(text).toContain('(lower is better): 1d 3h 0.1966 *, 11d 13h 0.1966\n');
+  });
+
+  it('still moves to the best point when the grid is not flat', () => {
+    // A half-life of 1 ms loses the first x before the second arrives; 1e15 keeps it. 10% apart.
+    const config: EngineConfig = {
+      intents: { buy: { ...buyConfig.intents.buy!, halfLife: 1 } },
+    };
+    const [fit] = tune(handLog(), config, { halfLives: [1e15] }).intents;
+    const [atCurrent, best] = fit?.halfLife.curve.map((p) => p.brier as number) ?? [];
+    expect(((atCurrent as number) - (best as number)) / (atCurrent as number)).toBeGreaterThan(
+      FLAT_GRID_GAIN,
+    );
+    expect(fit?.halfLife.source).toBe('grid');
+    expect(fit?.halfLife.value).toBe(1e15);
+    expect(fit?.halfLife.note).toMatch(/^lowest Brier score over the grid, 0\.1966 \(always/);
+  });
+});
+
+describe('the base rate check', () => {
+  it('says when the fitted intent does not beat its base rate, with no signal left', () => {
+    // Only the ubiquitous u: it is left out, p never leaves the prior, and the prior (11 of 21
+    // episodes, smoothed) is not the share of events the outcome follows within the window.
+    const report = tune(ubiquityLog(), withSignals({ u: 1 }), { halfLives: [1e15] });
+    const [fit] = report.intents;
+    expect(report.config.intents.buy?.signals).toStrictEqual({});
+    const [point] = fit?.halfLife.curve ?? [];
+    expect(point?.brier).toBeGreaterThan(fit?.halfLife.brierBaseline as number);
+    expect(fit?.beatsBaseRate).toBe(false);
+    const text = formatTuneText(report);
+    expect(text).toContain(
+      '\nThis intent does not beat its base rate: the fitted config scores 0.2510 where always predicting the base rate scores 0.2498 (lower is better). No signal is left in the config, so p never leaves the prior, and the prior (the share of episodes that end with buy.done) is not the share of events that buy.done follows within 100ms. Drop the intent, or find signals that tell its episodes apart (--all-events measures every other event in the log).\n',
+    );
+  });
+
+  it('names the signals when some are left and still do not separate the episodes', () => {
+    const report = tune(ubiquityLog(), withSignals({ u: 1, v: 1 }), { halfLives: [1e15] });
+    expect(report.intents[0]?.beatsBaseRate).toBe(false);
+    expect(formatTuneText(report)).toContain(
+      'Its signals do not separate the events that buy.done follows within 100ms from the rest.',
+    );
+  });
+
+  it('is true, and silent, when the fit beats the base rate', () => {
+    const [fit] = tune(handLog(), buyConfig, { halfLives: [1e15] }).intents;
+    expect(fit?.beatsBaseRate).toBe(true);
+    expect(formatTuneText(tune(handLog(), buyConfig, { halfLives: [1e15] }))).not.toContain(
+      'does not beat its base rate',
+    );
+  });
+
+  it('is null when nothing could be scored', () => {
+    // Every point's window runs past the end of the log: nothing to score the grid with.
+    const short = ubiquityLog().map((e) => (e.kind === 'end' ? { ...e, at: T + 60 } : e));
+    const [fit] = tune(short, withSignals({ u: 1, v: 1 }), { halfLives: [1e15] }).intents;
+    expect(fit?.halfLife.source).toBe('kept');
+    expect(fit?.beatsBaseRate).toBeNull();
   });
 });
 

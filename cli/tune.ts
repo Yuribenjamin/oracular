@@ -4,6 +4,11 @@
 // lift over the episodes without it its initial weight, and the half-life that predicts the log
 // best under replay (lowest Brier score) wins a grid search. Because the counts come from the
 // engine, tune cannot disagree with what a device would learn from the same events.
+//
+// Three rules keep the fit honest, each learned from a real clickstream: a signal seen in nearly
+// every episode is left out (the few episodes without it are not typical sessions, so its contrast
+// says little); the half-life is kept when the grid is flat (the best point gains less than 1%);
+// and the report says when the fitted intent still does not beat its own base rate.
 // Pure: no I/O, no clock. The CLI (run.ts) reads the files and prints what this returns.
 import {
   createState,
@@ -20,6 +25,7 @@ import {
 import { laplace, lift } from '../src/math';
 import { groupByInstall, type LogEntry } from './log';
 import { DEFAULT_THRESHOLD, replay } from './replay';
+import { formatDuration } from './report';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -32,6 +38,18 @@ export const DEFAULT_PRIOR_EPISODES = 10;
 export const MIN_INSTALLS_FOR_SPREAD = 10;
 /** A prior strength read from the spread is kept inside this range. */
 export const STRENGTH_RANGE: readonly [number, number] = [2, 50];
+/**
+ * A signal seen in more than this share of counted episodes is ubiquitous and left out of the
+ * fitted config. It cannot tell episodes apart, and the few episodes without it are rarely
+ * typical sessions (a checkout that opens its own session, a stub with one event), so the contrast
+ * measured on them says little about the signal.
+ */
+export const UBIQUITY_SHARE = 0.9;
+/**
+ * The current half-life is kept unless the best grid point improves its Brier score by at least
+ * this fraction: a flatter grid says the half-life does not matter here, not that it should change.
+ */
+export const FLAT_GRID_GAIN = 0.01;
 /** Two-sided 90% normal quantile, for the Wilson interval on each signal's outcome rate. */
 const Z90 = 1.6449;
 
@@ -66,8 +84,15 @@ export interface SignalFit {
   qWithout: number;
   /** The engine's lift of qWith over qWithout, in [−1, 1]; 0 for a signal never seen. */
   lift: number;
-  /** priorStrength × lift, rounded to two decimals; null when the signal was never seen or the weight rounds to 0. */
+  /**
+   * priorStrength × lift, rounded to two decimals; null when the signal was never seen, is
+   * ubiquitous, or the weight rounds to 0. Null means the signal is left out of the fitted config.
+   */
   weight: number | null;
+  /** Fraction of counted episodes in which the signal was seen. */
+  share: number;
+  /** Seen in more than {@link UBIQUITY_SHARE} of counted episodes: left out, whatever its lift. */
+  ubiquitous: boolean;
   /** The weight at the ends of a 90% Wilson interval on the outcome rate with the signal. */
   low: number;
   high: number;
@@ -110,6 +135,12 @@ export interface IntentFit {
   };
   /** learning.priorEpisodes as resolved from the config: the contrast a weight needs not to be thin. */
   priorEpisodes: number;
+  /**
+   * Whether the fitted intent, at the chosen half-life, scores a lower Brier than always predicting
+   * its base rate. False means the signals do not separate the episodes that end with the outcome
+   * from the rest. Null when nothing could be scored.
+   */
+  beatsBaseRate: boolean | null;
   /** The intent's declared signals, in config order. */
   signals: SignalFit[];
   /** Every other event name in the log, measured the same way; only with `allEvents`. */
@@ -212,6 +243,8 @@ function fitSignal(
   const contrast = nWith + without === 0 ? 0 : (nWith * without) / (nWith + without);
   const [qLow, qHigh] = wilson(hits, nWith, Z90);
   const rounded = Math.round(strength * l * 100) / 100;
+  const share = tally.episodes === 0 ? 0 : nWith / tally.episodes;
+  const ubiquitous = nWith > UBIQUITY_SHARE * tally.episodes;
   return {
     signal,
     current,
@@ -222,7 +255,9 @@ function fitSignal(
     qWith,
     qWithout,
     lift: l,
-    weight: nWith === 0 || rounded === 0 ? null : rounded,
+    weight: nWith === 0 || ubiquitous || rounded === 0 ? null : rounded,
+    share,
+    ubiquitous,
     low: strength * lift(qLow, qWithout),
     high: strength * lift(qHigh, qWithout),
     contrast,
@@ -466,6 +501,7 @@ export function tune(
       return { halfLife, brier: scored?.brier ?? null, points: scored?.points ?? 0 };
     });
     const scoredPoints = curve.filter((p) => p.brier !== null);
+    const atCurrent = curve.find((p) => p.halfLife === intent.halfLife) as HalfLifePoint;
     let halfLife: IntentFit['halfLife'];
     if (scoredPoints.length === 0) {
       halfLife = {
@@ -482,17 +518,44 @@ export function tune(
       const ties = scoredPoints.filter((p) => (p.brier as number) - best <= 1e-12);
       const nearest = (p: HalfLifePoint) => Math.abs(Math.log(p.halfLife / intent.halfLife));
       const chosen = ties.reduce((a, b) => (nearest(b) < nearest(a) ? b : a));
-      halfLife = {
-        value: chosen.halfLife,
-        current: intent.halfLife,
-        source: 'grid',
-        note: `lowest Brier score over the grid, ${best.toFixed(3)}${brierBaseline === null ? '' : ` (always predicting the base rate: ${(brierBaseline as number).toFixed(3)})`}`,
-        window,
-        curve,
-        brierBaseline,
-      };
+      const baseline =
+        brierBaseline === null
+          ? ''
+          : ` (always predicting the base rate: ${(brierBaseline as number).toFixed(4)})`;
+      // A flat grid says the half-life hardly matters here; the current value is as good a choice
+      // as any, and swapping it for a point that gains a fraction of a percent would mislead.
+      const gain =
+        atCurrent.brier === null || atCurrent.brier <= 0
+          ? Number.POSITIVE_INFINITY
+          : (atCurrent.brier - best) / atCurrent.brier;
+      if (chosen.halfLife !== intent.halfLife && gain < FLAT_GRID_GAIN) {
+        halfLife = {
+          value: intent.halfLife,
+          current: intent.halfLife,
+          source: 'kept',
+          note: `kept: the grid is flat, the best point (${formatDuration(chosen.halfLife)}, ${best.toFixed(4)}) improves on the current value (${(atCurrent.brier as number).toFixed(4)}) by ${(gain * 100).toFixed(2)}%, less than ${FLAT_GRID_GAIN * 100}%${baseline}`,
+          window,
+          curve,
+          brierBaseline,
+        };
+      } else {
+        halfLife = {
+          value: chosen.halfLife,
+          current: intent.halfLife,
+          source: 'grid',
+          note: `lowest Brier score over the grid, ${best.toFixed(4)}${baseline}`,
+          window,
+          curve,
+          brierBaseline,
+        };
+      }
     }
     fitted = withIntent(fitted, name, { ...fittedIntent, halfLife: halfLife.value });
+    const scoredAt = curve.find((p) => p.halfLife === halfLife.value) as HalfLifePoint;
+    const beatsBaseRate =
+      scoredAt.brier === null || brierBaseline === null
+        ? null
+        : scoredAt.brier < (brierBaseline as number);
 
     intents.push({
       intent: name,
@@ -505,6 +568,7 @@ export function tune(
       priorStrength: strength,
       halfLife,
       priorEpisodes,
+      beatsBaseRate,
       signals,
       candidates,
     });

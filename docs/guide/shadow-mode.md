@@ -123,7 +123,9 @@ Exit codes: 0 when the report is printed, 1 for unreadable input or nothing to s
 - **prior**: the pooled base rate, `(outcomes + 1) / (episodes + 2)`.
 - **priorStrength**: from the spread of per-install base rates, by the method of moments on a Beta distribution once the spread that sampling alone would produce is taken out, kept inside 2 to 50. Below 10 installs with a counted episode it is kept as it was, and the report says so.
 - **weights**: for each declared signal, `priorStrength × lift`, where lift is the engine's own comparison of the outcome rate in episodes with the signal against the episodes without it ([Episodes & learning](/guide/concepts/episodes-and-learning#from-hits-and-misses-to-a-weight)). A 90% Wilson interval on the rate with the signal gives the interval on the weight. A weight is labelled *thin* while its contrast is below `learning.priorEpisodes`, the point at which the engine itself would trust the comparison as much as your guess. A signal with no measurable lift is left out of the printed config.
-- **halfLife**: the lowest Brier score over a grid of half-lives, each scored by `replay` with the fitted prior, strength and weights and one fixed window.
+- **ubiquitous signals**: a signal seen in more than 90% of counted episodes is left out too, whatever its lift, and the report says so. It cannot tell episodes apart, and the few episodes without it are rarely typical sessions: a checkout that opens a session of its own, a stub with one event. The contrast measured on them says little about the signal and a lot about those sessions. On a real clickstream, `item.viewed` sat in 99% of sessions and the 1% without it ended in a purchase two times in three, which made the contrast call views strongly negative; dropping the signal scored better than either that weight or the hand-written one.
+- **halfLife**: the lowest Brier score over a grid of half-lives, each scored by `replay` with the fitted prior, strength and weights and one fixed window. When the best point improves on the current value by less than 1%, the grid is flat for this log and the current value is kept; the report says so and prints the grid to four decimals so you can see the shape yourself.
+- **the base rate check**: when the fitted intent, at its chosen half-life, does not score better than always predicting its base rate, the report says so under the grid. Its signals do not separate the episodes that end with the outcome from the rest, or no signal is left; drop the intent or find signals that do.
 
 ```sh
 npx oracular tune shadow-week-1.ndjson shadow-week-2.ndjson --config oracular.config.json
@@ -142,11 +144,11 @@ Counted: shadow episodes only. Durations assume `at` is in milliseconds. Every n
 
 stuck: outcome help.article.read, 3 installs, 14 counted episodes, 2 with the outcome
 
-| knob          | fitted | was | from                                                                             |
-| ------------- | ------ | --- | -------------------------------------------------------------------------------- |
-| prior         | 0.1875 | 0.1 | 2 of 14 episodes ended with the outcome, smoothed (2+1)/(14+2)                   |
-| priorStrength | 5.0    | 5.0 | kept: 3 installs with a counted episode, reading the spread needs 10             |
-| halfLife      | 10m    | 10m | lowest Brier score over the grid, 0.163 (always predicting the base rate: 0.200) |
+| knob          | fitted | was | from                                                                               |
+| ------------- | ------ | --- | ---------------------------------------------------------------------------------- |
+| prior         | 0.1875 | 0.1 | 2 of 14 episodes ended with the outcome, smoothed (2+1)/(14+2)                     |
+| priorStrength | 5.0    | 5.0 | kept: 3 installs with a counted episode, reading the spread needs 10               |
+| halfLife      | 10m    | 10m | lowest Brier score over the grid, 0.1633 (always predicting the base rate: 0.2001) |
 
 | signal         | weight | was   | 90% interval  | lift  | with: hits / misses | without: outcomes / episodes | note                     |
 | -------------- | ------ | ----- | ------------- | ----- | ------------------- | ---------------------------- | ------------------------ |
@@ -155,7 +157,7 @@ stuck: outcome help.article.read, 3 installs, 14 counted episodes, 2 with the ou
 | help.opened    | 3.65   | 3.00  | 1.90 to 5.00  | +0.73 | 2 / 0               | 0 / 12                       | thin: 1.7 of 10 contrast |
 | task.completed | 0.83   | -4.00 | -5.00 to 3.31 | +0.17 | 0 / 1               | 2 / 13                       | thin: 0.9 of 10 contrast |
 
-Half-life grid, Brier score against "the outcome follows within 1h" (lower is better): 10m 0.163 *, 1h 0.167, 6h 0.168, 1d 0.171, 3d 0.180, 7d 0.185, 14d 0.187, 30d 0.188
+Half-life grid, Brier score against "the outcome follows within 1h" (lower is better): 10m 0.1633 *, 1h 0.1672, 6h 0.1679, 1d 0.1709, 3d 0.1800, 7d 0.1850, 14d 0.1872, 30d 0.1884
 
 Config with every fitted value swapped in (paste it, or pass it to oracular replay --config):
 {
