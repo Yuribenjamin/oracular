@@ -36,7 +36,7 @@ The theme is **promises we can keep**. 1.0 means the API and the state format ar
 1. **Stability policy, written down.** What is public API (every export from `index.ts`, the serialized state shape, and the recorder format), the deprecation window (one minor with warnings before removal), the `STATE_VERSION` guarantee (every bump ships a migration and fixture tests, as 0.3 did), and that validation error types and message shapes are part of the contract.
 2. **Property-based tests.** Purity, monotone decay, the α/β invariant, serialize/deserialize identity, and `shouldReveal ⇒ lower ≥ threshold`, generated rather than hand-picked. The fixtures and the deserialize fuzz from 0.3 keep running against every release in between.
 3. **A debug overlay.** A small framework-free widget showing predict and explain live for every intent. The shadow panels the integrations built are the prototype.
-4. **One public case study with real numbers**, produced by `replay` on a production shadow log, and at least two production users referenced.
+4. **One public case study with real numbers**, produced by `replay` on a production shadow log, and at least two production users referenced. A reproducible first one, on a public clickstream rather than a shadow log, is [Case study: a public clickstream](/guide/case-study-clickstream); the production one is still to come.
 5. **Housekeeping.** Done in 0.3: GitHub Actions pinned by SHA, CodeQL and an OpenSSF Scorecard workflow, the publish-only-from-CI policy written down in SECURITY.md. What is left is keeping them green.
 
 ## After 1.0

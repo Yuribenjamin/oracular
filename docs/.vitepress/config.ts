@@ -76,6 +76,7 @@ export default defineConfig({
             { text: 'Explainability', link: '/guide/explainability' },
             { text: 'Tuning guide', link: '/guide/tuning' },
             { text: 'Shadow mode', link: '/guide/shadow-mode' },
+            { text: 'Case study: a clickstream', link: '/guide/case-study-clickstream' },
             { text: 'Recipes', link: '/guide/recipes' },
             { text: 'Using with frameworks', link: '/guide/frameworks' },
           ],
