@@ -5,9 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: release
@@ -16,12 +14,16 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # the "Version Packages" branch, tags and GitHub releases
+      pull-requests: write # the "Version Packages" pull request
+      id-token: write # npm trusted publishing (OIDC)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           registry-url: https://registry.npmjs.org
@@ -70,7 +72,7 @@ jobs:
       # Without: runs the publish script. `changeset publish` publishes only versions that are
       # not on the registry yet, with provenance, authenticated through OIDC. No NPM_TOKEN.
       # The PAT (not GITHUB_TOKEN) is what lets the Version Packages PR trigger CI.
-      - uses: changesets/action@v2
+      - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           publish-script: npm run release
           create-github-releases: true
