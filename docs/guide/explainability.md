@@ -24,7 +24,7 @@ After ten sessions in which `pricing.viewed` led to an upgrade six times out of 
 | `impact`          | p minus what p would be without this signal's contribution                                       |
 | `initialWeight`   | the weight in your config                                                                        |
 | `learnedWeight`   | what this user's history alone says the weight should be; 0 until the signal has completed an episode |
-| `effectiveWeight` | the blend that the next occurrence will actually add                                             |
+| `effectiveWeight` | the blend of initial and learned weight: what the signal's first occurrence in an episode adds   |
 | `hits`, `misses`  | the learned record, decayed if `learning.halfLife` is set                                        |
 
 Rows are sorted by |impact| descending, then by name. Impact is nonlinear in p, so a +3 contribution can matter more than a −4 one depending on where p sits.

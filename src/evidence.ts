@@ -6,8 +6,10 @@ import type { IntentConfig, RevealOptions } from './types';
 /**
  * How much positive evidence an intent needs before {@link shouldReveal} first becomes true:
  * the smallest pseudo-count `w` such that Beta(α₀ + w, β₀) clears both `p ≥ threshold` and
- * `p − z·sd ≥ threshold`. Divide by a signal's weight and round up for the number of identical
- * signals, fired together, that open the gate. Solved numerically to 1e-9.
+ * `p − z·sd ≥ threshold`. Divide by a signal's weight and round up for the number of full-weight
+ * occurrences that open the gate: distinct signals, or one occurrence per episode. Repeats within
+ * one episode add less (n of them add `w × log2(1 + n)`, see {@link IntentConfig.saturate}).
+ * Solved numerically to 1e-9.
  *
  * Cooldowns and decay are not part of the answer: this is the evidence needed at one instant.
  *
@@ -20,7 +22,7 @@ import type { IntentConfig, RevealOptions } from './types';
  * @example
  * ```ts
  * const needed = evidenceToReveal(config.intents.upgrade); // ≈ 15.1 for the quickstart config
- * Math.ceil(needed / 3); // 6 signals of weight 3
+ * Math.ceil(needed / 3); // 6 full-weight signals of weight 3
  * ```
  */
 export function evidenceToReveal(intent: IntentConfig, opts?: RevealOptions): number {

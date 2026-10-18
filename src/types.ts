@@ -1,4 +1,4 @@
-import type { STATE_VERSION } from './version';
+import type { RECORD_VERSION, STATE_VERSION } from './version';
 
 /**
  * Options that decide when `shouldReveal` fires and how long cooldowns last. Resolved per call →
@@ -32,9 +32,9 @@ export interface RevealOptions {
 export interface LearningConfig {
   /** Half-life of learned hit/miss counts, in the same unit as `at`. Omit for no forgetting. */
   halfLife?: number;
-  /** A perfectly predictive signal converges to `gain × |initial weight|`. Default 2. */
+  /** A perfectly predictive signal converges to `gain × |initial weight|`. Default 2; at most 1e6. */
   gain?: number;
-  /** Pseudo-count behind the developer's initial weight: how many observed episodes it takes to weigh as much as the prior. Default 10. */
+  /** Pseudo-count behind the developer's initial weight: how many observed episodes it takes to weigh as much as the prior. Default 10; at most 1e6. */
   priorEpisodes?: number;
 }
 
@@ -57,16 +57,27 @@ export interface LearningConfig {
 export interface IntentConfig {
   /** Prior probability, strictly between 0 and 1. */
   prior: number;
-  /** Strength of the prior as a pseudo-count, greater than 0. */
+  /** Strength of the prior as a pseudo-count, greater than 0 and at most 1e6. */
   priorStrength: number;
   /** Half-life of evidence, in the same unit as `at`. Evidence decays back toward the prior. */
   halfLife: number;
-  /** Event name → initial weight. Positive is evidence for the intent, negative against. Non-zero. */
+  /** Event name → initial weight. Positive is evidence for the intent, negative against. Non-zero, between −1e6 and 1e6. */
   signals: Record<string, number>;
   /** Event name that confirms the intent happened, e.g. `'checkout.completed'`. */
   outcome?: string;
   /** Reset α, β and contributions to the prior when the outcome arrives. Default true. */
   resetOnOutcome?: boolean;
+  /**
+   * Repeats of a signal within one episode add less: the n-th occurrence adds
+   * `w × log2(1 + 1/n)`, so ten occurrences add 3.46 weights, not ten. The count restarts when
+   * the episode ends or this intent's outcome arrives. Default: true when `episodeTimeout` is
+   * set, false otherwise, because without an idle timeout episodes end only when the app calls
+   * `endEpisode`, and if it never does the count would never restart. Set true to saturate
+   * anyway (your app ends every episode itself), or false for intents where the repetition
+   * itself is the evidence (a user stuck on the same step), so every occurrence adds its full
+   * weight.
+   */
+  saturate?: boolean;
   /** Reveal defaults for this intent. */
   reveal?: RevealOptions;
 }
@@ -134,6 +145,11 @@ export interface IntentState {
 export interface EpisodeIntentRecord {
   /** Signals seen since the episode started (or since this intent's last outcome). */
   seen: string[];
+  /**
+   * How many times each signal in `seen` has occurred over the same span; its keys are exactly the
+   * signals in `seen`. Repeats saturate: the n-th occurrence adds less than the first.
+   */
+  counts: Record<string, number>;
   /** Whether the outcome arrived in this episode. */
   resolved: boolean;
 }
@@ -232,7 +248,10 @@ export interface SignalExplanation {
   initialWeight: number;
   /** What this user's history alone says the weight should be. */
   learnedWeight: number;
-  /** The blend the next occurrence of the signal will actually add. */
+  /**
+   * The blend of initial and learned weight: what the signal adds the first time it occurs in an
+   * episode. Repeats within the episode add less (see {@link IntentConfig.saturate}).
+   */
   effectiveWeight: number;
   hits: number;
   misses: number;
@@ -272,8 +291,9 @@ export interface Evaluation {
 }
 
 /**
- * Turns a stored state of an older version into a current `EngineState`. Receives the parsed
- * JSON as-is and the version it declares.
+ * Turns a stored state of a version this library cannot migrate itself into a current
+ * `EngineState`. Receives the parsed JSON as-is and the version it declares. States saved by
+ * oracular 0.1.0 to 0.2.x (version 1) never reach it: `deserialize` upgrades those on its own.
  *
  * @example
  * ```ts
@@ -296,6 +316,100 @@ export type Migrate = (stored: unknown, version: number) => EngineState;
 export interface DeserializeOptions {
   /** The app's current config. Validated, swapped in, and used to prune signals and intents no longer declared. */
   config?: EngineConfig;
-  /** Called when the stored version differs from `STATE_VERSION`. */
+  /**
+   * Called when the stored version is neither `STATE_VERSION` nor one this library migrates
+   * itself (states from oracular 0.1.0 to 0.2.x are upgraded without it).
+   */
   migrate?: Migrate;
 }
+
+/**
+ * Whether the app acted on reveals when a record was made: `'shadow'` when it only computed them
+ * (nothing shown to the user), `'live'` when it showed them. Replay only measures shadow periods
+ * honestly: once a reveal is live, the reveal itself causes outcomes.
+ */
+export type RecordMode = 'shadow' | 'live';
+
+/**
+ * What every record needs from the app, for {@link createRecord} and {@link createEndRecord}.
+ *
+ * @example
+ * ```ts
+ * const recording: RecordOptions = { installId: storedInstallId, mode: 'shadow' };
+ * ```
+ */
+export interface RecordOptions {
+  /**
+   * A random id the app generates once, on first use, and stores (for example
+   * `crypto.randomUUID()`). It groups one install's records across exports and nothing else; never
+   * derive it from the device, the account or anything else about the user.
+   */
+  installId: string;
+  /** Whether reveals are shown to the user right now. */
+  mode: RecordMode;
+  /** How many signals to list in `top`, by size of impact. Default 3. */
+  top?: number;
+}
+
+/**
+ * What the engine decided for one intent at the moment of a record. It is there to compare what
+ * shipped with what a different config would have done; replay recomputes everything from the
+ * events and never reads it.
+ */
+export interface RecordedDecision {
+  /** As {@link Prediction.p}. */
+  p: number;
+  /** As {@link Prediction.lower}. */
+  lower: number;
+  /** What `shouldReveal` returned with the state's own reveal options. */
+  shouldReveal: boolean;
+  /** As {@link Prediction.suppressedUntil}. */
+  suppressedUntil: number | null;
+  /** Signals currently holding evidence, largest |impact| first, at most `RecordOptions.top`. */
+  top: { signal: string; impact: number }[];
+  /** Effective weight of every declared signal, in config order. */
+  weights: Record<string, number>;
+}
+
+/**
+ * One line of a recorder log: an event the app observed and what the engine decided right after
+ * it. The event (`name` and `at`, never `props`) is what replay recomputes from; the decisions
+ * are kept apart so they can never be mistaken for inputs.
+ *
+ * @example
+ * ```ts
+ * state = observe(state, event);
+ * log.append(JSON.stringify(createRecord(state, event, recording)));
+ * ```
+ */
+export interface EventRecord {
+  v: typeof RECORD_VERSION;
+  kind: 'event';
+  installId: string;
+  mode: RecordMode;
+  event: { name: string; at: number };
+  /** One entry per declared intent. */
+  decisions: Record<string, RecordedDecision>;
+}
+
+/**
+ * One line of a recorder log: the app ended the episode with {@link endEpisode}. Replay needs it
+ * to reproduce the misses that the episode's end records; episodes that end through
+ * `episodeTimeout` need no record.
+ *
+ * @example
+ * ```ts
+ * state = endEpisode(state, at);
+ * log.append(JSON.stringify(createEndRecord(at, recording)));
+ * ```
+ */
+export interface EndRecord {
+  v: typeof RECORD_VERSION;
+  kind: 'end';
+  installId: string;
+  mode: RecordMode;
+  at: number;
+}
+
+/** A line of a recorder log. */
+export type RecorderRecord = EventRecord | EndRecord;

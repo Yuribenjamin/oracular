@@ -15,6 +15,7 @@
       "!docs/api",
       "!docs/.vitepress/cache",
       "!docs/.vitepress/dist",
+      "!tests/fixtures",
       "!**/*.vue"
     ]
   },

@@ -15,15 +15,15 @@ shouldReveal = p ≥ threshold
 
 `z` defaults to 1.28, which under the normal approximation makes `lower` a one-sided 90% bound: you are about 90% sure the true probability is at least `lower`. `threshold` defaults to 0.5.
 
-From the [Signals & weights](/guide/concepts/signals-and-weights) table: p crosses 0.5 at the third `pricing.viewed`, but `lower` only reaches 0.5 at the sixth. The three extra signals buy the confidence.
+From the [Signals & weights](/guide/concepts/signals-and-weights) table: p crosses 0.5 at the third full-weight `pricing.viewed`, but `lower` only reaches 0.5 at the sixth. The three extra signals buy the confidence.
 
 ## Threshold and z together
 
-Evidence the quickstart config needs, and how many `pricing.viewed` (+3) signals that is. The table is generated from [`evidenceToReveal`](/api/functions/evidenceToReveal) and checked by the test suite:
+Evidence the quickstart config needs, and how many full-weight `pricing.viewed` (+3) signals that is (one per session; repeats within a session add less). The table is generated from [`evidenceToReveal`](/api/functions/evidenceToReveal) and checked by the test suite:
 
 <!-- generated:threshold-z-table -->
-| threshold | z | evidence needed | signals of weight 3 |
-| --------- | ---- | --------------- | ------------------- |
+| threshold | z | evidence needed | full-weight signals of weight 3 |
+| --------- | ---- | --------------- | ------------------------------- |
 | 0.3 | 1.28 | 7.2 | 3 |
 | 0.5 | 0 | 9.0 | 3 |
 | 0.5 | 1.28 | 15.1 | 6 |

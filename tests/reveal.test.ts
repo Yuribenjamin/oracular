@@ -12,7 +12,11 @@ import { assertInvariants, DAY, HOUR, MINUTE, upgradeConfig } from './helpers';
 
 const T = 1_700_000_000_000;
 
-/** prior 0.3 with strength 2, so a few hits of `x` (+3) move p fast while evidence stays thin. */
+/**
+ * prior 0.3 with strength 2, so a few hits of `x` (+3) move p fast while evidence stays thin.
+ * These tests pin the reveal gate on exact pseudo-counts (four `x` are α = 0.6 + 12), so repeats
+ * add their full weight here; saturation has its own tests in observe.test.ts and evidence.test.ts.
+ */
 function thinConfig(overrides: Partial<EngineConfig['intents'][string]> = {}): EngineConfig {
   return {
     intents: {
@@ -22,6 +26,7 @@ function thinConfig(overrides: Partial<EngineConfig['intents'][string]> = {}): E
         halfLife: 7 * DAY,
         signals: { x: 3, y: -3 },
         outcome: 'tip.used',
+        saturate: false,
         ...overrides,
       },
     },

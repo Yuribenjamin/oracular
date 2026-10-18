@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { assertInvariants, DAY, HOUR, MINUTE, upgradeConfig } from './helpers';
 
 const config = upgradeConfig();
+/** The same intent with sessions that end after 30 idle minutes, which switches saturation on. */
+const sessions = upgradeConfig({ episodeTimeout: 30 * MINUTE });
 const T = 1_700_000_000_000;
 
 describe('observe', () => {
@@ -27,7 +29,11 @@ describe('observe', () => {
       updatedAt: T,
       contributions: { 'pricing.viewed': { alpha: 3, beta: 0 } },
     });
-    expect(s.episode.intents.upgrade).toStrictEqual({ seen: ['pricing.viewed'], resolved: false });
+    expect(s.episode.intents.upgrade).toStrictEqual({
+      seen: ['pricing.viewed'],
+      counts: { 'pricing.viewed': 1 },
+      resolved: false,
+    });
 
     s = observe(s, { name: 'plan.downgraded', at: T });
     assertInvariants(s);
@@ -42,12 +48,92 @@ describe('observe', () => {
     expect(s.episode.intents.upgrade!.seen).toStrictEqual(['pricing.viewed', 'plan.downgraded']);
   });
 
-  it('counts a repeated signal twice but remembers it once per episode', () => {
+  it('saturates a repeated signal: the n-th occurrence in an episode adds w × log2(1 + 1/n)', () => {
+    let s = observe(createState(sessions), { name: 'limit.hit', at: T });
+    assertInvariants(s);
+    expect(s.intents.upgrade!.contributions['limit.hit']).toStrictEqual({ alpha: 2, beta: 0 });
+    s = observe(s, { name: 'limit.hit', at: T });
+    assertInvariants(s);
+    // 2 + 2 × log2(3/2) = 2 × log2(3) = 3.1699…
+    expect(s.intents.upgrade!.contributions['limit.hit']!.alpha).toBeCloseTo(2 * Math.log2(3), 12);
+    expect(s.intents.upgrade!.alpha).toBeCloseTo(0.5 + 2 * Math.log2(3), 12);
+    for (let n = 3; n <= 10; n++) {
+      s = observe(s, { name: 'limit.hit', at: T });
+      assertInvariants(s);
+    }
+    // Ten occurrences add 2 × log2(11) = 6.92, not 20.
+    expect(s.intents.upgrade!.contributions['limit.hit']!.alpha).toBeCloseTo(2 * Math.log2(11), 12);
+    expect(s.episode.intents.upgrade).toStrictEqual({
+      seen: ['limit.hit'],
+      counts: { 'limit.hit': 10 },
+      resolved: false,
+    });
+  });
+
+  it('saturates negative signals the same way, in β', () => {
+    let s = createState(sessions);
+    for (let n = 1; n <= 3; n++) {
+      s = observe(s, { name: 'plan.downgraded', at: T });
+      assertInvariants(s);
+    }
+    // −4 three times: 4 × log2(4) = 8 in β.
+    expect(s.intents.upgrade!.contributions['plan.downgraded']!.beta).toBeCloseTo(8, 12);
+  });
+
+  it('with saturate: false every occurrence adds its full weight', () => {
+    const linear: EngineConfig = {
+      ...sessions,
+      intents: { upgrade: { ...sessions.intents.upgrade!, saturate: false } },
+    };
+    let s = observe(createState(linear), { name: 'limit.hit', at: T });
+    s = observe(s, { name: 'limit.hit', at: T });
+    assertInvariants(s);
+    expect(s.intents.upgrade!.contributions['limit.hit']).toStrictEqual({ alpha: 4, beta: 0 });
+    expect(s.episode.intents.upgrade!.counts).toStrictEqual({ 'limit.hit': 2 });
+  });
+
+  it('without episodeTimeout, repeats add their full weight unless saturate: true', () => {
+    // Without an idle timeout, episodes end only through endEpisode. An app that never calls it
+    // would discount a signal forever, so saturation is off by default there.
     let s = observe(createState(config), { name: 'limit.hit', at: T });
     s = observe(s, { name: 'limit.hit', at: T });
     assertInvariants(s);
     expect(s.intents.upgrade!.contributions['limit.hit']).toStrictEqual({ alpha: 4, beta: 0 });
-    expect(s.episode.intents.upgrade!.seen).toStrictEqual(['limit.hit']);
+    expect(s.episode.intents.upgrade!.counts).toStrictEqual({ 'limit.hit': 2 });
+
+    const optIn: EngineConfig = {
+      intents: { upgrade: { ...config.intents.upgrade!, saturate: true } },
+    };
+    let o = observe(createState(optIn), { name: 'limit.hit', at: T });
+    o = observe(o, { name: 'limit.hit', at: T });
+    assertInvariants(o);
+    expect(o.intents.upgrade!.contributions['limit.hit']!.alpha).toBeCloseTo(2 * Math.log2(3), 12);
+  });
+
+  it('restarts the count when the episode ends and when the outcome arrives', () => {
+    const repeat = (state: ReturnType<typeof createState>, at: number) => {
+      const next = observe(state, { name: 'limit.hit', at });
+      assertInvariants(next);
+      return next;
+    };
+    const kept: EngineConfig = {
+      ...sessions,
+      intents: { upgrade: { ...sessions.intents.upgrade!, resetOnOutcome: false } },
+    };
+    let s = repeat(repeat(createState(kept), T), T);
+    const two = s.intents.upgrade!.contributions['limit.hit']!.alpha;
+    expect(two).toBeCloseTo(2 * Math.log2(3), 12);
+    // The outcome resets this intent's count (and only the count: resetOnOutcome is off).
+    s = observe(s, { name: 'upgrade.completed', at: T });
+    assertInvariants(s);
+    s = repeat(s, T);
+    expect(s.intents.upgrade!.contributions['limit.hit']!.alpha).toBeCloseTo(two + 2, 12);
+    // A new episode starts the count again too.
+    s = endEpisode(s, T);
+    assertInvariants(s);
+    s = repeat(s, T);
+    expect(s.intents.upgrade!.contributions['limit.hit']!.alpha).toBeCloseTo(two + 4, 12);
+    expect(s.episode.intents.upgrade!.counts).toStrictEqual({ 'limit.hit': 1 });
   });
 
   it('on the outcome: seen signals get a hit, the episode counts, evidence resets to the prior', () => {
@@ -63,7 +149,7 @@ describe('observe', () => {
       episodes: { hits: 1, misses: 0 },
       learnedAt: T + 2 * MINUTE,
     });
-    expect(s.episode.intents.upgrade).toStrictEqual({ seen: [], resolved: true });
+    expect(s.episode.intents.upgrade).toStrictEqual({ seen: [], counts: {}, resolved: true });
     expect(s.episode.startedAt).toBe(T);
   });
 
@@ -233,7 +319,7 @@ describe('episodeTimeout', () => {
     expect(s.episode).toStrictEqual({
       startedAt: T + HOUR,
       lastEventAt: T + HOUR,
-      intents: { upgrade: { seen: ['limit.hit'], resolved: false } },
+      intents: { upgrade: { seen: ['limit.hit'], counts: { 'limit.hit': 1 }, resolved: false } },
     });
   });
 

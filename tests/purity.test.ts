@@ -1,4 +1,6 @@
 import {
+  createEndRecord,
+  createRecord,
   createState,
   deserialize,
   endEpisode,
@@ -73,6 +75,15 @@ describe('purity', () => {
     const json = pure(serialize, s1);
     pure(deserialize, json);
     pure(deserialize, json, { config: upgradeConfig({ episodeTimeout: MINUTE }) });
+  });
+
+  it('createRecord and createEndRecord', () => {
+    const s0 = pure(createState, upgradeConfig());
+    const event = { name: 'pricing.viewed', at: T, props: { plan: 'pro' } };
+    const s1 = pure(observe, s0, event);
+    pure(createRecord, s1, event, { installId: 'install-1', mode: 'shadow' });
+    pure(createRecord, s1, event, { installId: 'install-1', mode: 'live', top: 1 });
+    pure(createEndRecord, T + MINUTE, { installId: 'install-1', mode: 'shadow' });
   });
 
   it('evaluate, evidenceToReveal and episodeClosed', () => {

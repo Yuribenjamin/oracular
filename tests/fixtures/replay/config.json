@@ -1,0 +1,27 @@
+{
+  "episodeTimeout": 1800000,
+  "intents": {
+    "upgrade": {
+      "prior": 0.05,
+      "priorStrength": 10,
+      "halfLife": 604800000,
+      "signals": { "pricing.viewed": 3, "limit.hit": 2, "export.clicked": 1, "plan.downgraded": -4 },
+      "outcome": "upgrade.completed"
+    },
+    "stuck": {
+      "prior": 0.1,
+      "priorStrength": 5,
+      "halfLife": 600000,
+      "signals": { "editor.undo": 1, "search.empty": 2, "help.opened": 3, "task.completed": -4 },
+      "outcome": "help.article.read",
+      "saturate": false,
+      "reveal": { "threshold": 0.6, "cooldown": 3600000 }
+    },
+    "tip": {
+      "prior": 0.2,
+      "priorStrength": 5,
+      "halfLife": 86400000,
+      "signals": { "app.opened": 1 }
+    }
+  }
+}

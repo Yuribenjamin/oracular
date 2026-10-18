@@ -59,4 +59,4 @@ The full list is in the [API reference](/api/).
 
 ## Versioning
 
-oracular follows semantic versioning. The serialized state carries its own [`STATE_VERSION`](/api/variables/STATE_VERSION), independent of the package version, and changes to it come with a documented migration path. See [Persistence & migration](/guide/persistence).
+oracular follows semantic versioning. The serialized state carries its own [`STATE_VERSION`](/api/variables/STATE_VERSION), independent of the package version, and every change to it ships a migration that `deserialize` applies on its own. See [Persistence & migration](/guide/persistence).

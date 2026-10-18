@@ -5,5 +5,5 @@
     "types": ["node"],
     "allowJs": true
   },
-  "include": ["src", "tests", "examples", "scripts", "*.ts"]
+  "include": ["src", "cli", "tests", "examples", "scripts", "*.ts"]
 }

@@ -66,6 +66,7 @@ export default defineConfig({
             { text: 'Episodes & learning', link: '/guide/concepts/episodes-and-learning' },
             { text: 'Reveal & confidence', link: '/guide/concepts/reveal-and-confidence' },
             { text: 'Outcomes & cooldowns', link: '/guide/concepts/outcomes-and-cooldowns' },
+            { text: 'What it can and cannot learn', link: '/guide/can-and-cannot-learn' },
           ],
         },
         {
@@ -74,6 +75,7 @@ export default defineConfig({
             { text: 'Persistence & migration', link: '/guide/persistence' },
             { text: 'Explainability', link: '/guide/explainability' },
             { text: 'Tuning guide', link: '/guide/tuning' },
+            { text: 'Shadow mode', link: '/guide/shadow-mode' },
             { text: 'Recipes', link: '/guide/recipes' },
             { text: 'Using with frameworks', link: '/guide/frameworks' },
           ],

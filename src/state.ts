@@ -15,8 +15,9 @@ import { STATE_VERSION } from './version';
  *   strictly: unknown keys, non-finite numbers and out-of-range values throw.
  * @returns A new, JSON-serializable state. `config` is not mutated.
  * @throws `TypeError` when a value has the wrong type or a key is not recognised.
- * @throws `RangeError` when a number is out of range, for example a `prior` outside (0, 1) or a
- *   signal weight of 0.
+ * @throws `RangeError` when a number is out of range, for example a `prior` outside (0, 1), a
+ *   signal weight of 0, or a weight, `priorStrength`, `learning.gain` or
+ *   `learning.priorEpisodes` beyond 1e6 (larger values could overflow the arithmetic).
  * @example
  * ```ts
  * const state = createState({

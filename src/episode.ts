@@ -25,18 +25,25 @@ export function extendEpisode(episode: EpisodeState, at: number): EpisodeState {
 }
 
 export function episodeRecord(episode: EpisodeState, intent: string): EpisodeIntentRecord {
-  return getOwn(episode.intents, intent) ?? { seen: [], resolved: false };
+  return getOwn(episode.intents, intent) ?? { seen: [], counts: {}, resolved: false };
 }
 
+/** How many times `signal` has occurred for `intent` in this episode (since its last outcome). */
+export function occurrences(episode: EpisodeState, intent: string, signal: string): number {
+  return getOwn(episodeRecord(episode, intent).counts, signal) ?? 0;
+}
+
+/** Remembers one more occurrence of `signal`: added to `seen` the first time, counted every time. */
 export function markSeen(episode: EpisodeState, intent: string, signal: string): EpisodeState {
   const record = episodeRecord(episode, intent);
-  if (record.seen.includes(signal)) return episode;
-  return {
-    ...episode,
-    intents: { ...episode.intents, [intent]: { ...record, seen: [...record.seen, signal] } },
-  };
+  const seen = record.seen.includes(signal) ? record.seen : [...record.seen, signal];
+  const counts = { ...record.counts, [signal]: (getOwn(record.counts, signal) ?? 0) + 1 };
+  return { ...episode, intents: { ...episode.intents, [intent]: { ...record, seen, counts } } };
 }
 
 export function markResolved(episode: EpisodeState, intent: string): EpisodeState {
-  return { ...episode, intents: { ...episode.intents, [intent]: { seen: [], resolved: true } } };
+  return {
+    ...episode,
+    intents: { ...episode.intents, [intent]: { seen: [], counts: {}, resolved: true } },
+  };
 }

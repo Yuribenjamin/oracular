@@ -7,23 +7,30 @@ import {
   shouldReveal,
 } from 'oracular';
 import { describe, expect, it } from 'vitest';
-import { DAY, upgradeConfig } from './helpers';
+import { assertInvariants, DAY, upgradeConfig } from './helpers';
 
 const T = 1_700_000_000_000;
 const upgrade = upgradeConfig().intents.upgrade!;
 
-/** Identical signals of weight `w`, fired together, until the gate opens. */
+/**
+ * Signals of weight `w`, fired together at full weight, until the gate opens. `saturate: false`
+ * makes each one add exactly `w`, which is what "divide by the weight" counts: distinct signals,
+ * or one per episode. Repeats in one episode are checked separately below.
+ */
 function signalsUntilReveal(
   intent: IntentConfig,
   w: number,
   opts?: Parameters<typeof shouldReveal>[3],
+  saturate = false,
+  max = 2000,
 ): number {
   const config: EngineConfig = {
-    intents: { x: { ...intent, signals: { s: w }, reveal: intent.reveal ?? {} } },
+    intents: { x: { ...intent, signals: { s: w }, saturate, reveal: intent.reveal ?? {} } },
   };
   let s = createState(config);
-  for (let i = 1; i <= 2000; i++) {
+  for (let i = 1; i <= max; i++) {
     s = observe(s, { name: 's', at: T });
+    assertInvariants(s);
     if (shouldReveal(s, 'x', T, opts)) return i;
   }
   return Number.POSITIVE_INFINITY;
@@ -58,6 +65,40 @@ describe('evidenceToReveal', () => {
             const label = `prior ${prior} strength ${priorStrength} θ ${threshold} z ${z} w ${w}`;
             expect(count(needed, w), label).toBe(signalsUntilReveal(intent, w, { threshold, z }));
           }
+  });
+
+  it('repeats of one signal in one episode open the gate where w × log2(1 + n) first reaches it', () => {
+    // Saturation: n occurrences in one episode add w × log2(1 + n), so the gate opens at the
+    // smallest n with w × log2(1 + n) ≥ evidenceToReveal. The engine sums the per-repeat
+    // increments; the closed form must agree with it.
+    for (const prior of [0.05, 0.1, 0.3])
+      for (const priorStrength of [2, 5, 10])
+        for (const [threshold, z] of [
+          [0.3, 1.28],
+          [0.5, 0],
+          [0.5, 1.28],
+        ] as const)
+          for (const w of [1, 2, 3, 5]) {
+            const intent: IntentConfig = { prior, priorStrength, halfLife: DAY, signals: { s: w } };
+            const needed = evidenceToReveal(intent, { threshold, z });
+            const exact = 2 ** (needed / w) - 1; // w × log2(1 + exact) = needed
+            const expected = Math.ceil(exact - 1e-9);
+            if (expected > 3000) continue;
+            const label = `prior ${prior} strength ${priorStrength} θ ${threshold} z ${z} w ${w}`;
+            const n = signalsUntilReveal(intent, w, { threshold, z }, true, 3000);
+            if (Math.abs(exact - Math.round(exact)) < 1e-6) {
+              // An exact tie (z = 0 makes `needed` a whole number of weights here): the engine
+              // sums the increments in floating point, so the last one can land an ulp short.
+              expect([expected, expected + 1], label).toContain(n);
+            } else {
+              expect(n, label).toBe(expected);
+            }
+          }
+  });
+
+  it('the quickstart intent: 6 full-weight pricing.viewed open the gate, 32 repeats in one episode', () => {
+    expect(signalsUntilReveal(upgrade, 3)).toBe(6);
+    expect(signalsUntilReveal(upgrade, 3, undefined, true)).toBe(32);
   });
 
   it('is exact where the answer is analytic: z = 0 needs α = β at threshold 0.5', () => {

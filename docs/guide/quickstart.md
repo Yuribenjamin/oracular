@@ -1,14 +1,14 @@
 # Quickstart
 
-The whole engine in fourteen lines. This block is the file `examples/quickstart.ts` in the repository, executed by the test suite, so it always runs:
+The whole engine in fifteen lines. This block is the file `examples/quickstart.ts` in the repository, executed by the test suite, so it always runs:
 
 <<< ../../examples/quickstart.ts
 
-With these numbers the offer fires after roughly six strong signals inside a week (p must clear 0.5 with a 90% lower bound); lower `priorStrength` or raise the weights to fire sooner. The [Tuning guide](/guide/tuning) has the tables.
+With these numbers the offer fires after roughly six strong signals across separate sessions inside a week (p must clear 0.5 with a 90% lower bound); repeats within one session count for less. Lower `priorStrength` or raise the weights to fire sooner. The [Tuning guide](/guide/tuning) has the tables.
 
 ## What each line does
 
-1. **`createState(config)`** builds the state. The `upgrade` intent starts at its prior: 5% likely, held with the strength of 10 observations (α = 0.5, β = 9.5). A normalized copy of the config is stored inside the state.
+1. **`createState(config)`** builds the state. The `upgrade` intent starts at its prior: 5% likely, held with the strength of 10 observations (α = 0.5, β = 9.5). `episodeTimeout` ends a session after 30 idle minutes. Learning needs it (every session is an episode), and it is what switches on the discount for a signal repeated within one session; without it, repeats add their full weight. A normalized copy of the config is stored inside the state.
 2. **`observe(state, event)`** feeds an event. `pricing.viewed` is a signal of `upgrade` with weight 3, so 3 pseudo-counts are added to α and the signal is remembered for this episode. Any other event name is ignored by this intent. The call returns a new state; the old one is untouched.
 3. **`shouldReveal(state, 'upgrade', now)`** is true when p ≥ 0.5 **and** p − 1.28·sd ≥ 0.5, and no cooldown is running. One `pricing.viewed` gives p ≈ 0.27, so it is false here.
 4. **`markRevealed(state, 'upgrade', now)`** records that you acted, starting a cooldown (by default one half-life, a week) during which `shouldReveal` stays false.

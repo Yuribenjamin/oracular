@@ -15,7 +15,7 @@ upgrade: {
 
 1. Set `prior` to the fraction of sessions (or users) that actually do the thing. Guess if you have to; it is a prior.
 2. Start with `priorStrength: 10`, weights between 1 and 3 for positive signals and −2 to −4 for strong negatives, `halfLife` at the horizon over which the behaviour builds, and the default `threshold`/`z`.
-3. Decide how a "ready" session looks: which signals, how many, over how long. Check with the tables below that it fires, and that a lukewarm session doesn't.
+3. Decide how a "ready" session looks: which signals, how many, over how long. Count each distinct signal once per session (repeats add little). Check with the tables below that it fires, and that a lukewarm session doesn't.
 4. Replay a few real event sequences in development and read [`explain`](/guide/explainability). Adjust weights, not thresholds, when one signal dominates for the wrong reason.
 5. Ship. Learning takes over per user from there; `priorEpisodes` decides how fast.
 
@@ -25,15 +25,15 @@ Where p starts and where it returns. Use the observed base rate. Too high and th
 
 ## `priorStrength`
 
-How much evidence it takes to move p, in the same pseudo-count units as weights. The evidence the quickstart config needs to clear the default gate, and how many signals of a given weight, fired together, that is. Generated from [`evidenceToReveal`](/api/functions/evidenceToReveal) and checked by the test suite, so the table and the library cannot disagree:
+How much evidence it takes to move p, in the same pseudo-count units as weights. The evidence the quickstart config needs to clear the default gate; how many full-weight signals of a given weight that is (distinct signals, or one per session); and how many times one weight-3 signal would have to repeat within a single session, where [repeats count for less](#repeated-signals). Generated from [`evidenceToReveal`](/api/functions/evidenceToReveal) and checked by the test suite, so the table and the library cannot disagree:
 
 <!-- generated:priorStrength-table -->
-| priorStrength | evidence needed | weight 3 | weight 2 | weight 1 |
-| ------------- | --------------- | -------- | -------- | -------- |
-| 5 | 8.9 | 3 | 5 | 9 |
-| 10 | 15.1 | 6 | 8 | 16 |
-| 20 | 26.5 | 9 | 14 | 27 |
-| 50 | 58.2 | 20 | 30 | 59 |
+| priorStrength | evidence needed | weight 3 | weight 2 | weight 1 | one weight-3 signal repeated in one session |
+| ------------- | --------------- | -------- | -------- | -------- | ------------------------------------------- |
+| 5 | 8.9 | 3 | 5 | 9 | 7 |
+| 10 | 15.1 | 6 | 8 | 16 | 32 |
+| 20 | 26.5 | 9 | 14 | 27 | 455 |
+| 50 | 58.2 | 20 | 30 | 59 | more than 10,000 |
 <!-- /generated:priorStrength-table -->
 
 Rule of thumb for the default gate (threshold 0.5, z 1.28):
@@ -48,7 +48,7 @@ The first term is what it takes to pull p to 0.5 (α must catch up with β); the
 
 How long evidence keeps mattering. Evidence decays toward the prior by half every `halfLife`:
 
-| time since 6 × `pricing.viewed` | p     | lower |
+| time since 6 full-weight `pricing.viewed` | p     | lower |
 | ------------------------------- | ----- | ----- |
 | now                             | 0.661 | 0.548 |
 | 1 day                           | 0.639 | 0.521 |
@@ -58,28 +58,40 @@ How long evidence keeps mattering. Evidence decays toward the prior by half ever
 
 The half-life also sets a **ceiling** on evidence that arrives regularly: a weight `w` every `τ` settles at about `w / (1 − 2^(−τ/halfLife))`. The same six-signal threshold looks very different depending on pacing:
 
-| `pricing.viewed` pacing (half-life 1 week) | fires after |
-| ------------------------------------------ | ----------- |
-| all at once                                | 6 signals   |
-| one per day                                | 7 signals   |
-| one every 3 days                           | never       |
-| one per week                               | never       |
+<!-- generated:pacing-table -->
+| `pricing.viewed` pacing (half-life 1 week, sessions end after 30 idle minutes) | fires after |
+| ------------------------------------------------------------------------------ | ----------- |
+| all in one session | 32 signals |
+| one per session, an hour apart | 6 signals |
+| one per day | 7 signals |
+| one every 3 days | never |
+| one per week | never |
+<!-- /generated:pacing-table -->
 
 If a behaviour builds over weeks, give it a half-life of weeks. If it is a state of the current session (stuck, exploring), use minutes and let it vanish. The cooldown defaults to the half-life too, so a long half-life also means a long pause after each reveal unless you set `cooldown`.
 
 ## Weights
 
-Weights are pseudo-observations. Make a convincing session sum to about `priorStrength` or more; make a single ambiguous event a fraction of it. Use negative weights for events that contradict the intent. Don't encode frequency in the weight: a signal that fires ten times adds its weight ten times already.
+Weights are pseudo-observations. Make a convincing session sum to about `priorStrength` or more, counting each distinct signal once; make a single ambiguous event a fraction of it. Use negative weights for events that contradict the intent. Don't encode frequency in the weight: frequency across sessions is already in the evidence, since every session's occurrence counts in full, and frequency within a session is deliberately discounted (see below).
 
 Remember that your weights are **priors** for the learner. After `priorEpisodes` completed episodes the user's own history counts as much as you do, and a perfectly predictive signal can grow to `gain × |weight|`; see below.
 
+## Repeated signals
+
+Within one episode, the n-th occurrence of a signal adds `w × log2(1 + 1/n)`, so n occurrences add `w × log2(1 + n)`: 1, 1.58, 2, 2.32 … 3.46 weights for 1 to 10 occurrences. The [Signals & weights](/guide/concepts/signals-and-weights#repeats-within-an-episode) page has the table. For the quickstart that means one burst of `pricing.viewed` cannot open the gate (it takes 32 in one session); several distinct signals, or the same signal across sessions, can.
+
+Two things follow for tuning:
+
+- **Episodes must end.** The count restarts with each episode, so saturation is on by default only when the config sets `episodeTimeout`. An app that ends episodes with `endEpisode` alone can set `saturate: true`; one that never ends them keeps full weights rather than discounting a signal it saw yesterday. Set `episodeTimeout`; learning needs it anyway.
+- **Opt out where repetition is the evidence.** For a "stuck" intent, the fifth undo in a row says more than the first. Set `saturate: false` on that intent and every occurrence adds its full weight, as before 0.3.
+
 ## `threshold` and `z`
 
-`threshold` is the probability you need; `z` is how sure you need to be of it. For the quickstart config, the evidence each gate needs and how many signals of weight 3 that is (generated, like the table above):
+`threshold` is the probability you need; `z` is how sure you need to be of it. For the quickstart config, the evidence each gate needs and how many full-weight signals of weight 3 that is (generated, like the table above):
 
 <!-- generated:threshold-z-table -->
-| threshold | z | evidence needed | signals of weight 3 |
-| --------- | ---- | --------------- | ------------------- |
+| threshold | z | evidence needed | full-weight signals of weight 3 |
+| --------- | ---- | --------------- | ------------------------------- |
 | 0.3 | 1.28 | 7.2 | 3 |
 | 0.5 | 0 | 9.0 | 3 |
 | 0.5 | 1.28 | 15.1 | 6 |
@@ -117,7 +129,7 @@ Off by default: history is permanent. Set to months if the user's habits change 
 
 ### Days: the upgrade offer
 
-The quickstart config. Evidence needed: 15.1 pseudo-counts. Six `pricing.viewed` at once fire it; one a day fires on the seventh; one every three days never does, because a one-week half-life removes evidence about as fast as that pace adds it. The outcome `upgrade.completed` resets the slate and pauses offers for the cooldown, a week by default. Everything on this page so far is this example.
+The quickstart config. Evidence needed: 15.1 pseudo-counts. Six `pricing.viewed` in six sessions fire it; one a day fires on the seventh; one every three days never does, because a one-week half-life removes evidence about as fast as that pace adds it; and 32 in a single session are needed, because repeats within a session count for less. The outcome `upgrade.completed` resets the slate and pauses offers for the cooldown, a week by default. Everything on this page so far is this example.
 
 ### Hours: about to ride
 
@@ -143,15 +155,20 @@ ride: {
 
 `evidenceToReveal(ride)` is 11.7. A typical morning:
 
-| time  | event              | p     | lower | fires |
-| ----- | ------------------ | ----- | ----- | ----- |
-| 07:00 | app.opened         | 0.200 | 0.038 | no    |
-| 07:02 | departures.viewed  | 0.345 | 0.169 | no    |
-| 07:03 | route.planned      | 0.485 | 0.320 | no    |
-| 07:06 | ticket.bought      | 0.598 | 0.454 | no    |
-| 07:08 | departures.viewed  | 0.640 | 0.506 | yes   |
+<!-- generated:ride-table -->
+| time | event | p | lower | fires |
+| ---- | ----- | - | ----- | ----- |
+| 07:00 | app.opened | 0.200 | 0.038 | no |
+| 07:02 | departures.viewed | 0.345 | 0.169 | no |
+| 07:03 | route.planned | 0.485 | 0.320 | no |
+| 07:06 | ticket.bought | 0.598 | 0.454 | no |
+| 07:08 | departures.viewed | 0.621 | 0.482 | no |
+| 07:09 | route.planned | 0.652 | 0.522 | yes |
+| 10:09 | (no event, read only) | 0.499 | 0.335 | no |
+| 19:09 | (no event, read only) | 0.181 | 0.024 | no |
+<!-- /generated:ride-table -->
 
-Ten pseudo-counts put p at 0.6 but leave the lower bound under 0.5; the second look at departures (+2, total 12) opens the gate. Then the clock does its work: with a three-hour half-life, the same state read at 10:06 is back to p 0.44, and at 19:06 to 0.31. The evening commute has to earn its own reveal, which is what you want.
+Ten pseudo-counts put p at 0.6 but leave the lower bound under 0.5. The second look at departures is a repeat within the session, so it adds 1.17 rather than 2 and the bound stays just short; the second route check adds 1.75 more and opens the gate at 07:09. Then the clock does its work: with a three-hour half-life, the same state read three hours later is back to p 0.50, and twelve hours later to 0.18. The evening commute has to earn its own reveal, which is what you want.
 
 When `ride.started` arrives at 07:16 (an ordinary `observe` call with that name), the evidence resets to the prior (p 0.1), the seen signals get their hit, and `suppressedUntil` is set to 11:16: the four-hour cooldown keeps the wallet from popping up again on the way to the office. A 30-minute `episodeTimeout` means the morning and evening trips are separate episodes, so an evening with no ride gives the evening's signals a miss rather than crediting them to the morning.
 

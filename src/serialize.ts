@@ -1,5 +1,7 @@
-import { normalizeConfig } from './config';
+import { normalizeConfig, resolveLearning } from './config';
 import { initIntent, withContributions } from './intent';
+import { signalWeights } from './learning';
+import { canMigrate, migrateStored } from './migrate';
 import { requireState } from './state';
 import type {
   DeserializeOptions,
@@ -35,19 +37,22 @@ export function serialize(state: EngineState): string {
  *
  * Always pass the app's current `config`: it is validated and replaces the stored snapshot,
  * intents and signals no longer declared are dropped (α and β are recomputed from the kept
- * contributions), and newly declared intents start at their prior. Pass `migrate` to upgrade a
- * state saved by an older version of this library.
+ * contributions), and newly declared intents start at their prior. States saved by oracular
+ * 0.1.0 to 0.2.x are upgraded to the current shape on their own; `migrate` is only for a version
+ * this library does not know.
  *
  * @param json - A string produced by {@link serialize}.
  * @param opts - `config`: the app's current config. `migrate`: called as
- *   `migrate(stored, version)` when the stored version differs from {@link STATE_VERSION};
- *   it must return a state of the current version.
+ *   `migrate(stored, version)` when the stored version is neither {@link STATE_VERSION} nor one
+ *   this library migrates itself; it must return a state of the current version.
  * @returns A validated state that satisfies the engine's invariants.
  * @throws `SyntaxError` when `json` is not valid JSON.
  * @throws `TypeError` when the stored data, the result of `migrate`, `opts` or `opts.config`
  *   has the wrong shape.
- * @throws `RangeError` when the stored version differs and no `migrate` is given, when
- *   `migrate` does not return the current version, or when a stored number is out of range.
+ * @throws `RangeError` when the stored version is unknown and no `migrate` is given, when
+ *   `migrate` does not return the current version, when a stored number is out of range, or
+ *   when stored numbers are finite but too large to compute with (a tampered or corrupted state
+ *   that would otherwise answer NaN).
  * @example
  * ```ts
  * const saved = localStorage.getItem('oracular');
@@ -80,17 +85,20 @@ export function deserialize(json: string, opts: DeserializeOptions = {}): Engine
 
   let stored: unknown = parsed;
   if (parsed.version !== STATE_VERSION) {
-    if (opts.migrate === undefined) {
+    if (canMigrate(parsed.version)) {
+      stored = migrateStored(parsed);
+    } else if (opts.migrate === undefined) {
       throw new RangeError(
-        `oracular: stored state is version ${parsed.version} but this library reads version ${STATE_VERSION}; pass a migrate function`,
+        `oracular: stored state is version ${parsed.version} but this library reads versions 1 to ${STATE_VERSION}; pass a migrate function`,
       );
+    } else {
+      stored = opts.migrate(parsed, parsed.version);
     }
-    stored = opts.migrate(parsed, parsed.version);
   }
 
   const raw = parseState(stored);
   const config = opts.config === undefined ? raw.config : normalizeConfig(opts.config);
-  return reconcile(raw, config);
+  return requireComputable(reconcile(raw, config));
 }
 
 // ---- parsing: field types only; keys are reconciled against the config afterwards ----
@@ -170,13 +178,22 @@ function intentState(value: unknown, path: string): IntentState {
   };
 }
 
+function occurrenceCount(value: unknown, path: string): number {
+  const n = finite(value, path);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new RangeError(`oracular: ${path} must be a positive integer`);
+  }
+  return n;
+}
+
 function episodeIntent(value: unknown, path: string): EpisodeIntentRecord {
   const r = record(value, path);
   if (!Array.isArray(r.seen) || !r.seen.every((s) => typeof s === 'string')) {
     typeError(`${path}.seen`, 'must be an array of strings');
   }
+  const counts = mapOwn(r.counts, `${path}.counts`, occurrenceCount);
   if (typeof r.resolved !== 'boolean') typeError(`${path}.resolved`, 'must be a boolean');
-  return { seen: r.seen as string[], resolved: r.resolved };
+  return { seen: r.seen as string[], counts, resolved: r.resolved };
 }
 
 function episodeState(value: unknown, path: string): EpisodeState {
@@ -199,6 +216,33 @@ function parseState(value: unknown): EngineState {
     intents: mapOwn(r.intents, 'state.intents', intentState),
     episode: episodeState(r.episode, 'state.episode'),
   };
+}
+
+// ---- computability: finite numbers that are still too large to compute with ----
+
+/**
+ * Every stored number is checked to be finite, but finite is not enough: a contribution near
+ * 1e308 makes α·β overflow, and learned counts near 1e308 make the contrast weighting overflow,
+ * so the state would answer NaN. Such a state was tampered with or corrupted; reject it.
+ */
+function requireComputable(state: EngineState): EngineState {
+  const learning = resolveLearning(state.config);
+  for (const [name, intent] of Object.entries(state.config.intents)) {
+    const is = state.intents[name] as IntentState;
+    const path = `state.intents[${JSON.stringify(name)}]`;
+    if (!Number.isFinite(is.alpha + is.beta) || !Number.isFinite(is.alpha * is.beta)) {
+      throw new RangeError(`oracular: ${path} holds more evidence than can be computed with`);
+    }
+    for (const signal of Object.keys(intent.signals)) {
+      const w = signalWeights(is, intent, learning, signal);
+      if (!Number.isFinite(w.learned) || !Number.isFinite(w.effective)) {
+        throw new RangeError(
+          `oracular: ${path} holds learned counts for ${JSON.stringify(signal)} too large to compute with`,
+        );
+      }
+    }
+  }
+  return state;
 }
 
 // ---- reconciling: make the state agree with a config ----
@@ -235,7 +279,10 @@ function reconcile(raw: EngineState, config: EngineConfig): EngineState {
       const seen = episode.seen.filter(
         (s, i) => hasOwn(intent.signals, s) && episode.seen.indexOf(s) === i,
       );
-      episodeIntents[name] = { seen, resolved: episode.resolved };
+      // One count per seen signal and no other: a seen signal without one counts once.
+      const counts: Record<string, number> = {};
+      for (const s of seen) counts[s] = getOwn(episode.counts, s) ?? 1;
+      episodeIntents[name] = { seen, counts, resolved: episode.resolved };
     }
   }
 

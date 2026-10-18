@@ -87,6 +87,7 @@ describe('createState', () => {
       ['NaN weight', () => patch(base(), (i) => ({ ...i, signals: { x: Number.NaN } })), TypeError],
       ['empty signal name', () => patch(base(), (i) => ({ ...i, signals: { '': 1 } })), TypeError],
       ['empty outcome', () => patch(base(), (i) => ({ ...i, outcome: '' })), TypeError],
+      ['saturate not boolean', () => patch(base(), (i) => ({ ...i, saturate: 'no' })), TypeError],
       [
         'resetOnOutcome not boolean',
         () => patch(base(), (i) => ({ ...i, resetOnOutcome: 'yes' })),
@@ -108,8 +109,43 @@ describe('createState', () => {
       ],
       ['learning.gain negative', () => ({ ...base(), learning: { gain: -2 } }), RangeError],
       ['learning.halfLife 0', () => ({ ...base(), learning: { halfLife: 0 } }), RangeError],
+      // Finite but absurd: beyond 1e6 the Beta and learning arithmetic can overflow to NaN.
+      [
+        'weight above 1e6',
+        () => patch(base(), (i) => ({ ...i, signals: { x: 1e6 + 1 } })),
+        RangeError,
+      ],
+      [
+        'weight below -1e6',
+        () => patch(base(), (i) => ({ ...i, signals: { x: -1e308 } })),
+        RangeError,
+      ],
+      [
+        'priorStrength above 1e6',
+        () => patch(base(), (i) => ({ ...i, priorStrength: 1e308 })),
+        RangeError,
+      ],
+      ['learning.gain above 1e6', () => ({ ...base(), learning: { gain: 1e6 + 1 } }), RangeError],
+      [
+        'learning.priorEpisodes above 1e6',
+        () => ({ ...base(), learning: { priorEpisodes: 1e308 } }),
+        RangeError,
+      ],
       ['null config', () => null, TypeError],
     ];
+
+    it('accepts exactly 1e6 for weights, priorStrength, gain and priorEpisodes', () => {
+      const config = {
+        ...base(),
+        learning: { gain: 1e6, priorEpisodes: 1e6 },
+        intents: {
+          upgrade: { ...base().intents.upgrade!, priorStrength: 1e6, signals: { x: 1e6, y: -1e6 } },
+        },
+      };
+      const state = createState(config);
+      assertInvariants(state);
+      expect(state.config.intents.upgrade!.signals).toStrictEqual({ x: 1e6, y: -1e6 });
+    });
 
     for (const [label, make, ErrorType] of cases) {
       it(label, () => {

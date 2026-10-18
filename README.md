@@ -13,6 +13,7 @@
   <a href="https://www.npmjs.com/package/oracular"><img src="https://img.shields.io/npm/dm/oracular" alt="npm downloads"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/oracular" alt="MIT license"></a>
   <a href="https://www.bestpractices.dev/projects/15643"><img src="https://www.bestpractices.dev/projects/15643/badge" alt="OpenSSF Best Practices"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/Yuribenjamin/oracular"><img src="https://api.scorecard.dev/projects/github.com/Yuribenjamin/oracular/badge" alt="OpenSSF Scorecard"></a>
 </p>
 
 <p align="center">
@@ -44,6 +45,7 @@ Install with `npm install oracular`, then:
 ```ts
 import { createState, markRevealed, observe, shouldReveal } from 'oracular';
 let state = createState({
+  episodeTimeout: 30 * 60 * 1000, // 30 idle minutes end a session
   intents: {
     upgrade: {
       prior: 0.05, priorStrength: 10, halfLife: 7 * 24 * 60 * 60 * 1000, // one week, in ms
@@ -58,7 +60,7 @@ if (shouldReveal(state, 'upgrade', Date.now())) {
 }
 ```
 
-With these numbers the offer fires after roughly six strong signals inside a week (p must clear 0.5 with a 90% lower bound); lower `priorStrength` or raise the weights to fire sooner.
+With these numbers the offer fires after roughly six strong signals across separate sessions inside a week (p must clear 0.5 with a 90% lower bound); repeats within one session count for less. Lower `priorStrength` or raise the weights to fire sooner.
 
 That block is copied verbatim into the test suite, so it always runs.
 
@@ -71,6 +73,7 @@ That block is copied verbatim into the test suite, so it always runs.
 - [API](#api)
 - [Persistence](#persistence)
 - [Explainability](#explainability)
+- [Shadow mode & replay](#shadow-mode--replay)
 - [Design rules](#design-rules)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
@@ -86,6 +89,17 @@ You declare intents. Each has a `prior` probability and a `priorStrength` (how m
 ### Signals add evidence
 
 Each intent maps event names to weights. A positive weight is evidence *for* the intent and is added to α; a negative weight is evidence *against* and its magnitude is added to β. Events the config doesn't mention cost nothing.
+
+### Repeats within a session count for less
+
+Ten views of the pricing page in one sitting are one burst of interest, not ten independent pieces of evidence. Within an episode, the n-th occurrence of a signal adds less than the first:
+
+```
+n-th occurrence adds   w × log2(1 + 1/n)     1, 0.58, 0.42, 0.32 … of the weight
+n occurrences add      w × log2(1 + n)       every doubling adds one more weight; ten add 3.46, not 10
+```
+
+The count restarts when the episode ends or the intent's outcome arrives, so the same signal in a new session counts fully again. Saturation is on by default when `episodeTimeout` is set. Without it, episodes end only when you call `endEpisode`, so repeats add their full weight unless you set `saturate: true`. For intents where the repetition itself is the evidence (a user stuck on the same step), set `saturate: false` and every occurrence adds its full weight.
 
 ### Evidence decays toward the prior
 
@@ -142,6 +156,7 @@ const config = {
       halfLife: 10 * 60 * 1000, // ten minutes: being stuck is a short-lived state
       signals: { 'editor.undo': 1, 'search.empty': 2, 'help.opened': 3, 'task.completed': -4 },
       outcome: 'help.article.read',
+      saturate: false, // the fifth undo in a row is more evidence, not less
       reveal: { threshold: 0.6, cooldown: 60 * 60 * 1000 },
     },
   },
@@ -231,9 +246,12 @@ explain(state, intent: string, at: number, opts?: { nonZero?: boolean; limit?: n
 evaluate(state, intent: string, at: number, opts?): { prediction, reveal, explanation }  // all three, one decay pass
 evidenceToReveal(intentConfig, opts?): number   // pseudo-counts at which shouldReveal first becomes true
 episodeClosed(prev, next): boolean               // did an episode close between two states?
+createRecord(state, event, { installId, mode }): EventRecord   // one recorder line: the event and what was decided
+createEndRecord(at, { installId, mode }): EndRecord           // one recorder line: the episode ended
 serialize(state): string
 deserialize(json: string, opts?: { config?: EngineConfig; migrate?: Migrate }): EngineState
-STATE_VERSION // 1
+STATE_VERSION // 2
+RECORD_VERSION // 1
 ```
 
 ### Config
@@ -244,19 +262,20 @@ interface EngineConfig {
   episodeTimeout?: number;   // idle gap that ends an episode; off if omitted
   learning?: {
     halfLife?: number;       // forgetting of learned counts; off if omitted
-    gain?: number;           // learned weight cap = gain × |initial|; default 2
-    priorEpisodes?: number;  // pseudo-count behind your weights; default 10
+    gain?: number;           // learned weight cap = gain × |initial|; default 2, at most 1e6
+    priorEpisodes?: number;  // pseudo-count behind your weights; default 10, at most 1e6
   };
   reveal?: RevealOptions;    // defaults for every intent
 }
 
 interface IntentConfig {
   prior: number;                    // (0, 1)
-  priorStrength: number;            // > 0
+  priorStrength: number;            // > 0, at most 1e6
   halfLife: number;                 // > 0
-  signals: Record<string, number>;  // event name → weight, non-zero
+  signals: Record<string, number>;  // event name → weight, non-zero, between −1e6 and 1e6
   outcome?: string;                 // event that confirms the intent
   resetOnOutcome?: boolean;         // default true
+  saturate?: boolean;               // repeats within an episode add less; default: episodeTimeout is set
   reveal?: RevealOptions;
 }
 
@@ -290,7 +309,7 @@ interface SignalExplanation {
   impact: number;          // p − p without this signal
   initialWeight: number;
   learnedWeight: number;
-  effectiveWeight: number; // what the next occurrence will add
+  effectiveWeight: number; // what the signal's first occurrence in an episode adds
   hits: number;
   misses: number;
 }
@@ -316,7 +335,7 @@ const state = deserialize(saved, { config });
 
 The new config is validated and swapped in. Intents and signals you no longer declare are dropped (α and β are recomputed from what remains), newly declared intents start at their prior, and everything learned about signals that still exist is kept.
 
-If you change the shape of the state itself across versions of this library, `deserialize` throws a `RangeError` unless you pass a `migrate` function, which receives the parsed object and its version and returns a current state:
+States saved by an older version of this library are upgraded on load: `deserialize` migrates the state shape written by oracular 0.1.0 to 0.2.x (`STATE_VERSION` 1) to the current one on its own. A `migrate` function is consulted only for a version the library does not know, such as a state written by a newer oracular before a rollback; without one, that throws a `RangeError`:
 
 ```ts
 deserialize(saved, {
@@ -342,6 +361,21 @@ explain(state, 'upgrade', Date.now());
 
 Rows are sorted by the size of their impact. `limit.hit` has no history yet, so its effective weight is exactly the initial one. `pricing.viewed` was followed by an upgrade in six of its seven sessions while the three sessions without it saw one upgrade, so it learned a weight above the initial 3. `export.clicked` appeared in every session: it has no counterfactual, so whatever its hit rate, its weight stands at exactly the initial 1 until a session happens without it. See [Episodes & learning](https://yuribenjamin.github.io/oracular/guide/concepts/episodes-and-learning) for why learning needs contrast.
 
+## Shadow mode & replay
+
+Run oracular silently first. Record what it decides, export the log, and measure a config offline before any reveal is shown:
+
+```ts
+state = observe(state, event);
+log.append(JSON.stringify(createRecord(state, event, { installId, mode: 'shadow' })));
+```
+
+```sh
+npx oracular replay shadow.ndjson --config oracular.config.json
+```
+
+`replay` reports precision, recall, lead time and reveals per user for every intent and threshold, and a reliability table with a Brier score. It scores only the periods in which reveals were not shown, because once they are, the reveal itself causes outcomes. `installId` is a random id your app generates once and stores; it is never derived from the device. The log holds event names and times, never `props`, and leaves the device only if your app sends it. The [Shadow mode guide](https://yuribenjamin.github.io/oracular/guide/shadow-mode) has the workflow and the record format.
+
 ## Design rules
 
 - **Pure.** Inputs are never mutated; the same input always gives the same output. Internally, α and β are always the prior plus the sum of per-signal contributions, so `explain` adds up.
@@ -351,7 +385,7 @@ Rows are sorted by the size of their impact. `limit.hit` has no history yet, so 
 
 ## Roadmap
 
-Not in 0.1, deliberately left room for: a React hook, a Vue composable, a devtools panel for watching `explain` live, and presets for common intents. Details and how to propose more on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
+Next is 0.3, themed **proof**: a recorder format for shadow mode, `npx oracular replay` to measure a config offline, per-episode saturation, and state robustness tests. Then cross-episode attribution and `tune` in 0.4, and a written stability policy before 1.0. Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
 
 ## Contributing
 
