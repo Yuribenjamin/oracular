@@ -13,6 +13,7 @@
   <a href="https://www.npmjs.com/package/oracular"><img src="https://img.shields.io/npm/dm/oracular" alt="npm downloads"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/oracular" alt="MIT license"></a>
   <a href="https://www.bestpractices.dev/projects/15643"><img src="https://www.bestpractices.dev/projects/15643/badge" alt="OpenSSF Best Practices"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/Yuribenjamin/oracular"><img src="https://api.scorecard.dev/projects/github.com/Yuribenjamin/oracular/badge" alt="OpenSSF Scorecard"></a>
 </p>
 
 <p align="center">

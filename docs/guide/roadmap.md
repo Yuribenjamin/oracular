@@ -40,14 +40,14 @@ The theme is **promises we can keep**. 1.0 means the API and the state format ar
 2. **Property-based tests.** Purity, monotone decay, the α/β invariant, serialize/deserialize identity, and `shouldReveal ⇒ lower ≥ threshold`, generated rather than hand-picked. The fixtures and the deserialize fuzz from 0.3 keep running against every release in between.
 3. **A debug overlay.** A small framework-free widget showing predict and explain live for every intent. The shadow panels the integrations built are the prototype.
 4. **One public case study with real numbers**, produced by `replay` on a production shadow log, and at least two production users referenced.
-5. **Housekeeping.** Pin GitHub Actions by SHA, add CodeQL and an OpenSSF Scorecard, document the publish-only-from-CI policy. Cheap, and done last so they never crowd out the items above.
+5. **Housekeeping.** Done in 0.3: GitHub Actions pinned by SHA, CodeQL and an OpenSSF Scorecard workflow, the publish-only-from-CI policy written down in SECURITY.md. What is left is keeping them green.
 
 ## After 1.0
 
 - **Framework bindings** (`@oracular/react`, `@oracular/vue`) only once a third integration shows what the common hook is. Note for whoever builds them: do not end episodes on background or `visibilitychange`; a short app switch is not a session boundary. Flush persistence and let `episodeTimeout` close idle episodes.
 - **Persistence helpers** for localStorage, AsyncStorage and IndexedDB, as separate tiny packages, if integrations keep rewriting them.
 - **Playground upgrade.** Paste a recorder log, scrub a timeline, drag sliders for weights, half-life and threshold, and watch p and the lower bound move.
-- **Project structure.** A GitHub organization, a GOVERNANCE file and a second maintainer when a contributor shows up.
+- **Project structure.** A GitHub organization and a second maintainer when a contributor shows up; GOVERNANCE.md says how.
 
 ## Considered and declined, for now
 
