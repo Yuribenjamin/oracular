@@ -177,6 +177,26 @@ describe('serialize / deserialize', () => {
     expect(() => deserialize(serialize(s), { cfg: config } as any)).toThrow(TypeError);
   });
 
+  it('rejects finite numbers too large to compute with, instead of answering NaN', () => {
+    const valid = JSON.parse(serialize(busyState()));
+    const huge = structuredClone(valid);
+    huge.intents.upgrade.contributions['pricing.viewed'] = { alpha: 1e308, beta: 0 };
+    // Each number is finite, but α·β overflows and the Beta variance would be NaN.
+    expect(() => deserialize(JSON.stringify(huge))).toThrow(RangeError);
+    expect(() => deserialize(JSON.stringify(huge))).toThrow(/more evidence than can be computed/);
+
+    const counts = structuredClone(valid);
+    counts.intents.upgrade.episodes = { hits: 1e308, misses: 1e308 };
+    // The contrast weighting nWith·nWithout / (nWith + nWithout) overflows to NaN.
+    expect(() => deserialize(JSON.stringify(counts))).toThrow(RangeError);
+    expect(() => deserialize(JSON.stringify(counts))).toThrow(/too large to compute with/);
+
+    // Large but computable counts still load.
+    const large = structuredClone(valid);
+    large.intents.upgrade.episodes = { hits: 1e9, misses: 1e9 };
+    assertInvariants(deserialize(JSON.stringify(large)));
+  });
+
   it('prunes undeclared signals and intents found in stored data', () => {
     const s = busyState();
     const tampered = JSON.parse(serialize(s));

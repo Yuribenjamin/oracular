@@ -141,23 +141,30 @@ export function assertInvariants(state: EngineState): void {
  * round trip can't be used: a key named "constructor" shadows the type check in vitest.)
  */
 export function assertPlainJson(value: unknown, path: string): void {
+  // The checks are plain comparisons and `expect` runs only when one fails, with the same
+  // message: this walks every number in the state after every operation, and the fuzz test
+  // does that thousands of times.
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
   if (typeof value === 'number') {
-    expect(Number.isFinite(value), `${path} must be a finite number, got ${String(value)}`).toBe(
-      true,
-    );
+    const ok = Number.isFinite(value);
+    if (!ok) expect(ok, `${path} must be a finite number, got ${String(value)}`).toBe(true);
     return;
   }
   if (Array.isArray(value)) {
     for (const [i, item] of value.entries()) assertPlainJson(item, `${path}[${i}]`);
     return;
   }
-  expect(typeof value, `${path} must be JSON-serializable`).toBe('object');
+  if (typeof value !== 'object') {
+    expect(typeof value, `${path} must be JSON-serializable`).toBe('object');
+  }
   const proto = Object.getPrototypeOf(value);
-  expect(proto === Object.prototype || proto === null, `${path} must be a plain object`).toBe(true);
+  const plain = proto === Object.prototype || proto === null;
+  if (!plain) expect(plain, `${path} must be a plain object`).toBe(true);
   for (const key of Object.keys(value as object)) {
     const item = (value as Record<string, unknown>)[key];
-    expect(item, `${path}.${key} must not be undefined`).not.toBeUndefined();
+    if (item === undefined) {
+      expect(item, `${path}.${key} must not be undefined`).not.toBeUndefined();
+    }
     assertPlainJson(item, `${path}.${key}`);
   }
 }

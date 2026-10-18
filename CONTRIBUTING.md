@@ -75,6 +75,9 @@ browsers, Node and React Native.
   `tests/fixtures/state/`) and checks that it migrates. The files are written by
   `node scripts/state-fixtures.mjs` from the real published tarballs, never by hand; after a
   release, add the new version to `VERSIONS` there and run it.
+- `tests/deserialize-fuzz.test.ts` feeds `deserialize` truncated, corrupted and tampered states.
+  It must only ever throw `SyntaxError`, `TypeError` or `RangeError`, or load a state whose
+  estimates stay finite.
 - Numeric tables in the docs are generated: `node scripts/tuning-tables.mjs --write` renders every
   `<!-- generated:… -->` region from the library, and a test fails when one is stale.
 

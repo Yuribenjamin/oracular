@@ -58,10 +58,10 @@ try {
 | Error         | When                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------ |
 | `SyntaxError` | the string is not valid JSON                                                                           |
-| `RangeError`  | the stored `version` differs from `STATE_VERSION` and no `migrate` was given; `migrate` did not return the current version; a stored number is out of range (a negative count, a fractional `revealCount`) |
+| `RangeError`  | the stored `version` is one this library does not know and no `migrate` was given; `migrate` did not return the current version; a stored number is out of range (a negative count, a fractional `revealCount`, a config weight beyond ±1e6); stored numbers that are each finite but too large to compute with, which would make the estimates NaN |
 | `TypeError`   | the state is malformed: no numeric `version`, a missing or wrongly typed field, an invalid `config`, invalid options |
 
-The same three types are used everywhere in the library (`createState`, `observe`, the options of `predict`, `explain` and `evaluate`), with the offending path in the message. If you store state where users can edit it, catch and fall back to `createState(config)`.
+The same three types are used everywhere in the library (`createState`, `observe`, the options of `predict`, `explain` and `evaluate`), with the offending path in the message. A fuzz test feeds `deserialize` truncated, corrupted and tampered versions of stored states and checks that it only ever throws one of these three or returns a state whose estimates stay finite. If you store state where users can edit it, catch and fall back to `createState(config)`.
 
 ## One state per user
 

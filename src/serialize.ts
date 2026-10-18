@@ -1,5 +1,6 @@
-import { normalizeConfig } from './config';
+import { normalizeConfig, resolveLearning } from './config';
 import { initIntent, withContributions } from './intent';
+import { signalWeights } from './learning';
 import { canMigrate, migrateStored } from './migrate';
 import { requireState } from './state';
 import type {
@@ -49,7 +50,9 @@ export function serialize(state: EngineState): string {
  * @throws `TypeError` when the stored data, the result of `migrate`, `opts` or `opts.config`
  *   has the wrong shape.
  * @throws `RangeError` when the stored version is unknown and no `migrate` is given, when
- *   `migrate` does not return the current version, or when a stored number is out of range.
+ *   `migrate` does not return the current version, when a stored number is out of range, or
+ *   when stored numbers are finite but too large to compute with (a tampered or corrupted state
+ *   that would otherwise answer NaN).
  * @example
  * ```ts
  * const saved = localStorage.getItem('oracular');
@@ -95,7 +98,7 @@ export function deserialize(json: string, opts: DeserializeOptions = {}): Engine
 
   const raw = parseState(stored);
   const config = opts.config === undefined ? raw.config : normalizeConfig(opts.config);
-  return reconcile(raw, config);
+  return requireComputable(reconcile(raw, config));
 }
 
 // ---- parsing: field types only; keys are reconciled against the config afterwards ----
@@ -213,6 +216,33 @@ function parseState(value: unknown): EngineState {
     intents: mapOwn(r.intents, 'state.intents', intentState),
     episode: episodeState(r.episode, 'state.episode'),
   };
+}
+
+// ---- computability: finite numbers that are still too large to compute with ----
+
+/**
+ * Every stored number is checked to be finite, but finite is not enough: a contribution near
+ * 1e308 makes α·β overflow, and learned counts near 1e308 make the contrast weighting overflow,
+ * so the state would answer NaN. Such a state was tampered with or corrupted; reject it.
+ */
+function requireComputable(state: EngineState): EngineState {
+  const learning = resolveLearning(state.config);
+  for (const [name, intent] of Object.entries(state.config.intents)) {
+    const is = state.intents[name] as IntentState;
+    const path = `state.intents[${JSON.stringify(name)}]`;
+    if (!Number.isFinite(is.alpha + is.beta) || !Number.isFinite(is.alpha * is.beta)) {
+      throw new RangeError(`oracular: ${path} holds more evidence than can be computed with`);
+    }
+    for (const signal of Object.keys(intent.signals)) {
+      const w = signalWeights(is, intent, learning, signal);
+      if (!Number.isFinite(w.learned) || !Number.isFinite(w.effective)) {
+        throw new RangeError(
+          `oracular: ${path} holds learned counts for ${JSON.stringify(signal)} too large to compute with`,
+        );
+      }
+    }
+  }
+  return state;
 }
 
 // ---- reconciling: make the state agree with a config ----

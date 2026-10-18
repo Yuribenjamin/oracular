@@ -32,9 +32,9 @@ export interface RevealOptions {
 export interface LearningConfig {
   /** Half-life of learned hit/miss counts, in the same unit as `at`. Omit for no forgetting. */
   halfLife?: number;
-  /** A perfectly predictive signal converges to `gain × |initial weight|`. Default 2. */
+  /** A perfectly predictive signal converges to `gain × |initial weight|`. Default 2; at most 1e6. */
   gain?: number;
-  /** Pseudo-count behind the developer's initial weight: how many observed episodes it takes to weigh as much as the prior. Default 10. */
+  /** Pseudo-count behind the developer's initial weight: how many observed episodes it takes to weigh as much as the prior. Default 10; at most 1e6. */
   priorEpisodes?: number;
 }
 
@@ -57,11 +57,11 @@ export interface LearningConfig {
 export interface IntentConfig {
   /** Prior probability, strictly between 0 and 1. */
   prior: number;
-  /** Strength of the prior as a pseudo-count, greater than 0. */
+  /** Strength of the prior as a pseudo-count, greater than 0 and at most 1e6. */
   priorStrength: number;
   /** Half-life of evidence, in the same unit as `at`. Evidence decays back toward the prior. */
   halfLife: number;
-  /** Event name → initial weight. Positive is evidence for the intent, negative against. Non-zero. */
+  /** Event name → initial weight. Positive is evidence for the intent, negative against. Non-zero, between −1e6 and 1e6. */
   signals: Record<string, number>;
   /** Event name that confirms the intent happened, e.g. `'checkout.completed'`. */
   outcome?: string;

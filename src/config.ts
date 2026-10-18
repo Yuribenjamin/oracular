@@ -12,6 +12,12 @@ export const DEFAULT_THRESHOLD = 0.5;
 export const DEFAULT_Z = 1.28;
 export const DEFAULT_GAIN = 2;
 export const DEFAULT_PRIOR_EPISODES = 10;
+/**
+ * Largest accepted magnitude for weights, `priorStrength`, `learning.gain` and
+ * `learning.priorEpisodes`: far beyond any real config, and small enough that the Beta and
+ * learning arithmetic can never overflow to Infinity or NaN.
+ */
+export const MAX_MAGNITUDE = 1e6;
 
 const CONFIG_KEYS = ['intents', 'episodeTimeout', 'learning', 'reveal'] as const;
 const INTENT_KEYS = [
@@ -68,6 +74,13 @@ function expectPositive(value: unknown, path: string): number {
   return n;
 }
 
+/** A positive number no larger than {@link MAX_MAGNITUDE}. */
+function expectBoundedPositive(value: unknown, path: string): number {
+  const n = expectPositive(value, path);
+  if (n > MAX_MAGNITUDE) rangeError(path, `must be at most ${MAX_MAGNITUDE}`);
+  return n;
+}
+
 function expectNonNegative(value: unknown, path: string): number {
   const n = expectNumber(value, path);
   if (n < 0) rangeError(path, 'must be 0 or greater');
@@ -120,9 +133,9 @@ function normalizeLearning(value: unknown, path: string): LearningConfig {
   const out: LearningConfig = {};
   if (record.halfLife !== undefined)
     out.halfLife = expectPositive(record.halfLife, `${path}.halfLife`);
-  if (record.gain !== undefined) out.gain = expectPositive(record.gain, `${path}.gain`);
+  if (record.gain !== undefined) out.gain = expectBoundedPositive(record.gain, `${path}.gain`);
   if (record.priorEpisodes !== undefined) {
-    out.priorEpisodes = expectPositive(record.priorEpisodes, `${path}.priorEpisodes`);
+    out.priorEpisodes = expectBoundedPositive(record.priorEpisodes, `${path}.priorEpisodes`);
   }
   return out;
 }
@@ -142,11 +155,17 @@ export function normalizeIntentConfig(value: unknown, path: string): IntentConfi
         'must be non-zero (positive is evidence for the intent, negative is evidence against)',
       );
     }
+    if (Math.abs(w) > MAX_MAGNITUDE) {
+      rangeError(
+        `${path}.signals[${JSON.stringify(name)}]`,
+        `must be between -${MAX_MAGNITUDE} and ${MAX_MAGNITUDE}`,
+      );
+    }
     signals[name] = w;
   }
   const out: IntentConfig = {
     prior: expectOpenUnit(record.prior, `${path}.prior`),
-    priorStrength: expectPositive(record.priorStrength, `${path}.priorStrength`),
+    priorStrength: expectBoundedPositive(record.priorStrength, `${path}.priorStrength`),
     halfLife: expectPositive(record.halfLife, `${path}.halfLife`),
     signals,
   };

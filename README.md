@@ -257,17 +257,17 @@ interface EngineConfig {
   episodeTimeout?: number;   // idle gap that ends an episode; off if omitted
   learning?: {
     halfLife?: number;       // forgetting of learned counts; off if omitted
-    gain?: number;           // learned weight cap = gain × |initial|; default 2
-    priorEpisodes?: number;  // pseudo-count behind your weights; default 10
+    gain?: number;           // learned weight cap = gain × |initial|; default 2, at most 1e6
+    priorEpisodes?: number;  // pseudo-count behind your weights; default 10, at most 1e6
   };
   reveal?: RevealOptions;    // defaults for every intent
 }
 
 interface IntentConfig {
   prior: number;                    // (0, 1)
-  priorStrength: number;            // > 0
+  priorStrength: number;            // > 0, at most 1e6
   halfLife: number;                 // > 0
-  signals: Record<string, number>;  // event name → weight, non-zero
+  signals: Record<string, number>;  // event name → weight, non-zero, between −1e6 and 1e6
   outcome?: string;                 // event that confirms the intent
   resetOnOutcome?: boolean;         // default true
   saturate?: boolean;               // repeats within an episode add less; default: episodeTimeout is set
