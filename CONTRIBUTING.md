@@ -47,8 +47,9 @@ src/            the library (zero runtime dependencies, no I/O of any kind)
   recorder.ts   createRecord, createEndRecord: the recorder format
   validate.ts   validateConfig
   units.ts      ms, durations in milliseconds
-cli/            the `oracular` bin (`oracular replay`): Node only, compiled with tsconfig.cli.json,
-                not part of the library; it imports 'oracular' like any user
+cli/            the `oracular` bin (`oracular replay`, `oracular tune`): Node only, compiled with
+                tsconfig.cli.json, not part of the library; it imports 'oracular' like any user,
+                plus `lift` and `laplace` from src/math.ts so its numbers are the engine's
 tests/          vitest suites, one per area, plus helpers.ts
   fixtures/     states saved by every published version, and the replay fixture logs
 examples/       quickstart.ts: the README's first code block, byte for byte

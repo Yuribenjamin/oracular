@@ -13,6 +13,8 @@ upgrade: {
 
 ## A procedure
 
+If you already have a [shadow log](/guide/shadow-mode), `npx oracular tune` does steps 1, 2 and the weights from data and prints the config to paste; the steps below are what it does, by hand, and how to read what it printed.
+
 1. Set `prior` to the fraction of sessions (or users) that actually do the thing. Guess if you have to; it is a prior.
 2. Start with `priorStrength: 10`, weights between 1 and 3 for positive signals and −2 to −4 for strong negatives, `halfLife` at the horizon over which the behaviour builds, and the default `threshold`/`z`.
 3. Decide how a "ready" session looks: which signals, how many, over how long. Count each distinct signal once per session (repeats add little). Check with the tables below that it fires, and that a lukewarm session doesn't.
