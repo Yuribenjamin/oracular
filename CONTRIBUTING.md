@@ -53,7 +53,8 @@ cli/            the `oracular` bin (`oracular replay`, `oracular tune`): Node on
                 plus `lift` and `laplace` from src/math.ts so its numbers are the engine's
 tests/          vitest suites, one per area, plus helpers.ts
   fixtures/     states saved by every published version, and the replay fixture logs
-examples/       quickstart.ts: the README's first code block, byte for byte
+examples/       quickstart.ts: the README's first code block, byte for byte; retailrocket/: the
+                converter and scripts behind the clickstream case study (the data is not here)
 scripts/        smoke scripts run against dist/ in CI on Node 18 and 20, pack-check, the
                 generated docs tables, and the state fixture generator
 schema/         config.schema.json, the JSON Schema for the config: published in the tarball and

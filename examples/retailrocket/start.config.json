@@ -1,0 +1,21 @@
+{
+  "episodeTimeout": 1800000,
+  "intents": {
+    "purchase": {
+      "prior": 0.01,
+      "priorStrength": 10,
+      "halfLife": 86400000,
+      "signals": { "item.viewed": 1, "cart.added": 3 },
+      "outcome": "order.placed",
+      "reveal": { "cooldown": 86400000 }
+    },
+    "cart": {
+      "prior": 0.03,
+      "priorStrength": 10,
+      "halfLife": 3600000,
+      "signals": { "item.viewed": 1 },
+      "outcome": "cart.added",
+      "reveal": { "cooldown": 3600000 }
+    }
+  }
+}
