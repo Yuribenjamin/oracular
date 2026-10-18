@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   createEndRecord,
@@ -316,10 +316,54 @@ const logs = {
   live: writeLog(() => 'live'),
 };
 
+/**
+ * Deep equality with a tolerance on numbers. The fixture logs pin the recorder's output, but
+ * Math.log1p and friends differ by an ulp between V8 versions (Node 22 and 24 disagree in the
+ * sixteenth digit of a few decisions), so numbers are compared to 1e-12 and everything else,
+ * key order included, exactly.
+ */
+function assertSameRecord(received: unknown, expected: unknown, path: string): void {
+  if (typeof expected === 'number' && typeof received === 'number') {
+    expect(received, path).toBeCloseTo(expected, 12);
+    return;
+  }
+  if (Array.isArray(expected)) {
+    expect(Array.isArray(received), path).toBe(true);
+    const items = received as unknown[];
+    expect(items.length, path).toBe(expected.length);
+    for (const [i, item] of expected.entries()) assertSameRecord(items[i], item, `${path}[${i}]`);
+    return;
+  }
+  if (expected !== null && typeof expected === 'object') {
+    expect(received, path).toBeTypeOf('object');
+    const record = received as Record<string, unknown>;
+    const keys = Object.keys(expected);
+    expect(Object.keys(record), `${path} keys`).toStrictEqual(keys);
+    for (const key of keys) {
+      assertSameRecord(record[key], (expected as Record<string, unknown>)[key], `${path}.${key}`);
+    }
+    return;
+  }
+  expect(received, path).toBe(expected);
+}
+
 describe('the fixture logs', () => {
-  it('are what the recorder writes (the format is pinned by these files)', async () => {
+  it('are what the recorder writes (the format is pinned by these files)', () => {
+    // UPDATE_FIXTURES=1 npm test rewrites them after a deliberate change to the recorder.
     for (const [name, text] of Object.entries(logs)) {
-      await expect(text).toMatchFileSnapshot(`./fixtures/replay/${name}.ndjson`);
+      const file = `${fixtures}${name}.ndjson`;
+      if (process.env.UPDATE_FIXTURES === '1') writeFileSync(file, text);
+      const expectedLines = readFileSync(file, 'utf8').split('\n');
+      const receivedLines = text.split('\n');
+      expect(receivedLines.length, `${name}.ndjson: line count`).toBe(expectedLines.length);
+      for (const [i, line] of receivedLines.entries()) {
+        const expectedLine = expectedLines[i] as string;
+        if (line === '' || expectedLine === '') {
+          expect(line, `${name}.ndjson:${i + 1}`).toBe(expectedLine);
+          continue;
+        }
+        assertSameRecord(JSON.parse(line), JSON.parse(expectedLine), `${name}.ndjson:${i + 1}`);
+      }
     }
   });
 

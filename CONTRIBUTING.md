@@ -78,6 +78,9 @@ browsers, Node and React Native.
   `tests/fixtures/state/`) and checks that it migrates. The files are written by
   `node scripts/state-fixtures.mjs` from the real published tarballs, never by hand; after a
   release, add the new version to `VERSIONS` there and run it.
+- `tests/fixtures/replay/*.ndjson` are written by the recorder inside `tests/replay.test.ts` and
+  compared with a 1e-12 tolerance on numbers, because V8 versions differ by an ulp in `Math`
+  results. After a deliberate change to the recorder, `UPDATE_FIXTURES=1 npm test` rewrites them.
 - `tests/deserialize-fuzz.test.ts` feeds `deserialize` truncated, corrupted and tampered states.
   It must only ever throw `SyntaxError`, `TypeError` or `RangeError`, or load a state whose
   estimates stay finite.
