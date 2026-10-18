@@ -4,7 +4,7 @@ What happens when 2.7 million real events go through `tune` and `replay`. This i
 
 ## The data
 
-The [Retailrocket e-commerce dataset](https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset) on Kaggle: 2,756,101 events from 1,407,580 visitors of an online shop over 138 days in 2015, each a `view`, an `addtocart` or a `transaction` with a timestamp and a visitor id. The converter turns it into a recorder log with the visitor id as the install id, every record in shadow mode, and three event names:
+The [Retailrocket e-commerce dataset](https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset) on Kaggle, published under CC BY-NC-SA 4.0: 2,756,101 events from 1,407,580 visitors of an online shop over 138 days in 2015, each a `view`, an `addtocart` or a `transaction` with a timestamp and a visitor id. The data itself is not in the repository and nothing here redistributes it; the numbers on this page are aggregates. The converter turns it into a recorder log with the visitor id as the install id, every record in shadow mode, and three event names:
 
 | dataset event | recorder event | count |
 | --- | --- | --- |

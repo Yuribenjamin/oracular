@@ -2,7 +2,7 @@
 
 Scripts behind [Case study: a public clickstream](https://yuribenjamin.github.io/oracular/guide/case-study-clickstream). They turn the Retailrocket e-commerce dataset into recorder logs, so that `oracular tune` and `oracular replay` can run on it, and run an app's view of the engine over the visitors who came back.
 
-The data is not in this repository. Download `events.csv` from the dataset's page on Kaggle, <https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset>, and keep its licence terms; nothing here redistributes it.
+The data is not in this repository. Download `events.csv` from the dataset's page on Kaggle, <https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset>. It is published under CC BY-NC-SA 4.0: credit the source, no commercial use of the data, and share any derived data under the same terms. Nothing here redistributes it; the scripts read your copy and the case study quotes aggregates.
 
 ```sh
 node examples/retailrocket/convert.mjs path/to/events.csv out/
