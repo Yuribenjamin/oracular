@@ -8,7 +8,13 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 function note(fit: SignalFit, priorEpisodes: number): string {
   if (fit.hits + fit.misses === 0) return 'never seen in a counted episode';
   const notes: string[] = [];
-  if (fit.weight === null) notes.push('no measurable lift, left out of the config');
+  if (fit.ubiquitous) {
+    notes.push(
+      `in ${(fit.share * 100).toFixed(1)}% of episodes, so it cannot tell them apart; left out of the config`,
+    );
+  } else if (fit.weight === null) {
+    notes.push('no measurable lift, left out of the config');
+  }
   if (fit.thin) notes.push(`thin: ${fit.contrast.toFixed(1)} of ${priorEpisodes} contrast`);
   return notes.join('; ');
 }
@@ -83,10 +89,21 @@ function formatIntent(fit: IntentFit): string {
     `Half-life grid, Brier score against "the outcome follows within ${formatDuration(fit.halfLife.window)}" (lower is better): ${fit.halfLife.curve
       .map(
         (p) =>
-          `${formatDuration(p.halfLife)} ${num(p.brier, 3)}${p.halfLife === fit.halfLife.value && fit.halfLife.source === 'grid' ? ' *' : ''}`,
+          `${formatDuration(p.halfLife)} ${num(p.brier, 4)}${p.halfLife === fit.halfLife.value && p.brier !== null ? ' *' : ''}`,
       )
       .join(', ')}`,
   );
+  if (fit.beatsBaseRate === false) {
+    const scored = fit.halfLife.curve.find((p) => p.halfLife === fit.halfLife.value);
+    const window = formatDuration(fit.halfLife.window);
+    const why = fit.signals.some((f) => f.weight !== null)
+      ? `Its signals do not separate the events that ${fit.outcome} follows within ${window} from the rest.`
+      : `No signal is left in the config, so p never leaves the prior, and the prior (the share of episodes that end with ${fit.outcome}) is not the share of events that ${fit.outcome} follows within ${window}.`;
+    out.push('');
+    out.push(
+      `This intent does not beat its base rate: the fitted config scores ${num(scored?.brier ?? null, 4)} where always predicting the base rate scores ${num(fit.halfLife.brierBaseline, 4)} (lower is better). ${why} Drop the intent, or find signals that tell its episodes apart (--all-events measures every other event in the log).`,
+    );
+  }
   if (fit.candidates.length > 0) {
     out.push('');
     out.push(
