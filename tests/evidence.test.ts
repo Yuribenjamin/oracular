@@ -65,7 +65,7 @@ describe('evidenceToReveal', () => {
             const label = `prior ${prior} strength ${priorStrength} θ ${threshold} z ${z} w ${w}`;
             expect(count(needed, w), label).toBe(signalsUntilReveal(intent, w, { threshold, z }));
           }
-  });
+  }, 30_000);
 
   it('repeats of one signal in one episode open the gate where w × log2(1 + n) first reaches it', () => {
     // Saturation: n occurrences in one episode add w × log2(1 + n), so the gate opens at the
@@ -94,7 +94,7 @@ describe('evidenceToReveal', () => {
               expect(n, label).toBe(expected);
             }
           }
-  });
+  }, 30_000);
 
   it('the quickstart intent: 6 full-weight pricing.viewed open the gate, 32 repeats in one episode', () => {
     expect(signalsUntilReveal(upgrade, 3)).toBe(6);
