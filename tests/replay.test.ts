@@ -543,6 +543,22 @@ describe('oracular replay', () => {
     );
   });
 
+  it('ignores a top-level "$schema" key in a .json config', async () => {
+    const plain = io();
+    expect(await run(replayArgs('shadow.ndjson', '--json'), plain.io)).toBe(0);
+    const pointing = io();
+    pointing.io.readFile = (path) =>
+      path.endsWith('config.json')
+        ? JSON.stringify({
+            $schema: 'https://yuribenjamin.github.io/oracular/config.schema.json',
+            ...config,
+          })
+        : readFileSync(path, 'utf8');
+    expect(await run(replayArgs('shadow.ndjson', '--json'), pointing.io)).toBe(0);
+    expect(pointing.out.stderr).toBe('');
+    expect(pointing.out.stdout).toBe(plain.out.stdout);
+  });
+
   it('prints help and the version', async () => {
     const help = io();
     expect(await run(['--help'], help.io)).toBe(0);

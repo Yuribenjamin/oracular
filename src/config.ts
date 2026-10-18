@@ -19,8 +19,9 @@ export const DEFAULT_PRIOR_EPISODES = 10;
  */
 export const MAX_MAGNITUDE = 1e6;
 
-const CONFIG_KEYS = ['intents', 'episodeTimeout', 'learning', 'reveal'] as const;
-const INTENT_KEYS = [
+// Exported for tests/schema.test.ts, which pins schema/config.schema.json to these lists.
+export const CONFIG_KEYS = ['intents', 'episodeTimeout', 'learning', 'reveal'] as const;
+export const INTENT_KEYS = [
   'prior',
   'priorStrength',
   'halfLife',
@@ -30,8 +31,8 @@ const INTENT_KEYS = [
   'saturate',
   'reveal',
 ] as const;
-const REVEAL_KEYS = ['threshold', 'z', 'cooldown'] as const;
-const LEARNING_KEYS = ['halfLife', 'gain', 'priorEpisodes'] as const;
+export const REVEAL_KEYS = ['threshold', 'z', 'cooldown'] as const;
+export const LEARNING_KEYS = ['halfLife', 'gain', 'priorEpisodes'] as const;
 const EXPLAIN_KEYS = ['nonZero', 'limit'] as const;
 
 function typeError(path: string, message: string): never {

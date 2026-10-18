@@ -59,7 +59,7 @@ Both production integrations so far built this themselves. From 0.3 the recorder
 npx oracular replay shadow-week-1.ndjson shadow-week-2.ndjson --config oracular.config.json
 ```
 
-The config can be a `.json` file, or a `.js`, `.mjs` or `.cjs` module whose default (or `config`) export is the config. On the fixture log in the repository, restricted to one intent and three thresholds:
+The config can be a `.json` file, or a `.js`, `.mjs` or `.cjs` module whose default (or `config`) export is the config. A `.json` file may carry a top-level `$schema` key pointing at the [published schema](https://yuribenjamin.github.io/oracular/config.schema.json) for editor completion; replay drops it before handing the config to the engine. On the fixture log in the repository, restricted to one intent and three thresholds:
 
 ```sh
 npx oracular replay tests/fixtures/replay/shadow.ndjson --config tests/fixtures/replay/config.json \

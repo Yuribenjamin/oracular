@@ -32,4 +32,6 @@ export type {
   SignalExplanation,
   SignalRecord,
 } from './types';
+export { ms, type Units } from './units';
+export { validateConfig } from './validate';
 export { RECORD_VERSION, STATE_VERSION } from './version';

@@ -28,6 +28,7 @@ export const EXPECTED_FILES = [
   'dist/index.js',
   'dist/index.js.map',
   'package.json',
+  'schema/config.schema.json',
 ].sort();
 
 const env = {};
@@ -69,10 +70,14 @@ try {
   console.log(`pack-check: ${tarball} holds exactly the ${files.length} expected files`);
 
   run('publint --strict', [binOf('publint', 'publint'), 'run', tgz, '--strict']);
+  // The schema subpath is a JSON file with no types to check, and Node 10 resolution has no way
+  // to resolve it; every JavaScript entrypoint is still checked under every resolution mode.
   run('attw', [
     binOf('@arethetypeswrong/cli', 'attw'),
     tgz,
     '--no-definitely-typed',
+    '--exclude-entrypoints',
+    './config.schema.json',
     '--format',
     'table',
   ]);

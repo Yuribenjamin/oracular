@@ -250,6 +250,8 @@ createRecord(state, event, { installId, mode }): EventRecord   // one recorder l
 createEndRecord(at, { installId, mode }): EndRecord           // one recorder line: the episode ended
 serialize(state): string
 deserialize(json: string, opts?: { config?: EngineConfig; migrate?: Migrate }): EngineState
+validateConfig(config: unknown): EngineConfig   // the checks createState runs, without a state; returns the normalized copy
+ms.seconds(n), ms.minutes(n), ms.hours(n), ms.days(n), ms.weeks(n)   // durations in milliseconds
 STATE_VERSION // 2
 RECORD_VERSION // 1
 ```
@@ -286,7 +288,7 @@ interface RevealOptions {
 }
 ```
 
-Reveal options resolve per call → intent → engine → defaults. Invalid config throws a `TypeError` or `RangeError` with the offending path in the message.
+Reveal options resolve per call → intent → engine → defaults. Invalid config throws a `TypeError` or `RangeError` with the offending path in the message. `validateConfig(config)` runs those checks without building a state and returns the normalized copy `createState` stores, so a bad weight fails at startup or in a test rather than on first use. For a config kept as JSON, the package ships a [JSON Schema](./schema/config.schema.json) as `oracular/config.schema.json`, also served at <https://yuribenjamin.github.io/oracular/config.schema.json>, for editor completion; `oracular replay` ignores the `$schema` key such a file carries, the engine does not.
 
 ### Results
 
@@ -317,7 +319,7 @@ interface SignalExplanation {
 
 ### Time
 
-`at` is a timestamp. Every duration (`halfLife`, `cooldown`, `episodeTimeout`, `learning.halfLife`) is in the same unit as `at`. Milliseconds from `Date.now()` are the obvious choice, but the library never calls `Date.now()` itself: you pass time in, which keeps every function deterministic and makes tests trivial. A clock that jumps backwards is tolerated (no decay, no error).
+`at` is a timestamp. Every duration (`halfLife`, `cooldown`, `episodeTimeout`, `learning.halfLife`) is in the same unit as `at`. Milliseconds from `Date.now()` are the obvious choice, but the library never calls `Date.now()` itself: you pass time in, which keeps every function deterministic and makes tests trivial. A clock that jumps backwards is tolerated (no decay, no error). When `at` is in milliseconds, `ms.days(7)`, `ms.hours(3)` and `ms.minutes(30)` spell the durations; they are plain multiplications.
 
 ## Persistence
 
@@ -385,7 +387,7 @@ npx oracular replay shadow.ndjson --config oracular.config.json
 
 ## Roadmap
 
-Next is 0.3, themed **proof**: a recorder format for shadow mode, `npx oracular replay` to measure a config offline, per-episode saturation, and state robustness tests. Then cross-episode attribution and `tune` in 0.4, and a written stability policy before 1.0. Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
+Now is 0.4, themed **learning that matches how people behave**: cross-episode attribution, so a session's signals can earn credit for an outcome days later; `npx oracular tune` to seed a config from a shadow log; presets; and small ergonomics (`validateConfig`, `ms`, a JSON Schema for the config). 0.3 shipped shadow mode, `npx oracular replay` and per-episode saturation. Then a written stability policy before 1.0. Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
 
 ## Contributing
 

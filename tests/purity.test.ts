@@ -9,10 +9,12 @@ import {
   evidenceToReveal,
   explain,
   markRevealed,
+  ms,
   observe,
   predict,
   serialize,
   shouldReveal,
+  validateConfig,
 } from 'oracular';
 import { describe, expect, it } from 'vitest';
 import { clone, deepFreeze, MINUTE, upgradeConfig } from './helpers';
@@ -95,5 +97,11 @@ describe('purity', () => {
     pure(evidenceToReveal, upgradeConfig().intents.upgrade!, { threshold: 0.7, z: 1.64 });
     const s2 = pure(endEpisode, s1, T + 2 * MINUTE);
     pure(episodeClosed, s1, s2);
+  });
+
+  it('validateConfig and ms', () => {
+    pure(validateConfig, upgradeConfig({ episodeTimeout: 10 * MINUTE, reveal: { z: 1.64 } }));
+    pure(ms.days, 7);
+    pure(ms.minutes, 1.5);
   });
 });
