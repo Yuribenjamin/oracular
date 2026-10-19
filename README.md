@@ -21,11 +21,18 @@
   · <a href="https://yuribenjamin.github.io/oracular/guide/introduction">Guide</a>
   · <a href="https://yuribenjamin.github.io/oracular/api/">API</a>
   · <a href="https://yuribenjamin.github.io/oracular/playground">Playground</a>
+  · <a href="https://yuribenjamin.github.io/oracular/guide/is-it-for-me">Is it for me?</a>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Yuribenjamin/oracular/main/assets/inspector.gif" width="800" alt="A pricing page next to the oracular inspector panel. Over a simulated day, each click adds a signal and p and the lower bound rise, until both clear 0.5: the gate opens, an upgrade offer appears and a cooldown starts. Eight days later the evidence has decayed back toward the prior.">
 </p>
 
 **oracular** is a tiny, zero-dependency, pure-functional intent engine that runs entirely on the device. Feed it the events your app already emits. It keeps a probabilistic estimate of what the user is about to do (upgrade, churn, get stuck, buy…) and tells you when that estimate crosses a threshold *with enough confidence* to act on it: show a tip, make an offer, reveal a feature, place an ad. It learns from each user's own outcomes, so your initial guesses get corrected on their device, not on a server.
 
 It never touches the network, storage, DOM, timers or globals. Your app owns persistence and side effects; the library owns the math.
+
+The job, concretely: your pricing page learns when to show *this* user the upgrade offer, and their events never leave their browser. On a [public clickstream of 2.7 million events](https://yuribenjamin.github.io/oracular/guide/case-study-clickstream#the-rule-a-skeptic-would-write), among the visitors who came back, the tuned engine caught 27.9% of the orders at 48.9% precision, where the best rule a skeptic would write caught 6.4% at 39.2%; for first-time visitors the two tie, as they must.
 
 ## Why oracular
 
@@ -79,8 +86,8 @@ On a public clickstream of 2.7 million events, a hand-written config scored wors
 
 - [Why oracular](#why-oracular)
 - [The workflow: shadow, tune, ship, learn](#the-workflow-shadow-tune-ship-learn)
-- [How it works](#how-it-works)
 - [Examples](#examples)
+- [How it works](#how-it-works)
 - [Using with React](#using-with-react)
 - [API](#api)
 - [Persistence](#persistence)
@@ -91,6 +98,66 @@ On a public clickstream of 2.7 million events, a hand-written config scored wors
 - [Contributing](#contributing)
 
 The [documentation site](https://yuribenjamin.github.io/oracular/) has the long form: one page per concept, a tuning guide with tables, recipes, framework examples, the generated API reference and a playground that runs the engine in your browser.
+
+## Examples
+
+The ad case is one of these, not the point of the library.
+
+### Onboarding tip when the user is stuck
+
+```ts
+const config = {
+  episodeTimeout: 30 * 60 * 1000,
+  intents: {
+    stuck: {
+      prior: 0.1,
+      priorStrength: 5,
+      halfLife: 10 * 60 * 1000, // ten minutes: being stuck is a short-lived state
+      signals: { 'editor.undo': 1, 'search.empty': 2, 'help.opened': 3, 'task.completed': -4 },
+      outcome: 'help.article.read',
+      saturate: false, // the fifth undo in a row is more evidence, not less
+      reveal: { threshold: 0.6, cooldown: 60 * 60 * 1000 },
+    },
+  },
+};
+```
+
+### Upgrade offer
+
+The quickstart above. Signals that are followed by `upgrade.completed` grow heavier for this user; the ones that aren't shrink, even to negative.
+
+### Churn save
+
+```ts
+const churn = {
+  prior: 0.08,
+  priorStrength: 20,
+  halfLife: 14 * 24 * 60 * 60 * 1000,
+  signals: {
+    'session.short': 1,
+    'notifications.disabled': 3,
+    'export.all': 4, // taking their data with them
+    'feature.new.used': -2,
+  },
+  outcome: 'account.cancelled',
+  reveal: { threshold: 0.5, z: 1.64 }, // be surer before you offer a discount
+};
+```
+
+### Ad placement
+
+```ts
+import { presets } from 'oracular/presets';
+
+// The tuned preset (prior 0.048, strength 4, cart.added 2.3, from a real clickstream), plus your own signals.
+const willBuy = {
+  ...presets.willBuy,
+  signals: { ...presets.willBuy.signals, 'wishlist.added': 2, 'cart.emptied': -3 },
+};
+// shouldReveal(state, 'willBuy', now) → show the sponsored placement, then markRevealed.
+```
+
+More in the docs: [Recipes](https://yuribenjamin.github.io/oracular/guide/recipes) and the [Tuning guide](https://yuribenjamin.github.io/oracular/guide/tuning).
 
 ## How it works
 
@@ -160,66 +227,6 @@ The outcome also starts the intent's `cooldown`: `shouldReveal` stays false unti
 ### Every answer comes with its reasons
 
 `explain` returns, per signal, how much evidence it currently holds and how much p would move without it, plus the initial, learned and effective weights and the hit/miss record. If a reveal looks wrong, you can see exactly why it fired.
-
-## Examples
-
-The ad case is one of these, not the point of the library.
-
-### Onboarding tip when the user is stuck
-
-```ts
-const config = {
-  episodeTimeout: 30 * 60 * 1000,
-  intents: {
-    stuck: {
-      prior: 0.1,
-      priorStrength: 5,
-      halfLife: 10 * 60 * 1000, // ten minutes: being stuck is a short-lived state
-      signals: { 'editor.undo': 1, 'search.empty': 2, 'help.opened': 3, 'task.completed': -4 },
-      outcome: 'help.article.read',
-      saturate: false, // the fifth undo in a row is more evidence, not less
-      reveal: { threshold: 0.6, cooldown: 60 * 60 * 1000 },
-    },
-  },
-};
-```
-
-### Upgrade offer
-
-The quickstart above. Signals that are followed by `upgrade.completed` grow heavier for this user; the ones that aren't shrink, even to negative.
-
-### Churn save
-
-```ts
-const churn = {
-  prior: 0.08,
-  priorStrength: 20,
-  halfLife: 14 * 24 * 60 * 60 * 1000,
-  signals: {
-    'session.short': 1,
-    'notifications.disabled': 3,
-    'export.all': 4, // taking their data with them
-    'feature.new.used': -2,
-  },
-  outcome: 'account.cancelled',
-  reveal: { threshold: 0.5, z: 1.64 }, // be surer before you offer a discount
-};
-```
-
-### Ad placement
-
-```ts
-import { presets } from 'oracular/presets';
-
-// The tuned preset (prior 0.048, strength 4, cart.added 2.3, from a real clickstream), plus your own signals.
-const willBuy = {
-  ...presets.willBuy,
-  signals: { ...presets.willBuy.signals, 'wishlist.added': 2, 'cart.emptied': -3 },
-};
-// shouldReveal(state, 'willBuy', now) → show the sponsored placement, then markRevealed.
-```
-
-More in the docs: [Recipes](https://yuribenjamin.github.io/oracular/guide/recipes) and the [Tuning guide](https://yuribenjamin.github.io/oracular/guide/tuning).
 
 ## Using with React
 

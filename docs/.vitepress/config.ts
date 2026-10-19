@@ -53,6 +53,7 @@ export default defineConfig({
           text: 'Getting started',
           items: [
             { text: 'Introduction', link: '/guide/introduction' },
+            { text: 'Is it for you?', link: '/guide/is-it-for-me' },
             { text: 'Installation', link: '/guide/installation' },
             { text: 'Quickstart', link: '/guide/quickstart' },
             { text: 'Presets', link: '/guide/presets' },
@@ -79,6 +80,7 @@ export default defineConfig({
             { text: 'Tuning guide', link: '/guide/tuning' },
             { text: 'Shadow mode', link: '/guide/shadow-mode' },
             { text: 'Case study: a clickstream', link: '/guide/case-study-clickstream' },
+            { text: 'Migrating from rules', link: '/guide/migrating-from-rules' },
             { text: 'Recipes', link: '/guide/recipes' },
             { text: 'Using with frameworks', link: '/guide/frameworks' },
           ],
