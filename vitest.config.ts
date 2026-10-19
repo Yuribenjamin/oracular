@@ -13,6 +13,10 @@ export default defineConfig({
         find: /^oracular\/presets$/,
         replacement: fileURLToPath(new URL('./src/presets.ts', import.meta.url)),
       },
+      {
+        find: /^oracular\/inspect$/,
+        replacement: fileURLToPath(new URL('./src/inspect.ts', import.meta.url)),
+      },
     ],
   },
   test: {

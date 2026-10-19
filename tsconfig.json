@@ -20,7 +20,8 @@
     "noEmit": true,
     "paths": {
       "oracular": ["./src/index.ts"],
-      "oracular/presets": ["./src/presets.ts"]
+      "oracular/presets": ["./src/presets.ts"],
+      "oracular/inspect": ["./src/inspect.ts"]
     }
   },
   "include": ["src"]

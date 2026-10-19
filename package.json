@@ -53,6 +53,17 @@
       },
       "default": "./dist/presets.cjs"
     },
+    "./inspect": {
+      "import": {
+        "types": "./dist/inspect.d.ts",
+        "default": "./dist/inspect.js"
+      },
+      "require": {
+        "types": "./dist/inspect.d.cts",
+        "default": "./dist/inspect.cjs"
+      },
+      "default": "./dist/inspect.cjs"
+    },
     "./config.schema.json": "./schema/config.schema.json",
     "./package.json": "./package.json"
   },
@@ -60,6 +71,9 @@
     "*": {
       "presets": [
         "./dist/presets.d.ts"
+      ],
+      "inspect": [
+        "./dist/inspect.d.ts"
       ]
     }
   },

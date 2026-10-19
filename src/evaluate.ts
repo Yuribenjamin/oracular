@@ -7,7 +7,7 @@ import {
   splitEvaluateOptions,
 } from './config';
 import { requireIntentConfig, requireState } from './state';
-import type { EngineState, EvaluateOptions, Evaluation } from './types';
+import type { EngineState, EvaluateOptions, Evaluation, Snapshot } from './types';
 
 /**
  * {@link predict}, {@link shouldReveal} and {@link explain} in one call, from a single decay
@@ -51,4 +51,31 @@ export function evaluate(
     reveal: decideReveal(prediction, reveal),
     explanation: buildExplanation(is, config, learning, split.explain),
   };
+}
+
+/**
+ * {@link evaluate} for every declared intent at once, in config order: the whole engine's view at
+ * one moment, as plain data. This is what to log, assert on, or hand to `renderInspector` from
+ * `oracular/inspect` for a live panel. Read-only.
+ *
+ * @param state - The current state. Not mutated.
+ * @param at - The time to evaluate at.
+ * @param opts - Reveal overrides and explain filters, applied to every intent.
+ * @returns `at` and one {@link IntentSnapshot} per intent.
+ * @throws `TypeError` when `state` is not an engine state, `at` is not finite, or `opts` is
+ *   malformed.
+ * @example
+ * ```ts
+ * for (const { intent, prediction, reveal } of inspect(state, Date.now()).intents) {
+ *   console.log(intent, prediction.p.toFixed(3), reveal ? 'reveal' : '');
+ * }
+ * ```
+ */
+export function inspect(state: EngineState, at: number, opts?: EvaluateOptions): Snapshot {
+  const s = requireState(state);
+  const intents = Object.keys(s.config.intents).map((intent) => ({
+    intent,
+    ...evaluate(s, intent, at, opts),
+  }));
+  return { at, intents };
 }

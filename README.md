@@ -256,6 +256,7 @@ shouldReveal(state, intent: string, at: number, opts?: RevealOptions): boolean
 markRevealed(state, intent: string, at: number): EngineState
 explain(state, intent: string, at: number, opts?: { nonZero?: boolean; limit?: number }): SignalExplanation[]
 evaluate(state, intent: string, at: number, opts?): { prediction, reveal, explanation }  // all three, one decay pass
+inspect(state, at: number, opts?): { at, intents: [{ intent, prediction, reveal, explanation }] }  // evaluate for every intent
 evidenceToReveal(intentConfig, opts?): number   // pseudo-counts at which shouldReveal first becomes true
 episodeClosed(prev, next): boolean               // did an episode close between two states?
 createRecord(state, event, { installId, mode }): EventRecord   // one recorder line: the event and what was decided
@@ -375,6 +376,8 @@ explain(state, 'upgrade', Date.now());
 ```
 
 Rows are sorted by the size of their impact. `limit.hit` has no history yet, so its effective weight is exactly the initial one. `pricing.viewed` was followed by an upgrade in six of its seven sessions while the three sessions without it saw one upgrade, so it learned a weight above the initial 3. `export.clicked` appeared in every session: it has no counterfactual, so whatever its hit rate, its weight stands at exactly the initial 1 until a session happens without it. See [Episodes & learning](https://yuribenjamin.github.io/oracular/guide/concepts/episodes-and-learning) for why learning needs contrast.
+
+`inspect(state, now)` returns all of that for every intent as one object, and `oracular/inspect` renders it as a live, framework-free panel: `mountInspector(element, () => inspect(state, Date.now()))`, then `update()` after each `observe`. See [Inspect](https://yuribenjamin.github.io/oracular/guide/inspect).
 
 ## Shadow mode, replay and tune
 

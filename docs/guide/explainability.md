@@ -60,3 +60,5 @@ const { prediction, reveal, explanation } = evaluate(state, 'upgrade', Date.now(
 ## Reference
 
 - [`explain`](/api/functions/explain), [`ExplainOptions`](/api/interfaces/ExplainOptions), [`evaluate`](/api/functions/evaluate), [`SignalExplanation`](/api/interfaces/SignalExplanation).
+
+To watch all of this change as events arrive, [`inspect`](/guide/inspect) returns every intent's prediction, gate and explanation as one object, and `oracular/inspect` renders it as a live panel.

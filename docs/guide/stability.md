@@ -5,6 +5,7 @@ What you can rely on today, what may still change before 1.0, and what 1.0 will 
 ## What is public API
 
 - **Every export of `oracular`** and of `oracular/presets`, with the behaviour its documentation describes: the functions, the types, `STATE_VERSION` and `RECORD_VERSION`. The exports test in the repository pins the list; adding to it is an API decision, removing from it follows the deprecation rule below.
+- **`oracular/inspect` is experimental.** `inspect` in the main entry is API like any other export; the renderer and the mount helper in the subpath may change their markup, styles and options in a minor without the deprecation rule, until this page says otherwise.
 - **The serialized state.** The shape `serialize` writes and `deserialize` reads, versioned by `STATE_VERSION`.
 - **The recorder format**, versioned by `RECORD_VERSION`: the lines `createRecord` and `createEndRecord` write, which `oracular replay` and `oracular tune` read.
 - **The config JSON Schema** at `oracular/config.schema.json`.
@@ -43,10 +44,10 @@ The other direction is the rollback hazard: a release that cannot read a newer s
 | --- | --- |
 | The stability policy, written down | this page |
 | Property-based tests for purity, monotone decay, the α/β invariant, serialize/deserialize identity, and `shouldReveal ⇒ lower ≥ threshold` | open |
-| A framework-free debug overlay showing `predict` and `explain` live | open |
+| A framework-free debug overlay showing `predict` and `explain` live | done: [Inspect](/guide/inspect) |
 | A public case study produced by `replay` on a production shadow log, and two production users referenced | open; a [reproducible one on a public clickstream](/guide/case-study-clickstream) exists |
 | The tolerant state reader: a release reads the next version, so states move both ways one step at a time | done in 0.7 |
-| A size ceiling, decided once: the core, meaning the whole `oracular` entry alone, stays under 7 kB minified and gzipped (6.65 kB today; each release's budget is the shipped size plus about 10% and stops at this number). Subpaths have their own rows in the budget file and their own ceilings, 1 kB for `oracular/presets`; adapters live in their own packages | holding |
+| A size ceiling, decided once: the core, meaning the whole `oracular` entry alone, stays under 7 kB minified and gzipped (6.65 kB today; each release's budget is the shipped size plus about 10% and stops at this number). Subpaths have their own rows in the budget file and their own ceilings, 1 kB for `oracular/presets` and 1.5 kB for `oracular/inspect`; adapters live in their own packages | holding |
 | Housekeeping green: pinned actions, CodeQL, Scorecard, publish only from CI | holding |
 
 The [roadmap](/guide/roadmap) carries the same list with the reasoning behind each item.

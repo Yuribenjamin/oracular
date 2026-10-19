@@ -440,6 +440,27 @@ export interface EndRecord {
 /** A line of a recorder log. */
 export type RecorderRecord = EventRecord | EndRecord;
 
+/** One intent in a {@link Snapshot}: its name and what {@link evaluate} says about it. */
+export interface IntentSnapshot extends Evaluation {
+  intent: string;
+}
+
+/**
+ * Every intent's prediction, gate and explanation at one moment, as {@link inspect} returns it:
+ * what a debug panel shows, what a test asserts on, what `console.table` prints.
+ *
+ * @example
+ * ```ts
+ * const { intents } = inspect(state, Date.now());
+ * console.table(intents.map((i) => ({ intent: i.intent, p: i.prediction.p, reveal: i.reveal })));
+ * ```
+ */
+export interface Snapshot {
+  at: number;
+  /** In config order. */
+  intents: IntentSnapshot[];
+}
+
 /**
  * The intents `oracular/presets` ships. Each is a plain {@link IntentConfig} to spread into your
  * config and override; `presetSources` there says where its numbers come from.

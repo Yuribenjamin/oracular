@@ -49,6 +49,8 @@ src/            the library (zero runtime dependencies, no I/O of any kind)
   validate.ts   validateConfig
   units.ts      ms, durations in milliseconds
   presets.ts    the `oracular/presets` entry: four starting configs and where their numbers come from
+  inspect.ts    the `oracular/inspect` entry: renderInspector and mountInspector, an HTML view of
+                the snapshot `inspect` (main entry) returns; no DOM API, no timer, no engine code
 cli/            the `oracular` bin (`oracular replay`, `oracular tune`): Node only, compiled with
                 tsconfig.cli.json, not part of the library; it imports 'oracular' like any user,
                 plus `lift` and `laplace` from src/math.ts so its numbers are the engine's

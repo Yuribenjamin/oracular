@@ -19,5 +19,12 @@
     "import": "*",
     "gzip": true,
     "limit": "1 kB"
+  },
+  {
+    "name": "inspect subpath (ESM, min+gzip)",
+    "path": "dist/inspect.js",
+    "import": "*",
+    "gzip": true,
+    "limit": "1.5 kB"
   }
 ]

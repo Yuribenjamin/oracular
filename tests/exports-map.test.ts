@@ -48,15 +48,30 @@ describe('package.json exports', () => {
       default: './dist/presets.cjs',
     });
     expect(presets.default).toBe('./dist/presets.cjs');
+    for (const sub of ['inspect'] as const) {
+      const entry = pkg.exports[`./${sub}`] as Record<string, unknown>;
+      expect(Object.keys(entry)).toStrictEqual(['import', 'require', 'default']);
+      expect(entry.import).toStrictEqual({
+        types: `./dist/${sub}.d.ts`,
+        default: `./dist/${sub}.js`,
+      });
+      expect(entry.require).toStrictEqual({
+        types: `./dist/${sub}.d.cts`,
+        default: `./dist/${sub}.cjs`,
+      });
+    }
     expect(Object.keys(pkg.exports)).toStrictEqual([
       '.',
       './presets',
+      './inspect',
       './config.schema.json',
       './package.json',
     ]);
-    // TypeScript's node10 resolution ignores the exports map; typesVersions points it at the
-    // subpath's declarations so an old tsconfig still gets types for 'oracular/presets'.
-    expect(pkg.typesVersions).toStrictEqual({ '*': { presets: ['./dist/presets.d.ts'] } });
+    // TypeScript's node10 resolution ignores the exports map; typesVersions points it at each
+    // subpath's declarations so an old tsconfig still gets types for them.
+    expect(pkg.typesVersions).toStrictEqual({
+      '*': { presets: ['./dist/presets.d.ts'], inspect: ['./dist/inspect.d.ts'] },
+    });
   });
 
   it('resolves to the right file for each kind of consumer', () => {

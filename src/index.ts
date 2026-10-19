@@ -1,4 +1,4 @@
-export { evaluate } from './evaluate';
+export { evaluate, inspect } from './evaluate';
 export { evidenceToReveal } from './evidence';
 export { explain } from './explain';
 export { endEpisode, episodeClosed, observe } from './observe';
@@ -19,6 +19,7 @@ export type {
   ExplainOptions,
   IntentConfig,
   IntentEvent,
+  IntentSnapshot,
   IntentState,
   LearningConfig,
   Migrate,
@@ -34,6 +35,7 @@ export type {
   SignalContribution,
   SignalExplanation,
   SignalRecord,
+  Snapshot,
 } from './types';
 export { ms, type Units } from './units';
 export { validateConfig } from './validate';

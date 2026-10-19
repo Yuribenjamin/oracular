@@ -75,6 +75,7 @@ export default defineConfig({
           items: [
             { text: 'Persistence & migration', link: '/guide/persistence' },
             { text: 'Explainability', link: '/guide/explainability' },
+            { text: 'Inspect: see explain live', link: '/guide/inspect' },
             { text: 'Tuning guide', link: '/guide/tuning' },
             { text: 'Shadow mode', link: '/guide/shadow-mode' },
             { text: 'Case study: a clickstream', link: '/guide/case-study-clickstream' },

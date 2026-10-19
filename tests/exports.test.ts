@@ -15,6 +15,7 @@ it('exports exactly the public surface', () => {
       'evaluate',
       'evidenceToReveal',
       'explain',
+      'inspect',
       'markRevealed',
       'ms',
       'observe',
