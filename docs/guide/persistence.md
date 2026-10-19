@@ -10,7 +10,7 @@ import { serialize } from 'oracular';
 localStorage.setItem('oracular', serialize(state));
 ```
 
-[`serialize`](/api/functions/serialize) is `JSON.stringify` after a shape check. The output contains your config snapshot, α and β per intent, per-signal contributions and hit/miss counts, the episodes waiting under `attribution`, the open episode, and the reveal and outcome timestamps. It never contains event `props`. For a handful of intents it is a few kilobytes.
+[`serialize`](/api/functions/serialize) is `JSON.stringify` after a shape check. The output contains your config snapshot, α and β per intent, per-signal contributions and hit/miss counts, the episodes waiting under `attribution`, the open episode, and the reveal and outcome timestamps. It never contains event `props`. For a handful of intents it is a few kilobytes. Loading a state and saving it again produces the same string, so a save can be skipped when the string has not changed.
 
 Persist after every `observe` if writes are cheap (localStorage, an in-memory store flushed later), or debounce; always persist after `endEpisode`, and persist at once whenever [`episodeClosed(prev, next)`](/api/functions/episodeClosed) is true, since a close is where misses are recorded. On mobile, flush the pending save when the app goes to the background; see [Using with frameworks](/guide/frameworks#react-native).
 

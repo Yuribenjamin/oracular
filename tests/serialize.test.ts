@@ -66,6 +66,27 @@ describe('serialize / deserialize', () => {
     expect(observe(back, event)).toStrictEqual(observe(s, event));
   });
 
+  it('keeps the open episode in first-touch order on load, so a save after a load is the same string', () => {
+    // Two intents declared in one order and touched in the other.
+    const two = upgradeConfig({
+      intents: {
+        ...config.intents,
+        churn: { prior: 0.1, priorStrength: 5, halfLife: DAY, signals: { 'session.short': 1 } },
+      },
+    });
+    let s = createState(two);
+    s = observe(s, { name: 'session.short', at: T });
+    s = observe(s, { name: 'pricing.viewed', at: T + MINUTE });
+    assertInvariants(s);
+    expect(Object.keys(s.episode.intents)).toStrictEqual(['churn', 'upgrade']);
+    const json = serialize(s);
+    for (const back of [load(json), load(json, { config: two })]) {
+      expect(Object.keys(back.episode.intents)).toStrictEqual(['churn', 'upgrade']);
+      expect(back).toStrictEqual(s);
+      expect(serialize(back)).toBe(json);
+    }
+  });
+
   it('never stores event props', () => {
     let s = createState(config);
     s = observe(s, {
