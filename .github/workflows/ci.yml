@@ -31,6 +31,19 @@ jobs:
       # Bundle budget, then the packed tarball itself: exact file list, publint, attw.
       - run: npm run size
       - run: npm run pack:check
+      # @oracular/react: typecheck and tests resolve 'oracular' to src/; build, smoke, size and
+      # pack:check resolve it through the workspace link to the dist built above.
+      - run: npm run typecheck -w packages/react
+      - run: npm test -w packages/react
+      - run: npm run build -w packages/react
+      - run: npm run smoke -w packages/react
+      - run: npm run size -w packages/react
+      - run: npm run pack:check -w packages/react
+      # The example app type-checks and bundles against both packages' published declarations.
+      - run: npm run build -w examples/react-vite
+      # The package declares react >=18 and develops on 19, so its tests run on the floor too. This
+      # reinstalls React 18 without saving and restores the tree with npm ci afterwards: last.
+      - run: npm run test:react18 -w packages/react
       - if: matrix.node == 22
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
