@@ -6,7 +6,7 @@ The weights you write in the config are guesses. oracular corrects them with the
 
 An **episode** is a session. Any event opens one if none is open and extends it otherwise. An episode ends when:
 
-- your app calls [`endEpisode`](/api/functions/endEpisode) (tab closed, app backgrounded, user signed out), or
+- your app calls [`endEpisode`](/api/functions/endEpisode) (sign-out), or
 - `config.episodeTimeout` is set and the next event arrives after a longer idle gap. The old episode is then closed at the moment it timed out, before the new event is applied.
 
 One episode is open at a time, shared by all intents. Within it, every intent remembers which of its signals it has **seen**, and how many times, so that [repeats within the episode add less](/guide/concepts/signals-and-weights#repeats-within-an-episode). Learning counts each seen signal once per episode, however often it occurred.
@@ -138,7 +138,7 @@ prev.episode.startedAt !== null && next.episode.startedAt !== prev.episode.start
 
 Two things, and the first is the one people forget:
 
-1. **Let episodes end.** Without `endEpisode` or `episodeTimeout`, nothing ever gets a miss, every seen signal looks perfectly predictive, and the base rate climbs to 100%. On the web, call `endEpisode` when the session ends and set `episodeTimeout` as a safety net. On mobile, rely on `episodeTimeout` alone; ending the episode on every app switch would split sessions (see [Using with frameworks](/guide/frameworks#react-native)).
+1. **Let episodes end.** Without `endEpisode` or `episodeTimeout`, nothing ever gets a miss, every seen signal looks perfectly predictive, and the base rate climbs to 100%. Set `episodeTimeout` and rely on it, on the web as on mobile, and call `endEpisode` on sign-out. Ending the episode on `pagehide` or on every app switch would split sessions (see [Using with frameworks](/guide/frameworks)).
 2. **Emit the outcome event** with the exact name in `outcome`. It is an ordinary `observe()` call; nothing else is needed.
 
 ## Reference

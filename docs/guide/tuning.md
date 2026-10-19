@@ -113,7 +113,7 @@ How long to stay quiet after a reveal and after the outcome. Defaults to `halfLi
 
 ## `episodeTimeout`
 
-The idle gap that ends a session on its own. 30 minutes is the usual web convention; on mobile, call `endEpisode` when the app goes to the background and keep a timeout as a safety net. Without episodes ending, nothing is ever a miss and learning cannot work.
+The idle gap that ends a session on its own. 30 minutes is the usual web convention. Set it everywhere and let it do the work; calling `endEpisode` on `pagehide` or when the app goes to the background would split sessions. Without episodes ending, nothing is ever a miss and learning cannot work.
 
 ## `attribution`
 

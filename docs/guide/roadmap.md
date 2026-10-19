@@ -6,7 +6,7 @@ Oracular is an on-device intent engine: your app learns when the user is ready, 
 
 - **Nothing leaves the device.** No feature may require a network call, a vendor, a device fingerprint, or cross-user data. Requests that need any of those get a polite no, however reasonable they sound.
 - **Pure core, thin helpers.** The engine stays `(state, event) → state`. Anything with I/O lives outside the core, in documented patterns or small optional helpers.
-- **Earn features from integrations.** A feature enters the roadmap when a real app needed it, not when it sounds useful. Two production integrations exist today; the third decides the shape of any framework binding.
+- **Earn features from integrations.** A feature enters the roadmap when a real app needed it, not when it sounds useful. Two production integrations exist today; their common shape became the store behind `@oracular/react`, and the Vue composable follows the same store.
 - **Honest about the model.** The docs say what the engine can and cannot learn, and every number in a tuning table is generated from the engine's own math.
 
 ## Done: 0.3
@@ -47,8 +47,8 @@ The theme is **promises we can keep**. 1.0 means the API and the state format ar
 
 ## After 1.0
 
-- **Framework bindings** (`@oracular/react`, `@oracular/vue`) only once a third integration shows what the common hook is. Note for whoever builds them: do not end episodes on background or `visibilitychange`; a short app switch is not a session boundary. Flush persistence and let `episodeTimeout` close idle episodes.
-- **Persistence helpers** for localStorage, AsyncStorage and IndexedDB, as separate tiny packages, if integrations keep rewriting them.
+- **`@oracular/vue`**, a composable over the framework-free store that `@oracular/react` ships (`createIntentStore`). React shipped first because both production integrations are React apps. The rule the store embodies holds for every binding: never end an episode on background, `pagehide` or `visibilitychange`; a short app switch is not a session boundary. Flush persistence and let `episodeTimeout` close idle episodes.
+- **Persistence adapters** for localStorage, AsyncStorage and MMKV ship inside `@oracular/react`; an IndexedDB adapter, or a framework-free adapter package, if an integration asks for one.
 - **Playground upgrade.** Paste a recorder log, scrub a timeline, drag sliders for weights, half-life and threshold, and watch p and the lower bound move.
 - **Project structure.** A GitHub organization and a second maintainer when a contributor shows up; GOVERNANCE.md says how.
 
