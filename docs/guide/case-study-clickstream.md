@@ -103,6 +103,49 @@ The tuned config is 10% better than the base rate, and a reveal at threshold 0.3
 
 Per-user learning is worth 1.1% of the score here and two points of precision. That is the expected size: 87% of these visitors have a single session, so for most of them the engine never sees a verdict.
 
+## The rule a skeptic would write
+
+Every reviewer asks the same question: would a hand-written rule do as well? The obvious one here is *reveal when `cart.added` has happened k times in this session*. `baseline-rules.mjs` scores it exactly as replay scores a reveal: the same 30-minute sessions, an order within a day counts, no second reveal for a day after a reveal or an order, and windows that run past the end of the log are not scored. A rule has no probability, so there is no Brier score to compare; precision and recall at matching operating points are the fair test.
+
+| policy | reveals | precision | recall | median lead |
+| --- | --- | --- | --- | --- |
+| rule: `cart.added` ≥ 1 in a session | 20329 | 27.6% | 79.2% | 5 min |
+| oracular, threshold 0.3, `z` 0 | 20307 | 27.6% | 79.1% | 5 min |
+| rule: `cart.added` ≥ 2 | 4025 | 27.9% | 16.7% | 10 min |
+| oracular, threshold 0.5, `z` 0 | 3063 | 26.2% | 14.3% | 9 min |
+| rule: `cart.added` ≥ 3 | 1702 | 27.8% | 7.1% | 12 min |
+| oracular, threshold 0.3, default `z`, learning off | 1690 | 27.3% | 6.7% | 11 min |
+| **oracular, threshold 0.3, default `z`** | **1688** | **29.0%** | **8.9%** | **11 min** |
+
+Read the ties first. For a visitor the engine has never seen, the tuned gate *is* the rule: with one signal left in the config, "p and its lower bound clear 0.3" means "the third cart add of the session", and with the confidence gate off it means "the first". The rows pair up, and oracular with learning switched off lands within half a point of the rule on both measures. Nothing else would be honest: a Bayesian gate over one signal and a counter over one signal are the same policy until there is something to learn.
+
+Then read where they part. At the same 1,690 reveals, learning lifts precision from 27.3% to 29.0% and recall from 6.7% to 8.9%, against a rule that cannot move. The gain is small because 87% of these visitors have one session. Where visitors come back, the gap is the point: among the 29,391 holdout visitors with three or more sessions, 4,844 orders:
+
+| policy, returning visitors only | reveals | precision | recall | median lead |
+| --- | --- | --- | --- | --- |
+| rule: `cart.added` ≥ 3 | 721 | 34.7% | 8.4% | 17 min |
+| stateful rule: ≥ 3, unless 3+ cart sessions without an order since the last order | 664 | 36.3% | 8.2% | 19 min |
+| stateful rule: ≥ 3, unless 2+ fruitless cart sessions | 621 | 37.7% | 7.9% | 19 min |
+| stateful rule: ≥ 3, unless 1+ fruitless cart session | 508 | 39.2% | 6.4% | 20 min |
+| oracular, threshold 0.3, learning off | 720 | 34.0% | 7.9% | 19 min |
+| **oracular, threshold 0.3, tuned config as printed** | **718** | **38.0%** | **12.0%** | **16 min** |
+| oracular, threshold 0.4 | 240 | 37.9% | 4.5% | 28 min |
+| oracular, threshold 0.5 | 36 | 41.7% | 1.0% | 14 min |
+| oracular, threshold 0.3, `learning.priorEpisodes` 5 | 703 | 39.5% | 14.3% | 17 min |
+| oracular, threshold 0.3, `priorEpisodes` 3 | 687 | 41.2% | 16.0% | 17 min |
+| **oracular, threshold 0.3, `priorEpisodes` 3, `gain` 3** | **829** | **46.4%** | **24.8%** | **16 min** |
+| oracular, threshold 0.4, `priorEpisodes` 3, `gain` 3 | 292 | 53.1% | 13.0% | 25 min |
+
+At the same number of reveals as the plain rule, the printed config has 3.3 points more precision and catches 43% more orders, because the engine has learned which of these visitors fill carts and never buy and which buy whenever they do. The visitor from the next section with 39 cart sessions and about nine orders needs more than three cart adds before the engine speaks; the one with 93 hits and one miss needs fewer. A rule treats them alike.
+
+The next skeptic asks whether that is Bayesian learning or just having memory, so the table has a stateful rule too: the third cart add, unless this visitor has already had N cart sessions without an order since their last order. Memory does buy precision, and at N = 1 the rule is a point the printed config does not beat: 39.2% against 38.0%, at half the recall. Nor does raising oracular's threshold reach it. With one signal in the config, a higher threshold only demands a fourth or fifth cart add in the session, so the threshold rows trade recall away for nothing: 0.4 is less precise than 0.3 and catches a third of the orders. The threshold is the wrong knob for this question; it moves the gate, not the memory.
+
+The knob that matches the rule's memory is the learner's own: `learning.priorEpisodes`, how many episodes of a visitor's history it takes to weigh as much as the population's weight, and `learning.gain`, how far that history may move the weight. `tune` does not fit either, so these rows were chosen on the fit half's returning visitors and are quoted here on the holdout's, which the choice never saw. Every one of them beats every rule point on both measures at once. With `priorEpisodes` 3 and `gain` 3 the engine trusts a visitor's history after three sessions and lets it triple a weight: 829 reveals at 46.4% precision catching 24.8% of orders, against the best rule's 39.2% and 6.4%; and its Brier score improves too, 0.1140 against 0.1165 for the printed config. On the whole holdout the same setting scores 0.0410 against 0.0416, 33.5% precision and 15.8% recall at 0.3 against 29.0% and 8.9%. The frontier is not one point oracular happens to hold; the rule's whole curve sits below it.
+
+That is also the answer to the clause the next skeptic will add. Skip after N fruitless sessions, fire earlier for past buyers, forgive after an order, weigh recent sessions more: each is a hand-coded piece of the learner, with its own constant to pick and its own bug to find. The table is what you get for writing it down once as math, with two constants, and letting the data set them.
+
+Three other things the rule does not have, none of which shows in this table: a calibrated probability at every event (the Brier scores above), a gate that moves to another operating point by changing a number rather than rewriting the rule (the last row), and decay, which here is a one-hour half-life that lets the morning's two cart adds fade before the evening's one rather than count toward it. On a population with longer intents and more returning users, those are the rows to add.
+
 ## Attribution, on and off
 
 [Cross-episode attribution](/guide/concepts/episodes-and-learning#credit-across-episodes) lets a session that ends without the order wait for it. On this data, 17% of orders follow an earlier cart-but-no-order session within a week, so there is something to credit. Scored on the holdout with the tuned config:
@@ -143,6 +186,7 @@ npx oracular tune out/fit.ndjson --config examples/retailrocket/start.config.jso
 # paste the printed config into out/tuned.config.json
 npx oracular replay out/holdout.ndjson --config out/tuned.config.json
 node examples/retailrocket/returning-buyers.mjs out/holdout.ndjson out/tuned.config.json
+node examples/retailrocket/baseline-rules.mjs out/holdout.ndjson 1 2 3 3:1 3:2 3:3   # k, or k:N for the stateful rule
 ```
 
-`convert.mjs` also writes `out/stats.json`, the session counts quoted above.
+`convert.mjs` also writes `out/stats.json`, the session counts quoted above. For the returning-visitor rows, filter each half to visitors with three or more sessions before running `replay` and `baseline-rules.mjs` on it; the learning rows add `"learning": { "priorEpisodes": 3, "gain": 3 }` to the tuned config.

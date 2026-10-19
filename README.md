@@ -73,7 +73,7 @@ The weights above are a guess, and the point of oracular is that you do not have
 3. **Tune.** `npx oracular tune shadow.ndjson --config oracular.config.json` reads what the engine itself counted across your users and prints the config to ship: the base rate as the prior, each signal's measured lift as its weight, the half-life that predicts the log best, with sample sizes and intervals. `npx oracular replay` scores any config on the same log before you commit to it.
 4. **Ship, and let it learn.** The fitted config is the population's answer; on each device the engine corrects it from that user's own outcomes.
 
-On a public clickstream of 2.7 million events, a hand-written config scored worse than always guessing the base rate, and the tuned one 10% better, with a reveal followed by an order six times as often as chance. The [case study](https://yuribenjamin.github.io/oracular/guide/case-study-clickstream) has every number; the [Shadow mode guide](https://yuribenjamin.github.io/oracular/guide/shadow-mode) has the workflow.
+On a public clickstream of 2.7 million events, a hand-written config scored worse than always guessing the base rate, and the tuned one 10% better, with a reveal followed by an order six times as often as chance. Against the rule a skeptic would write, reveal on the third cart add, it ties for first-time visitors, as it must, and for returning ones catches 43% more orders at three points higher precision, because it has learned who fills carts without buying. The [case study](https://yuribenjamin.github.io/oracular/guide/case-study-clickstream) has every number; the [Shadow mode guide](https://yuribenjamin.github.io/oracular/guide/shadow-mode) has the workflow.
 
 ## Contents
 
