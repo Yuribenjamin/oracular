@@ -10,6 +10,7 @@ import {
   markRevealed,
   observe,
   predict,
+  type RevealOptions,
   serialize,
   shouldReveal,
 } from '../../../../src/index';
@@ -41,6 +42,10 @@ const configText = ref(JSON.stringify(defaultConfig, null, 2));
 const configError = ref<string | null>(null);
 const configNote = ref<string | null>(null);
 const log = ref<string[]>([]);
+// How `lower` is computed, passed per call so the config above stays as written.
+const bound = ref<'normal' | 'exact'>('normal');
+const revealOpts = computed<RevealOptions>(() => ({ bound: bound.value }));
+watch(bound, (b) => note(`bound: '${b}'`));
 
 const intentNames = computed(() => Object.keys(state.value.config.intents));
 watch(intentNames, (names) => {
@@ -66,8 +71,12 @@ const outcomeButtons = computed(() => {
   return [...seen.entries()].map(([name, intents]) => ({ name, hint: `outcome of ${intents.join(', ')}` }));
 });
 
-const prediction = computed(() => (intentName.value ? predict(state.value, intentName.value, now.value) : null));
-const fires = computed(() => (intentName.value ? shouldReveal(state.value, intentName.value, now.value) : false));
+const prediction = computed(() =>
+  intentName.value ? predict(state.value, intentName.value, now.value, revealOpts.value) : null,
+);
+const fires = computed(() =>
+  intentName.value ? shouldReveal(state.value, intentName.value, now.value, revealOpts.value) : false,
+);
 const rows = computed(() => (intentName.value ? explain(state.value, intentName.value, now.value) : []));
 const intentState = computed(() => (intentName.value ? state.value.intents[intentName.value] : undefined));
 const episode = computed(() => state.value.episode);
@@ -205,9 +214,15 @@ function restoreDefaultConfig(): void {
           suppressed until {{ fmtTime(prediction.suppressedUntil) }}
         </span>
       </div>
+      <div class="pg-bound">
+        <span class="pg-label">lower bound</span>
+        <label><input v-model="bound" type="radio" name="pg-bound" value="normal" /> normal: p − z·sd</label>
+        <label><input v-model="bound" type="radio" name="pg-bound" value="exact" /> exact: the Beta quantile at Φ(−z)</label>
+        <span class="pg-muted">passed as <code>{ bound: '{{ bound }}' }</code> to predict and shouldReveal</span>
+      </div>
       <dl class="pg-stats">
         <div><dt>p</dt><dd class="pg-mono">{{ fmt(prediction.p) }}</dd></div>
-        <div><dt>lower (p − z·sd)</dt><dd class="pg-mono">{{ fmt(prediction.lower) }}</dd></div>
+        <div><dt>lower ({{ bound === 'exact' ? 'Beta quantile at Φ(−z)' : 'p − z·sd' }})</dt><dd class="pg-mono">{{ fmt(prediction.lower) }}</dd></div>
         <div><dt>sd</dt><dd class="pg-mono">{{ fmt(prediction.sd) }}</dd></div>
         <div><dt>confidence</dt><dd class="pg-mono">{{ fmt(prediction.confidence) }}</dd></div>
         <div><dt>evidence (α + β)</dt><dd class="pg-mono">{{ fmt(prediction.evidence, 2) }}</dd></div>
@@ -390,6 +405,19 @@ function restoreDefaultConfig(): void {
 .pg-no {
   background: var(--vp-c-default-soft);
   color: var(--vp-c-text-1);
+}
+.pg-bound {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+  font-size: 0.875rem;
+}
+.pg-bound label {
+  cursor: pointer;
+}
+.pg-bound input {
+  margin-right: 0.3rem;
 }
 .pg-stats {
   display: grid;
