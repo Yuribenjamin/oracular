@@ -105,6 +105,8 @@ Two things follow for tuning:
 
 Prefer a moderate `threshold` with the default `z` over a high threshold: raising the threshold is expensive, tightening the bound is cheap. For actions with a real cost to the user (an interruption, a discount), raise `z` to 1.64 or 2 first.
 
+One diagnostic: if raising the threshold costs recall and buys no precision, the config has effectively one signal and the gate has become a counter. p then moves only with how often that signal has happened, so a higher threshold only asks for more of it. On the returning visitors of the [clickstream case study](/guide/case-study-clickstream#the-rule-a-skeptic-would-write), moving the printed config from 0.3 to 0.4 takes precision from 38.0% to 37.9% and recall from 12.0% to 4.5%. The fixes are more signals, or faster learning (`learning.priorEpisodes` and `learning.gain`), not a higher threshold.
+
 ## `cooldown`
 
 How long to stay quiet after a reveal and after the outcome. Defaults to `halfLife`. For a tip that may be shown again next week, a week; for an upgrade offer after a purchase, consider longer than the half-life; for a feature hint that should appear once, something very long with `markRevealed` as your "seen it" flag.
