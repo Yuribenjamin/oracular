@@ -43,7 +43,7 @@ The other direction is the rollback hazard: a release that cannot read a newer s
 | criterion | status |
 | --- | --- |
 | The stability policy, written down | this page |
-| Property-based tests for purity, monotone decay, the α/β invariant, serialize/deserialize identity, and `shouldReveal ⇒ lower ≥ threshold` | open |
+| Property-based tests for purity, monotone decay, the α/β invariant, serialize/deserialize identity, and `shouldReveal ⇒ lower ≥ threshold` | done: [tests/property.test.ts](https://github.com/Yuribenjamin/oracular/blob/main/tests/property.test.ts) |
 | A framework-free debug overlay showing `predict` and `explain` live | done: [Inspect](/guide/inspect) |
 | A public case study produced by `replay` on a production shadow log, and two production users referenced | open; a [reproducible one on a public clickstream](/guide/case-study-clickstream) exists |
 | The tolerant state reader: a release reads the next version, so states move both ways one step at a time | done in 0.7 |

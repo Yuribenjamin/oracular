@@ -316,8 +316,14 @@ function reconcile(raw: EngineState, config: EngineConfig): EngineState {
         keep(stored.contributions, intent.signals),
       );
     }
-    const episode = getOwn(raw.episode.intents, name);
-    if (episode !== undefined && raw.episode.startedAt !== null) {
+  }
+
+  // The open episode's records stay in the order the intents were first touched, as `observe`
+  // writes them, so a save after a load is the same string; intents no longer declared are dropped.
+  if (raw.episode.startedAt !== null) {
+    for (const [name, episode] of Object.entries(raw.episode.intents)) {
+      const intent = getOwn(config.intents, name);
+      if (intent === undefined) continue;
       const seen = episode.seen.filter(
         (s, i) => hasOwn(intent.signals, s) && episode.seen.indexOf(s) === i,
       );
