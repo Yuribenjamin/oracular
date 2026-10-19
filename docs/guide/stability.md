@@ -38,7 +38,7 @@ The other direction is the rollback hazard: a release that cannot read a newer s
 
 ## What 1.0 means, and what it still needs
 
-1.0 means the API and the state format are commitments under the rules above: a breaking change to either needs a major. It is not a schedule; it is this list being true. Status as of 0.6:
+1.0 means the API and the state format are commitments under the rules above: a breaking change to either needs a major. It is not a schedule; it is this list being true. Status as of 0.7:
 
 | criterion | status |
 | --- | --- |
