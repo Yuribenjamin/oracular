@@ -66,14 +66,57 @@ nEff      = (nWith × nWithout) / (nWith + nWithout)             0 if either sid
 effective = (k × w₀ + nEff × learned) / (k + nEff)              k = learning.priorEpisodes
 ```
 
-Both rates are Laplace-smoothed (+1 / +2). Two knobs, both under `config.learning`:
+Both rates are Laplace-smoothed (+1 / +2). The formula shown is the default normalized difference. Learning options live under `config.learning`:
 
-- **`gain`** (default 2) caps how far a perfectly predictive signal can grow: `learned` lives in [−gain·|w₀|, gain·|w₀|].
+- **`gain`** (default 2) scales the learned estimate. With the default lift, it caps how far a perfectly predictive signal can grow: `learned` lives in [−gain·|w₀|, gain·|w₀|].
 - **`priorEpisodes`** (default 10) is how much contrast it takes for the user's history to weigh as much as your initial weight. The signal's strength (`w₀`) and your confidence in it (`k`) are deliberately separate things.
+
+## Choosing a lift formula
+
+Choose a formula when constructing the engine:
+
+```ts
+const state = createState({
+  intents,
+  learning: { lift: 'relative-lift' },
+});
+```
+
+`learning.lift` accepts these names. Here `q` is the outcome rate with the signal and `b` the
+outcome rate without it, both Laplace-smoothed as above.
+
+| Name | Formula | Common use case |
+| --- | --- | --- |
+| `'absolute-difference'` | `q − b` | A/B testing, changes in conversion probability |
+| `'relative-lift'` | `(q − b) / b` | Marketing, percentage improvement |
+| `'risk-ratio'` | `q / b` | Epidemiology, comparing risks |
+| `'log-lift'` | `ln(q / b)` | Statistical modeling, additive scoring |
+| `'odds-ratio'` | `(q / (1 − q)) / (b / (1 − b))` | Logistic regression, medical research |
+| `'normalized-difference'` (default) | `(q − b) / (1 − b)` if `q ≥ b`, else `(q − b) / b` | Bounded adaptive weighting |
+| `'association-rule'` | `P(A,B) / (P(A) × P(B))` | Market baskets, recommendations |
+
+For association-rule lift, `A` means the signal occurred and `B` means the outcome occurred.
+The engine adds one to each of the four cells of this contingency table, consistent with the
+Laplace smoothing of `q` and `b`. The overall outcome rate is therefore
+`P(B) = (outcomes + 2) / (episodes + 4)`, and lift is `q / P(B)`. This differs from the risk
+ratio, which compares with episodes without the signal. For example, two successful signal
+episodes and three unsuccessful episodes without it give `P(A,B) = 3/9`, `P(A) = 4/9`,
+`P(B) = 4/9`, and lift `27/16`.
+
+Omitting the option keeps the existing normalized difference exactly, including for saved states
+without the option. All formulas feed the same `gain × |w₀| × lift` and contrast blend. Ratios
+have a neutral value of **1**, stay positive below the baseline, and are used as written rather
+than shifted by 1. Differences and log lift have a neutral value of **0** and can be negative.
+Only normalized difference guarantees lift in [−1, 1]; with other choices `gain` is a multiplier,
+not a hard cap. Ratio/log inputs are clamped to `[Number.EPSILON, 1 − Number.EPSILON]` to keep
+arithmetic finite when large smoothed counts approach floating-point endpoints.
+
+`oracular tune` uses the selected formula for weights, candidate signals and intervals. Its
+fitted config weights stay within the accepted ±1e6 range even with unbounded formulas.
 
 ## Learning needs contrast
 
-In plain words: a signal is judged by comparing the sessions it appeared in with the sessions it did not appear in. Does the outcome happen more often when the signal is present than when it is absent? That is the only question the signal can answer, and both halves of it have to exist before the answer means anything.
+With the default lift, a signal is judged by comparing the sessions it appeared in with the sessions it did not appear in. Does the outcome happen more often when the signal is present than when it is absent? That is the only question the signal can answer, and both halves of it have to exist before the answer means anything.
 
 `nEff` is how much of both halves has been seen. It is the harmonic-mean-style count `(nWith × nWithout) / (nWith + nWithout)`: with 10 sessions on each side it is 5; with 1 on one side and 5 on the other it is 0.83; with 0 on either side it is 0. The blend then mixes your weight and the learned one in proportion to `k` against `nEff`, so:
 
@@ -81,7 +124,11 @@ In plain words: a signal is judged by comparing the sessions it appeared in with
 - A signal that has been **absent but never present** has nothing to learn from either; `learned` is 0 and `nEff` is 0.
 - A signal seen in one session and absent from five has a little contrast, and moves a little.
 
-The alternative, comparing a signal with the overall base rate, judges it partly against its own sessions and moves weights on data that cannot support a conclusion. Comparing against 50% wrongly reads every signal of a rare outcome as negative. The with-versus-without contrast, weighted by how much contrast exists, does neither.
+Using the overall base rate (as association-rule lift does) judges a signal partly against its
+own sessions, so its baseline moves with its prevalence. The default compares two disjoint
+groups instead. Every formula keeps the same contrast blend: without both groups, the initial
+weight stands. Comparing against a fixed 50% would wrongly read every signal of a rare outcome
+as negative.
 
 ## Worked example
 

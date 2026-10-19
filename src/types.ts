@@ -25,6 +25,16 @@ export interface RevealOptions {
   bound?: 'normal' | 'exact';
 }
 
+/** The formula used to compare outcome rates when learning signal weights. */
+export type LiftType =
+  | 'absolute-difference'
+  | 'relative-lift'
+  | 'risk-ratio'
+  | 'log-lift'
+  | 'odds-ratio'
+  | 'normalized-difference'
+  | 'association-rule';
+
 /**
  * How the engine learns from the user's own outcomes.
  *
@@ -37,9 +47,17 @@ export interface RevealOptions {
  * ```
  */
 export interface LearningConfig {
+  /**
+   * Lift formula. Default `'normalized-difference'` preserves the bounded [−1, 1] comparison.
+   * Other choices use their raw formulas: ratios have a neutral value of 1 and are not centered
+   * or capped. `'association-rule'` compares with the overall outcome rate; the others compare
+   * episodes with the signal against episodes without it. Ratio/log inputs are kept within
+   * [Number.EPSILON, 1 − Number.EPSILON] for finite arithmetic.
+   */
+  lift?: LiftType;
   /** Half-life of learned hit/miss counts, in the same unit as `at`. Omit for no forgetting. */
   halfLife?: number;
-  /** A perfectly predictive signal converges to `gain × |initial weight|`. Default 2; at most 1e6. */
+  /** Multiplier of `|initial weight| × lift`. With the default lift, caps the learned magnitude at `gain × |initial weight|`. Default 2; at most 1e6. */
   gain?: number;
   /** Pseudo-count behind the developer's initial weight: how many observed episodes it takes to weigh as much as the prior. Default 10; at most 1e6. */
   priorEpisodes?: number;

@@ -4,6 +4,7 @@ import type {
   ExplainOptions,
   IntentConfig,
   LearningConfig,
+  LiftType,
   RevealOptions,
 } from './types';
 import { isRecord } from './util';
@@ -33,7 +34,16 @@ export const INTENT_KEYS = [
   'reveal',
 ] as const;
 export const REVEAL_KEYS = ['threshold', 'z', 'cooldown', 'bound'] as const;
-export const LEARNING_KEYS = ['halfLife', 'gain', 'priorEpisodes'] as const;
+export const LEARNING_KEYS = ['halfLife', 'gain', 'priorEpisodes', 'lift'] as const;
+export const LIFT_TYPES: readonly LiftType[] = [
+  'absolute-difference',
+  'relative-lift',
+  'risk-ratio',
+  'log-lift',
+  'odds-ratio',
+  'normalized-difference',
+  'association-rule',
+];
 const EXPLAIN_KEYS = ['nonZero', 'limit'] as const;
 
 function typeError(path: string, message: string): never {
@@ -139,6 +149,12 @@ function normalizeLearning(value: unknown, path: string): LearningConfig {
   const record = expectRecord(value, path);
   expectKeys(record, LEARNING_KEYS, path);
   const out: LearningConfig = {};
+  if (record.lift !== undefined) {
+    if (!LIFT_TYPES.includes(record.lift as LiftType)) {
+      typeError(`${path}.lift`, `must be one of: ${LIFT_TYPES.join(', ')}`);
+    }
+    out.lift = record.lift as LiftType;
+  }
   if (record.halfLife !== undefined)
     out.halfLife = expectPositive(record.halfLife, `${path}.halfLife`);
   if (record.gain !== undefined) out.gain = expectBoundedPositive(record.gain, `${path}.gain`);
@@ -287,6 +303,7 @@ export function resolveReveal(
 }
 
 export interface ResolvedLearning {
+  lift: LiftType;
   /** null means learned counts never decay. */
   halfLife: number | null;
   gain: number;
@@ -295,6 +312,7 @@ export interface ResolvedLearning {
 
 export function resolveLearning(config: EngineConfig): ResolvedLearning {
   return {
+    lift: config.learning?.lift ?? 'normalized-difference',
     halfLife: config.learning?.halfLife ?? null,
     gain: config.learning?.gain ?? DEFAULT_GAIN,
     priorEpisodes: config.learning?.priorEpisodes ?? DEFAULT_PRIOR_EPISODES,

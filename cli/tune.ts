@@ -18,10 +18,12 @@ import {
   episodeClosed,
   type IntentConfig,
   type IntentState,
+  type LiftType,
   markRevealed,
   observe,
   predict,
 } from 'oracular';
+import { MAX_MAGNITUDE } from '../src/config';
 import { laplace, lift } from '../src/math';
 import { groupByInstall, type LogEntry } from './log';
 import { DEFAULT_THRESHOLD, replay } from './replay';
@@ -82,10 +84,10 @@ export interface SignalFit {
   /** Laplace-smoothed outcome rates with and without the signal, as the engine computes them. */
   qWith: number;
   qWithout: number;
-  /** The engine's lift of qWith over qWithout, in [−1, 1]; 0 for a signal never seen. */
+  /** The engine's selected lift; bounded to [−1, 1] only for normalized difference. 0 for a signal never seen. */
   lift: number;
   /**
-   * priorStrength × lift, rounded to two decimals; null when the signal was never seen, is
+   * priorStrength × lift, rounded to two decimals and capped to ±1e6; null when the signal was never seen, is
    * ubiquitous, or the weight rounds to 0. Null means the signal is left out of the fitted config.
    */
   weight: number | null;
@@ -230,6 +232,7 @@ function fitSignal(
   tally: Tally,
   strength: number,
   priorEpisodes: number,
+  liftType: LiftType,
 ): SignalFit {
   const hits = own(tally.hits, signal);
   const misses = own(tally.misses, signal);
@@ -239,10 +242,17 @@ function fitSignal(
   const qWith = laplace(hits, nWith);
   const qWithout = laplace(outcomesWithout, without);
   // As the engine: nothing is known about a signal until it has been seen in a completed episode.
-  const l = nWith === 0 ? 0 : lift(qWith, qWithout);
+  const baseline =
+    liftType === 'association-rule'
+      ? (hits + outcomesWithout + 2) / (nWith + without + 4)
+      : qWithout;
+  const l = nWith === 0 ? 0 : lift(qWith, baseline, liftType);
   const contrast = nWith + without === 0 ? 0 : (nWith * without) / (nWith + without);
   const [qLow, qHigh] = wilson(hits, nWith, Z90);
-  const rounded = Math.round(strength * l * 100) / 100;
+  const rounded = Math.max(
+    -MAX_MAGNITUDE,
+    Math.min(MAX_MAGNITUDE, Math.round(strength * l * 100) / 100),
+  );
   const share = tally.episodes === 0 ? 0 : nWith / tally.episodes;
   const ubiquitous = nWith > UBIQUITY_SHARE * tally.episodes;
   return {
@@ -258,8 +268,8 @@ function fitSignal(
     weight: nWith === 0 || ubiquitous || rounded === 0 ? null : rounded,
     share,
     ubiquitous,
-    low: strength * lift(qLow, qWithout),
-    high: strength * lift(qHigh, qWithout),
+    low: strength * lift(qLow, baseline, liftType),
+    high: strength * lift(qHigh, baseline, liftType),
     contrast,
     thin: contrast < priorEpisodes,
   };
@@ -359,6 +369,7 @@ export function tune(
   const normalized = base.config;
   const includeLive = options.includeLive === true;
   const priorEpisodes = normalized.learning?.priorEpisodes ?? DEFAULT_PRIOR_EPISODES;
+  const liftType = normalized.learning?.lift ?? 'normalized-difference';
 
   const skipped: { intent: string; reason: string }[] = [];
   const names = options.intents ?? Object.keys(normalized.intents);
@@ -483,10 +494,17 @@ export function tune(
     const prior = laplace(tally.outcomes, tally.episodes);
     const strength = fitStrength(plan.installs, intent.priorStrength);
     const signals = Object.keys(intent.signals).map((signal) =>
-      fitSignal(signal, intent.signals[signal] as number, tally, strength.value, priorEpisodes),
+      fitSignal(
+        signal,
+        intent.signals[signal] as number,
+        tally,
+        strength.value,
+        priorEpisodes,
+        liftType,
+      ),
     );
     const candidates = plan.candidates.map((signal) =>
-      fitSignal(signal, null, tally, strength.value, priorEpisodes),
+      fitSignal(signal, null, tally, strength.value, priorEpisodes, liftType),
     );
     const roundedPrior = Math.round(prior * 1e4) / 1e4;
     const fittedIntent: IntentConfig = {

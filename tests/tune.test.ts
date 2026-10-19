@@ -5,6 +5,7 @@ import {
   type EngineConfig,
   endEpisode,
   explain,
+  type LiftType,
   observe,
   type RecordMode,
   validateConfig,
@@ -88,6 +89,39 @@ const handLog = (mode: RecordMode = 'shadow'): LogEntry[] => [
 describe('tune, on a log small enough to count by hand', () => {
   const report = tune(deepFreeze(handLog()), buyConfig, { halfLives: [1e15] });
   const [fit] = report.intents;
+
+  it.each<[LiftType, number]>([
+    ['absolute-difference', 0.35],
+    ['relative-lift', 1.4],
+    ['risk-ratio', 2.4],
+    ['log-lift', Math.log(2.4)],
+    ['odds-ratio', 4.5],
+    ['normalized-difference', 0.35 / 0.75],
+    ['association-rule', 1.35],
+  ])('fits %s with the same formula as the engine', (lift, expected) => {
+    const config = { ...buyConfig, learning: { lift } };
+    const selected = tune(handLog(), config, { halfLives: [1e15], allEvents: true });
+    const x = selected.intents[0]!.signals.find((s) => s.signal === 'x')!;
+    expect(x.lift).toBeCloseTo(expected, 12);
+    expect(x.weight).toBe(Math.round(2 * expected * 100) / 100);
+    expect(Number.isFinite(x.low)).toBe(true);
+    expect(Number.isFinite(x.high)).toBe(true);
+    expect(selected.config.learning?.lift).toBe(lift);
+    expect(() => validateConfig(selected.config)).not.toThrow();
+  });
+
+  it('caps unbounded fitted weights at the accepted config magnitude', () => {
+    const config: EngineConfig = {
+      ...buyConfig,
+      learning: { lift: 'odds-ratio' },
+      intents: { buy: { ...buyConfig.intents.buy!, priorStrength: 1e6 } },
+    };
+    const selected = tune(handLog(), config, { halfLives: [1e15] });
+    const x = selected.intents[0]!.signals.find((s) => s.signal === 'x')!;
+    expect(x.lift).toBeCloseTo(4.5, 12);
+    expect(x.weight).toBe(1e6);
+    expect(() => validateConfig(selected.config)).not.toThrow();
+  });
 
   it('pools the engine’s own hits, misses and episode totals across installs', () => {
     expect(report.installs).toBe(2);

@@ -1,3 +1,5 @@
+import type { LiftType } from './types';
+
 /** 2^(−elapsed / halfLife). Returns 1 for zero, negative or non-finite elapsed time. */
 export function decayFactor(elapsed: number, halfLife: number): number {
   if (!(elapsed > 0) || !Number.isFinite(elapsed)) return 1;
@@ -136,10 +138,28 @@ export function laplace(successes: number, total: number): number {
 }
 
 /**
- * How far a rate `q` sits from a base rate `b`, scaled to [−1, 1]:
- * +1 when q is 1, 0 when q equals b, −1 when q is 0.
+ * Compares a rate `q` with baseline `b`. By default, scales the difference to [−1, 1].
+ * For association-rule lift, `b` must be the overall outcome rate rather than the rate without
+ * the signal: P(outcome | signal) / P(outcome) = P(signal, outcome) / (P(signal) P(outcome)).
+ * Ratio/log inputs are bounded away from 0 and 1 to keep learned weights finite even when a
+ * smoothed probability rounds to an endpoint. The default retains its original arithmetic.
  */
-export function lift(q: number, b: number): number {
+export function lift(q: number, b: number, type: LiftType = 'normalized-difference'): number {
+  if (type === 'absolute-difference') return q - b;
+  if (type !== 'normalized-difference') {
+    const rate = Math.max(Number.EPSILON, Math.min(1 - Number.EPSILON, q));
+    const base = Math.max(Number.EPSILON, Math.min(1 - Number.EPSILON, b));
+    switch (type) {
+      case 'relative-lift':
+        return (rate - base) / base;
+      case 'log-lift':
+        return Math.log(rate / base);
+      case 'odds-ratio':
+        return rate / (1 - rate) / (base / (1 - base));
+      default:
+        return rate / base;
+    }
+  }
   if (q >= b) return b >= 1 ? 0 : (q - b) / (1 - b);
   return b <= 0 ? 0 : (q - b) / b;
 }

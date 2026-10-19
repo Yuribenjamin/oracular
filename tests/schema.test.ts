@@ -2,7 +2,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { type EngineConfig, validateConfig } from 'oracular';
 import { describe, expect, it } from 'vitest';
-import { CONFIG_KEYS, INTENT_KEYS, LEARNING_KEYS, MAX_MAGNITUDE, REVEAL_KEYS } from '../src/config';
+import {
+  CONFIG_KEYS,
+  INTENT_KEYS,
+  LEARNING_KEYS,
+  LIFT_TYPES,
+  MAX_MAGNITUDE,
+  REVEAL_KEYS,
+} from '../src/config';
 import { clone, upgradeConfig } from './helpers';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -49,6 +56,15 @@ const property = (node: Schema, key: string): Schema => {
 const intentSchema = resolve(property(schema, 'intents').additionalProperties as Schema);
 const revealSchema = resolve(property(schema, 'reveal'));
 const learningSchema = resolve(property(schema, 'learning'));
+
+it('offers every lift formula accepted by the constructor', () => {
+  const selector = resolve(property(learningSchema, 'lift'));
+  expect(selector.type).toBe('string');
+  expect(selector.enum).toStrictEqual(LIFT_TYPES);
+  for (const lift of LIFT_TYPES) {
+    expect(validateConfig(upgradeConfig({ learning: { lift } })).learning?.lift).toBe(lift);
+  }
+});
 const weightSchema = resolve(property(intentSchema, 'signals').additionalProperties as Schema);
 
 describe('the config JSON Schema', () => {

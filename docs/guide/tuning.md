@@ -125,7 +125,12 @@ Off by default. How long a session's signals wait for the outcome after the sess
 
 There is no early dip: a weight does not move until the signal has been both present and absent, and the first confirmed session leaves it exactly where you set it. See [Episodes & learning](/guide/concepts/episodes-and-learning#early-episode-learning) for the numbers.
 
-`gain` (default 2): the most a signal can grow (or flip) relative to your weight. 1 means history can only shrink or flip within your scale; 3 lets a signal you underrated become a strong one.
+`gain` (default 2): the multiplier on the learned lift. With the default normalized difference,
+it is the most a signal can grow (or flip) relative to your weight. 1 means history can only
+shrink or flip within your scale; 3 lets a signal you underrated become a strong one. Select
+another formula with `learning.lift`; see [Choosing a lift formula](/guide/concepts/episodes-and-learning#choosing-a-lift-formula).
+Unbounded formulas use `gain` as a multiplier without a hard cap; raw ratios remain positive
+and have a neutral value of 1.
 
 With the default values, a signal that always precedes the outcome ends twenty sessions at 1.33× its initial weight, and one that never does ends at −0.33×. The derivation is on [Episodes & learning](/guide/concepts/episodes-and-learning).
 

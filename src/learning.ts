@@ -33,7 +33,7 @@ export interface SignalWeights {
 
 /**
  * initial:   the developer's weight w0.
- * learned:   gain · |w0| · lift(qWith, qWithout), where qWith is the Laplace-smoothed outcome
+ * learned:   gain · |w0| · the configured lift, where qWith is the Laplace-smoothed outcome
  *            rate of episodes in which the signal was seen (hits / (hits + misses)) and
  *            qWithout the Laplace-smoothed outcome rate of the intent's other episodes
  *            (episodes without the signal). 0 until the signal has completed an episode.
@@ -62,7 +62,13 @@ export function signalWeights(
   const outcomesWithout = Math.min(nWithout, Math.max(0, state.episodes.hits - record.hits));
   const qWithout = laplace(outcomesWithout, nWithout);
   // Nothing has been learned about a signal until it has been seen in a completed episode.
-  const learned = nWith === 0 ? 0 : learning.gain * Math.abs(initial) * lift(qWith, qWithout);
+  // +1 in each cell of the signal × outcome table agrees with the two Laplace-smoothed rates.
+  const baseline =
+    learning.lift === 'association-rule'
+      ? (record.hits + outcomesWithout + 2) / (nWith + nWithout + 4)
+      : qWithout;
+  const learned =
+    nWith === 0 ? 0 : learning.gain * Math.abs(initial) * lift(qWith, baseline, learning.lift);
   // Learning needs contrast: weight the comparison by how much of both sides has been seen.
   const nEff = nWith + nWithout === 0 ? 0 : (nWith * nWithout) / (nWith + nWithout);
   const k = learning.priorEpisodes;
