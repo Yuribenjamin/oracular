@@ -85,6 +85,7 @@ export default defineConfig({
           text: 'Project',
           items: [
             { text: 'FAQ', link: '/guide/faq' },
+            { text: 'Stability and 1.0', link: '/guide/stability' },
             { text: 'Roadmap', link: '/guide/roadmap' },
           ],
         },
