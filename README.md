@@ -136,7 +136,8 @@ effective = (k × w₀ + nEff × learned) / (k + nEff)            k = priorEpiso
 
 `w₀` is your initial weight, `gain` (default 2) scales the learned weight (and caps it with the default lift), and `priorEpisodes` (default 10) is how much contrast it takes for the user's own history to count as much as your guess. A signal's strength and your confidence in it are separate knobs. A signal is judged against the sessions in which it did *not* appear, so for an outcome that happens in 3% of sessions, a signal followed by it 30% of the time is strong evidence, not weak. And learning needs contrast: a signal that has never been absent has no counterfactual, so its weight stands until there are sessions without it. Nothing drifts after a single outcome.
 
-The formula above is the default **normalized difference**. Choose another at construction with
+The formula above is the default **normalized difference**. `learning.lift` is an optional
+setting for advanced users who want to choose the learning scale. Choose another at construction with
 `createState({ intents, learning: { lift: 'relative-lift' } })`. Omit `learning.lift` to keep the
 current behavior, including when loading older saved states. The available names and formulas
 are listed in [Episodes & learning](https://yuribenjamin.github.io/oracular/guide/concepts/episodes-and-learning#choosing-a-lift-formula).

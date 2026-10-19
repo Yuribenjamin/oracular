@@ -73,6 +73,11 @@ Both rates are Laplace-smoothed (+1 / +2). The formula shown is the default norm
 
 ## Choosing a lift formula
 
+`learning.lift` is an optional setting for advanced users who want to control the learning
+scale. Leave it unset to keep the existing bounded behavior. Alternatives use the raw formulas
+below, so select one whose scale and neutral value suit your application, and tune `gain` and
+signal weights accordingly.
+
 Choose a formula when constructing the engine:
 
 ```ts

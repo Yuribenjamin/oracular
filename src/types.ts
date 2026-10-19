@@ -48,7 +48,8 @@ export type LiftType =
  */
 export interface LearningConfig {
   /**
-   * Lift formula. Default `'normalized-difference'` preserves the bounded [−1, 1] comparison.
+   * Optional lift formula for advanced users. Omit to preserve the existing bounded [−1, 1]
+   * comparison (`'normalized-difference'`). Choose the scale and neutral value deliberately.
    * Other choices use their raw formulas: ratios have a neutral value of 1 and are not centered
    * or capped. `'association-rule'` compares with the overall outcome rate; the others compare
    * episodes with the signal against episodes without it. Ratio/log inputs are kept within
