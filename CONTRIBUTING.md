@@ -21,7 +21,7 @@ Individual steps:
 | `npm run lint`          | Biome lint + format check (`npm run format` to fix)           |
 | `npm run typecheck`     | `tsc` over `src/` against the ES2020 library only, `cli/` with Node types, then tests |
 | `npm test`              | vitest, once (`npm run test:watch` to iterate)                |
-| `npm run build`         | tsup → `dist/` (ESM, CJS, `.d.ts`, and the `dist/cli.js` bin)  |
+| `npm run build`         | tsup → `dist/`: the main entry and the bin, then `oracular/presets`, then `oracular/inspect` (each ESM, CJS, `.d.ts`); the subpaths build in turn so a build running at the same time can never clean their declarations away |
 | `npm run smoke`         | runs the built output through the `exports` map in CJS and ESM, and the bin on the fixture logs |
 | `npm run size`          | size-limit: min+gzip size of the ESM build against the budget in `.size-limit.json` |
 | `npm run pack:check`    | packs the package, asserts the exact file list, runs publint (strict) and attw on the tarball |
