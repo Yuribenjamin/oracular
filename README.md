@@ -200,12 +200,12 @@ const churn = {
 ### Ad placement
 
 ```ts
+import { presets } from 'oracular/presets';
+
+// The tuned preset (prior 0.048, strength 4, cart.added 2.3, from a real clickstream), plus your own signals.
 const willBuy = {
-  prior: 0.02,
-  priorStrength: 50,
-  halfLife: 3 * 24 * 60 * 60 * 1000,
-  signals: { 'product.viewed': 1, 'cart.added': 3, 'wishlist.added': 2, 'cart.emptied': -3 },
-  outcome: 'checkout.completed',
+  ...presets.willBuy,
+  signals: { ...presets.willBuy.signals, 'wishlist.added': 2, 'cart.emptied': -3 },
 };
 // shouldReveal(state, 'willBuy', now) → show the sponsored placement, then markRevealed.
 ```

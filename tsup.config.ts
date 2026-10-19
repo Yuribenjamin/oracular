@@ -6,8 +6,23 @@ export default defineConfig([
     format: ['esm', 'cjs'],
     dts: true,
     sourcemap: true,
-    // tsup builds both configs at the same time; keep the CLI's output when cleaning dist/.
-    clean: ['!cli.js'],
+    // tsup builds every config at the same time; keep the other entries' output when cleaning dist/.
+    clean: ['!cli.js', '!presets.*'],
+    target: 'es2020',
+    treeshake: true,
+    splitting: false,
+    minify: false,
+  },
+  {
+    // `oracular/presets`, built apart from the main entry so that each declaration file is
+    // self-contained: one shared dts build would split the types both entries use into a chunk with
+    // a hashed name, and the tarball's file list is pinned. The few bytes of `ms` it uses are
+    // bundled into it.
+    entry: ['src/presets.ts'],
+    format: ['esm', 'cjs'],
+    dts: true,
+    sourcemap: true,
+    clean: false,
     target: 'es2020',
     treeshake: true,
     splitting: false,

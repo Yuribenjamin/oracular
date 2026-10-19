@@ -437,3 +437,31 @@ export interface EndRecord {
 
 /** A line of a recorder log. */
 export type RecorderRecord = EventRecord | EndRecord;
+
+/**
+ * The intents `oracular/presets` ships. Each is a plain {@link IntentConfig} to spread into your
+ * config and override; `presetSources` there says where its numbers come from.
+ */
+export type PresetName = 'willBuy' | 'upgrade' | 'stuck' | 'churn';
+
+/**
+ * Where a preset's numbers come from, as `presetSources` in `oracular/presets` reports it. A tuned
+ * preset was fitted by `oracular tune` on a real log and carries the sample behind it; a
+ * hand-written one is a careful guess nobody has measured. Either is a starting point: run in
+ * shadow mode and let `tune` replace it with your own numbers.
+ *
+ * @example
+ * ```ts
+ * import { presetSources } from 'oracular/presets';
+ * presetSources.willBuy.kind; // 'tuned'
+ * ```
+ */
+export interface PresetSource {
+  kind: 'tuned' | 'hand-written';
+  /** What the numbers were fitted on, or where the guess comes from. */
+  note: string;
+  /** Counted episodes behind a tuned preset; null for a hand-written one. */
+  episodes: number | null;
+  /** Installs those episodes came from; null for a hand-written one. */
+  installs: number | null;
+}

@@ -9,6 +9,7 @@ import {
   shouldReveal,
   validateConfig,
 } from 'oracular';
+import { presetSources, presets } from 'oracular/presets';
 
 const config = {
   intents: {
@@ -40,5 +41,9 @@ assert.ok(p1 > p0, 'a positive signal raises p');
 assert.equal(typeof shouldReveal(after, 'upgrade', 2), 'boolean');
 assert.deepEqual(validateConfig(config), before.config);
 assert.equal(ms.days(1), 86_400_000);
+// The presets subpath resolves through the exports map and every preset is a config the engine takes.
+assert.deepEqual(Object.keys(presets), ['willBuy', 'upgrade', 'stuck', 'churn']);
+assert.deepEqual(Object.keys(presetSources), Object.keys(presets));
+createState({ intents: presets });
 
 console.log(`smoke ok (esm, node ${process.version})`);

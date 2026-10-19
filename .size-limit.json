@@ -12,5 +12,12 @@
     "import": "{ createState, observe, shouldReveal, markRevealed }",
     "gzip": true,
     "limit": "3.7 kB"
+  },
+  {
+    "name": "presets subpath (ESM, min+gzip)",
+    "path": "dist/presets.js",
+    "import": "*",
+    "gzip": true,
+    "limit": "1 kB"
   }
 ]

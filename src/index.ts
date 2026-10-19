@@ -24,6 +24,8 @@ export type {
   Migrate,
   PendingEpisode,
   Prediction,
+  PresetName,
+  PresetSource,
   RecordedDecision,
   RecorderRecord,
   RecordMode,

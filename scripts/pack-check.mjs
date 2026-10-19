@@ -27,6 +27,12 @@ export const EXPECTED_FILES = [
   'dist/index.d.ts',
   'dist/index.js',
   'dist/index.js.map',
+  'dist/presets.cjs',
+  'dist/presets.cjs.map',
+  'dist/presets.d.cts',
+  'dist/presets.d.ts',
+  'dist/presets.js',
+  'dist/presets.js.map',
   'package.json',
   'schema/config.schema.json',
 ].sort();

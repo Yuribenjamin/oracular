@@ -10,6 +10,7 @@ const {
   STATE_VERSION,
   validateConfig,
 } = require('oracular');
+const { presets, presetSources } = require('oracular/presets');
 
 const config = {
   intents: {
@@ -37,5 +38,8 @@ assert.ok(p1 > p0, 'a positive signal raises p');
 assert.equal(typeof shouldReveal(after, 'upgrade', 2), 'boolean');
 assert.deepEqual(validateConfig(config), before.config);
 assert.equal(ms.days(1), 86_400_000);
+assert.deepEqual(Object.keys(presets), ['willBuy', 'upgrade', 'stuck', 'churn']);
+assert.deepEqual(Object.keys(presetSources), Object.keys(presets));
+createState({ intents: presets });
 
 console.log(`smoke ok (cjs, node ${process.version})`);
