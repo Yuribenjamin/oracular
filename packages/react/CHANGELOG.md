@@ -1,1 +1,7 @@
 # @oracular/react
+
+## 0.1.0
+
+### Minor Changes
+
+- [#49](https://github.com/Yuribenjamin/oracular/pull/49) [`59da0c2`](https://github.com/Yuribenjamin/oracular/commit/59da0c226a1cba2570cbdb261efbc1d2b3f3fb0f) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - **React bindings.** `@oracular/react` is the React binding for oracular, built on a framework-free store. `createIntentStore(config, { persist, now, saveDelay, onError })` holds one engine state with a clock, subscribers and persistence: `track`, `observe`, `endEpisode`, `markRevealed`, `reveal` (check and mark in one step), `load` and `flush`. Saves are debounced and skipped when the string has not changed, written at once when an episode closes, and a load replays whatever was tracked while it was pending, so the first screens' events are never lost. `useIntent(store)` binds a component through `useSyncExternalStore`, with reads going to the current state rather than a render-time copy, so `track` then `reveal` in one click sees the event; `IntentProvider` and `useIntentContext()` share a store through context; `useIntent(config, options)` gives one component its own. The hook loads on mount and flushes on `pagehide`, when the page becomes hidden, and on unmount, and never ends an episode on those events: a short switch away is not a session boundary. The adapters `localStorageAdapter`, `asyncStorageAdapter` and `mmkvAdapter` take the storage object in, so the package has no dependencies beyond its peers, `oracular >=0.8.0 <2` and `react >=18`. Tested on React 18 and 19.
