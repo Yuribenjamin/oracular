@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0
+
+### Minor Changes
+
+- [#36](https://github.com/Yuribenjamin/oracular/pull/36) [`a585808`](https://github.com/Yuribenjamin/oracular/commit/a58580846d39fa14269096fa3e4f0891749eee88) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - **Inspect.** `inspect(state, at, opts?)` in the main entry returns every intent's prediction, gate and explanation as one object, in config order. `oracular/inspect` renders that snapshot: `renderInspector` as an HTML fragment with inline styles and every string escaped, `mountInspector` into anything with an `innerHTML`, with `update` and `unmount`; neither touches a DOM API or sets a timer, and neither carries engine code. The subpath is experimental, as the stability page says: its markup and options may change in a minor. The types `Snapshot` and `IntentSnapshot` are exported from the main entry.
+
+- [#36](https://github.com/Yuribenjamin/oracular/pull/36) [`a585808`](https://github.com/Yuribenjamin/oracular/commit/a58580846d39fa14269096fa3e4f0891749eee88) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - **Presets.** `oracular/presets` exports `presets`, four plain `IntentConfig` objects to spread into your config and override: `willBuy`, tuned by `oracular tune` on a public e-commerce clickstream of 2.7 million events (one shop, May to September 2015, 4.8% of sessions ending with an order; prior 0.048, strength 4, `cart.added` 2.3, half-life one hour, 181,080 sessions behind it), and `upgrade`, `stuck` and `churn`, the documentation's running examples, hand-written and labelled so. `presetSources` carries each preset's provenance as data, and the types `PresetName` and `PresetSource` are exported from the main entry.
+
+### Patch Changes
+
+- [#36](https://github.com/Yuribenjamin/oracular/pull/36) [`a585808`](https://github.com/Yuribenjamin/oracular/commit/a58580846d39fa14269096fa3e4f0891749eee88) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - **Rollback.** `deserialize` reads a state one version newer than `STATE_VERSION` as the current one, ignoring the fields it does not know, so a rollback by one release keeps every user's history. The rule that allows it, a state version bump only adds fields, is now a commitment on the new stability page, together with what counts as public API, how versions are read before 1.0, the deprecation rule, the state-format guarantee, the 1.0 criteria and their status, and a 7 kB ceiling for the core. Two versions ahead still throws the `RangeError`, and `migrate` is still consulted for it. From now on the changeset of every state version bump says what an older reader silently loses; this release bumps nothing, so a 0.6 reader loses nothing but was never able to read ahead.
+
 ## 0.6.0
 
 ### Minor Changes
