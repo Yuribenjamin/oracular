@@ -11,6 +11,7 @@ npx oracular tune out/fit.ndjson --config examples/retailrocket/start.config.jso
 npx oracular replay out/holdout.ndjson --config out/tuned.config.json
 node examples/retailrocket/returning-buyers.mjs out/holdout.ndjson out/tuned.config.json
 node examples/retailrocket/baseline-rules.mjs out/holdout.ndjson 1 2 3 3:2   # the hand-written rule (k, or k:N with memory), scored like replay
+node examples/retailrocket/returning.mjs out/holdout.ndjson out/holdout-returning.ndjson   # visitors with three or more sessions
 ```
 
-`convert.mjs` needs only Node 18 or newer. The other two need `oracular` installed (`npm install oracular`), or this repository built (`npm run build`). Both CLI commands run on the 1.4 million record halves with Node's default heap, in well under a minute each.
+`convert.mjs`, `returning.mjs` and `baseline-rules.mjs` need only Node 18 or newer. The rest need `oracular` installed (`npm install oracular`), or this repository built (`npm run build`). Both CLI commands run on the 1.4 million record halves with Node's default heap, in well under a minute each.
