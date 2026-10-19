@@ -59,6 +59,8 @@ describe('purity', () => {
     pure(predict, s1, 'upgrade', T + MINUTE, { z: 2, threshold: 0.3 });
     pure(shouldReveal, s1, 'upgrade', T + MINUTE);
     pure(shouldReveal, s1, 'upgrade', T + MINUTE, { threshold: 0.1, z: 0 });
+    pure(predict, s1, 'upgrade', T + MINUTE, { bound: 'exact' });
+    pure(shouldReveal, s1, 'upgrade', T + MINUTE, { threshold: 0.1, z: 0, bound: 'exact' });
     const s2 = pure(markRevealed, s1, 'upgrade', T + MINUTE);
     pure(predict, s2, 'upgrade', T + 2 * MINUTE);
   });
@@ -95,6 +97,8 @@ describe('purity', () => {
     pure(evaluate, s1, 'upgrade', T + MINUTE, { z: 2, nonZero: true, limit: 2 });
     pure(evidenceToReveal, upgradeConfig().intents.upgrade!);
     pure(evidenceToReveal, upgradeConfig().intents.upgrade!, { threshold: 0.7, z: 1.64 });
+    pure(evidenceToReveal, upgradeConfig().intents.upgrade!, { bound: 'exact' });
+    pure(evaluate, s1, 'upgrade', T + MINUTE, { bound: 'exact', limit: 1 });
     const s2 = pure(endEpisode, s1, T + 2 * MINUTE);
     pure(episodeClosed, s1, s2);
   });
@@ -116,7 +120,10 @@ describe('purity', () => {
   });
 
   it('validateConfig and ms', () => {
-    pure(validateConfig, upgradeConfig({ episodeTimeout: 10 * MINUTE, reveal: { z: 1.64 } }));
+    pure(
+      validateConfig,
+      upgradeConfig({ episodeTimeout: 10 * MINUTE, reveal: { z: 1.64, bound: 'exact' } }),
+    );
     pure(ms.days, 7);
     pure(ms.minutes, 1.5);
   });

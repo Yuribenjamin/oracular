@@ -44,7 +44,7 @@ Rule of thumb for the default gate (threshold 0.5, z 1.28):
 evidence needed ≈ (1 − 2·prior) × priorStrength + 1.9 × √priorStrength
 ```
 
-The first term is what it takes to pull p to 0.5 (α must catch up with β); the second is the confidence margin, which grows only with the square root of the strength. For the quickstart (prior 0.05): priorStrength 5 → about 9, 10 → about 15, 20 → about 26, 50 → about 58. Read it the other way to choose: if a convincing session is worth 10 to 12 pseudo-counts, `priorStrength: 5` fires on it (needs 8.9) and `priorStrength: 10` does not (needs 15.1). For an exact number with your own threshold and z, call `evidenceToReveal(intentConfig)`.
+The first term is what it takes to pull p to 0.5 (α must catch up with β); the second is the confidence margin, which grows only with the square root of the strength. For the quickstart (prior 0.05): priorStrength 5 → about 9, 10 → about 15, 20 → about 26, 50 → about 58. Read it the other way to choose: if a convincing session is worth 10 to 12 pseudo-counts, `priorStrength: 5` fires on it (needs 8.9) and `priorStrength: 10` does not (needs 15.1). For an exact number with your own threshold and z, call `evidenceToReveal(intentConfig)`; it follows `bound: 'exact'` too, which asks for a little more at small strengths.
 
 ## `halfLife`
 

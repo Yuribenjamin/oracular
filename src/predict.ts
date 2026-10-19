@@ -12,9 +12,9 @@ import type { EngineState, Prediction, RevealOptions } from './types';
  * @param state - The current state. Not mutated.
  * @param intent - Name of an intent declared in the config.
  * @param at - The time to evaluate at, in the same unit as your durations.
- * @param opts - Overrides for `threshold`, `z` and `cooldown`, resolved as call → intent →
- *   engine → defaults. `z` sets `lower`; `cooldown` sets `revealed` and `suppressedUntil`;
- *   `threshold` only matters to {@link shouldReveal}.
+ * @param opts - Overrides for `threshold`, `z`, `cooldown` and `bound`, resolved as call →
+ *   intent → engine → defaults. `z` and `bound` set `lower`; `cooldown` sets `revealed` and
+ *   `suppressedUntil`; `threshold` only matters to {@link shouldReveal}.
  * @returns The prediction. `p`, `sd`, `lower` and `confidence` are in [0, 1]; `evidence` is
  *   α + β.
  * @throws `RangeError` when `intent` is not declared in the config.
@@ -43,7 +43,8 @@ export function predict(
 
 /**
  * Whether to act on the intent now. True when p ≥ `threshold`, the lower confidence bound
- * p − z·sd also clears `threshold`, and no cooldown is running: neither the one started by
+ * (p − z·sd, or the exact Beta quantile with `bound: 'exact'`) also clears `threshold`, and no
+ * cooldown is running: neither the one started by
  * {@link markRevealed} nor the one started by the intent's outcome event.
  *
  * @param state - The current state. Not mutated.

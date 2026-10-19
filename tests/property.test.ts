@@ -60,6 +60,7 @@ const reveal = fc.record(
     threshold: fc.integer({ min: 0, max: 10 }).map((n) => n / 10),
     z: fc.constantFrom(0, 0.5, 1.28, 1.64, 2, 3),
     cooldown: fc.constantFrom(0, MINUTE, HOUR, DAY),
+    bound: fc.constantFrom('normal' as const, 'exact' as const),
   },
   { requiredKeys: [], noNullPrototype: true },
 );
@@ -353,13 +354,13 @@ describe('properties', () => {
       fc.property(scenario, options, ({ config: cfg, trace: steps }, opts) => {
         const plain = run(cfg, steps);
         const names = Object.keys(cfg.intents);
+        for (const name of names) evidenceToReveal(cfg.intents[name]!, opts);
         const read = (s: EngineState, at: number) => {
           for (const name of names) {
             predict(s, name, at, opts);
             shouldReveal(s, name, at, opts);
             explain(s, name, at, { limit: 2 });
             evaluate(s, name, at, opts);
-            evidenceToReveal(cfg.intents[name]!, opts);
           }
           inspect(s, at, opts);
           serialize(s);

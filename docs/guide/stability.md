@@ -47,7 +47,7 @@ The other direction is the rollback hazard: a release that cannot read a newer s
 | A framework-free debug overlay showing `predict` and `explain` live | done: [Inspect](/guide/inspect) |
 | A public case study produced by `replay` on a production shadow log, and two production users referenced | open; a [reproducible one on a public clickstream](/guide/case-study-clickstream) exists |
 | The tolerant state reader: a release reads the next version, so states move both ways one step at a time | done in 0.7 |
-| A size ceiling, decided once: the core, meaning the whole `oracular` entry alone, stays under 7 kB minified and gzipped (6.65 kB today; each release's budget is the shipped size plus about 10% and stops at this number). Subpaths have their own rows in the budget file and their own ceilings, 1 kB for `oracular/presets` and 1.5 kB for `oracular/inspect`; adapters live in their own packages | holding |
+| A size ceiling, decided once: the core, meaning the whole `oracular` entry alone, stays under 7.9 kB minified and gzipped (7.19 kB today; each release's budget is the shipped size plus about 10% and stops at this number). The ceiling was 7 kB until 0.8, when the exact lower bound added 0.54 kB and it was raised once, to the shipped size plus about 10%. Subpaths have their own rows in the budget file and their own ceilings, 1 kB for `oracular/presets` and 1.5 kB for `oracular/inspect`; adapters live in their own packages | holding |
 | Housekeeping green: pinned actions, CodeQL, Scorecard, publish only from CI | holding |
 
 The [roadmap](/guide/roadmap) carries the same list with the reasoning behind each item.

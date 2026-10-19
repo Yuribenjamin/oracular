@@ -28,6 +28,9 @@ describe('tuning tables in the docs', () => {
     const tables = renderTables();
     expect(tables['priorStrength-table']).toContain('| 10 | 15.1 | 6 | 8 | 16 | 32 |');
     expect(tables['threshold-z-table']).toContain('| 0.5 | 0 | 9.0 | 3 |');
+    // Reveal & confidence: the normal bound against the exact quantile at z = 1.28.
+    expect(tables['bound-table']).toContain('| 4, 3 | 0.571 | 0.347 | 0.333 |');
+    expect(tables['bound-table']).toContain('| 30, 20 | 0.600 | 0.512 | 0.511 |');
     // Signals & weights, Intents & priors, Reveal & confidence: p crosses 0.5 at the third
     // full-weight signal, the lower bound at the sixth (α = 18.5, sd 0.088, p 0.66).
     expect(tables['full-weight-table']).toContain('| 3 | 9.5 | 9.5 | 0.500 |');

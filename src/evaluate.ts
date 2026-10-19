@@ -18,8 +18,8 @@ import type { EngineState, EvaluateOptions, Evaluation, Snapshot } from './types
  * @param state - The current state. Not mutated.
  * @param intent - Name of an intent declared in the config.
  * @param at - The time to evaluate at.
- * @param opts - Reveal overrides (`threshold`, `z`, `cooldown`) and explain filters (`nonZero`,
- *   `limit`) in one object.
+ * @param opts - Reveal overrides (`threshold`, `z`, `cooldown`, `bound`) and explain filters
+ *   (`nonZero`, `limit`) in one object.
  * @returns `prediction` (as `predict`), `reveal` (as `shouldReveal`) and `explanation` (as
  *   `explain` with the same filters).
  * @throws `RangeError` when `intent` is not declared in the config.

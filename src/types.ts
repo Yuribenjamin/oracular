@@ -16,6 +16,13 @@ export interface RevealOptions {
   z?: number;
   /** How long after `markRevealed` the intent stays revealed and `shouldReveal` is false. Default: the intent's `halfLife`. */
   cooldown?: number;
+  /**
+   * How `lower` is computed. `'normal'` (default): p − z·sd, clamped to [0, 1]. `'exact'`: the
+   * Beta distribution's own quantile at the same one-sided level, Φ(−z), so `z` keeps its
+   * meaning. The two differ on thin evidence near the threshold, where the approximation is
+   * optimistic; under `'exact'`, `z: 0` is the median rather than the mean.
+   */
+  bound?: 'normal' | 'exact';
 }
 
 /**
@@ -235,7 +242,10 @@ export interface Prediction {
   p: number;
   /** Standard deviation of the Beta distribution. */
   sd: number;
-  /** p − z·sd, clamped to [0, 1]. This is what `shouldReveal` compares to the threshold. */
+  /**
+   * The lower confidence bound `shouldReveal` compares to the threshold: p − z·sd clamped to
+   * [0, 1], or with `bound: 'exact'` the Beta quantile at Φ(−z).
+   */
   lower: number;
   /** 1 − 2·sd, clamped to [0, 1]. A heuristic: 1 when the estimate is sharp, 0 when it is as vague as possible. */
   confidence: number;

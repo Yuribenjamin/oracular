@@ -32,7 +32,7 @@ export const INTENT_KEYS = [
   'attribution',
   'reveal',
 ] as const;
-export const REVEAL_KEYS = ['threshold', 'z', 'cooldown'] as const;
+export const REVEAL_KEYS = ['threshold', 'z', 'cooldown', 'bound'] as const;
 export const LEARNING_KEYS = ['halfLife', 'gain', 'priorEpisodes'] as const;
 const EXPLAIN_KEYS = ['nonZero', 'limit'] as const;
 
@@ -125,6 +125,12 @@ export function normalizeRevealOptions(value: unknown, path: string): RevealOpti
   if (record.z !== undefined) out.z = expectNonNegative(record.z, `${path}.z`);
   if (record.cooldown !== undefined) {
     out.cooldown = expectNonNegative(record.cooldown, `${path}.cooldown`);
+  }
+  if (record.bound !== undefined) {
+    if (record.bound !== 'normal' && record.bound !== 'exact') {
+      typeError(`${path}.bound`, 'must be "normal" or "exact"');
+    }
+    out.bound = record.bound;
   }
   return out;
 }
@@ -261,6 +267,7 @@ export interface ResolvedReveal {
   threshold: number;
   z: number;
   cooldown: number;
+  bound: 'normal' | 'exact';
 }
 
 export function resolveReveal(
@@ -275,6 +282,7 @@ export function resolveReveal(
       o.threshold ?? intent.reveal?.threshold ?? config?.reveal?.threshold ?? DEFAULT_THRESHOLD,
     z: o.z ?? intent.reveal?.z ?? config?.reveal?.z ?? DEFAULT_Z,
     cooldown: o.cooldown ?? intent.reveal?.cooldown ?? config?.reveal?.cooldown ?? intent.halfLife,
+    bound: o.bound ?? intent.reveal?.bound ?? config?.reveal?.bound ?? 'normal',
   };
 }
 
