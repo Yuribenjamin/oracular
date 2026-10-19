@@ -73,7 +73,8 @@ jobs:
 
   changeset:
     name: Changeset present (advisory)
-    if: github.event_name == 'pull_request'
+    # Not on the version PR: it consumes the changesets, so it can never carry one.
+    if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main'
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
