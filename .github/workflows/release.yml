@@ -83,7 +83,7 @@ jobs:
       # The PAT (not GITHUB_TOKEN) is what lets the Version Packages PR trigger CI.
       - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          version: npm run release:version
+          version-script: npm run release:version
           publish-script: npm run release
           create-github-releases: true
           commit-message: "chore: version packages"
