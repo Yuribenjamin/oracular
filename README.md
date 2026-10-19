@@ -21,11 +21,18 @@
   · <a href="https://yuribenjamin.github.io/oracular/guide/introduction">Guide</a>
   · <a href="https://yuribenjamin.github.io/oracular/api/">API</a>
   · <a href="https://yuribenjamin.github.io/oracular/playground">Playground</a>
+  · <a href="https://yuribenjamin.github.io/oracular/guide/is-it-for-me">Is it for me?</a>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Yuribenjamin/oracular/main/assets/inspector.gif" width="800" alt="A pricing page next to the oracular inspector panel. Over a simulated day, each click adds a signal and p and the lower bound rise, until both clear 0.5: the gate opens, an upgrade offer appears and a cooldown starts. Eight days later the evidence has decayed back toward the prior.">
 </p>
 
 **oracular** is a tiny, zero-dependency, pure-functional intent engine that runs entirely on the device. Feed it the events your app already emits. It keeps a probabilistic estimate of what the user is about to do (upgrade, churn, get stuck, buy…) and tells you when that estimate crosses a threshold *with enough confidence* to act on it: show a tip, make an offer, reveal a feature, place an ad. It learns from each user's own outcomes, so your initial guesses get corrected on their device, not on a server.
 
 It never touches the network, storage, DOM, timers or globals. Your app owns persistence and side effects; the library owns the math.
+
+The job, concretely: your pricing page learns when to show *this* user the upgrade offer, and their events never leave their browser. On a [public clickstream of 2.7 million events](https://yuribenjamin.github.io/oracular/guide/case-study-clickstream#the-rule-a-skeptic-would-write), among the visitors who came back, the tuned engine caught 27.9% of the orders at 48.9% precision, where the best rule a skeptic would write caught 6.4% at 39.2%; for first-time visitors the two tie, as they must.
 
 ## Why oracular
 
@@ -79,8 +86,8 @@ On a public clickstream of 2.7 million events, a hand-written config scored wors
 
 - [Why oracular](#why-oracular)
 - [The workflow: shadow, tune, ship, learn](#the-workflow-shadow-tune-ship-learn)
-- [How it works](#how-it-works)
 - [Examples](#examples)
+- [How it works](#how-it-works)
 - [Using with React](#using-with-react)
 - [API](#api)
 - [Persistence](#persistence)
@@ -91,66 +98,6 @@ On a public clickstream of 2.7 million events, a hand-written config scored wors
 - [Contributing](#contributing)
 
 The [documentation site](https://yuribenjamin.github.io/oracular/) has the long form: one page per concept, a tuning guide with tables, recipes, framework examples, the generated API reference and a playground that runs the engine in your browser.
-
-## How it works
-
-### Intents are Beta distributions
-
-You declare intents. Each has a `prior` probability and a `priorStrength` (how many observations the prior is worth). Internally an intent is a Beta(α, β) distribution with α₀ = prior × priorStrength and β₀ = (1 − prior) × priorStrength. Its current estimate is p = α / (α + β).
-
-### Signals add evidence
-
-Each intent maps event names to weights. A positive weight is evidence *for* the intent and is added to α; a negative weight is evidence *against* and its magnitude is added to β. Events the config doesn't mention cost nothing.
-
-### Repeats within a session count for less
-
-Ten views of the pricing page in one sitting are one burst of interest, not ten independent pieces of evidence. Within an episode, the n-th occurrence of a signal adds less than the first:
-
-```
-n-th occurrence adds   w × log2(1 + 1/n)     1, 0.58, 0.42, 0.32 … of the weight
-n occurrences add      w × log2(1 + n)       every doubling adds one more weight; ten add 3.46, not 10
-```
-
-The count restarts when the episode ends or the intent's outcome arrives, so the same signal in a new session counts fully again. Saturation is on by default when `episodeTimeout` is set. Without it, episodes end only when you call `endEpisode`, so repeats add their full weight unless you set `saturate: true`. For intents where the repetition itself is the evidence (a user stuck on the same step), set `saturate: false` and every occurrence adds its full weight.
-
-### Evidence decays toward the prior
-
-Before any update or reading, the evidence decays by 2^(−Δt / halfLife), where Δt is the time since the intent was last updated. Only the *excess over the prior* decays: with no events, p drifts back to `prior` and α + β back to `priorStrength`. Someone who looked at pricing a month ago is not someone who looked at pricing today.
-
-### The user's history corrects your weights
-
-Events happen inside **episodes** (sessions). An episode ends when you call `endEpisode`, or on its own after `episodeTimeout` of inactivity. Signals seen in the episode are remembered per intent. When the intent's `outcome` event arrives, each remembered signal gets a **hit**; when the episode ends without it, each gets a **miss**, or, with `attribution` set on the intent, the episode waits and takes the share `2^(−age / halfLife)` of a hit if the outcome arrives inside the window. The engine also counts, per intent, how many episodes ended with and without the outcome: the intent's **base rate**.
-
-A signal's weight is then a blend of your prior and the learned estimate:
-
-```
-nWith    = hits + misses                                      episodes with the signal
-nWithout = episodes − nWith                                   episodes without it
-qWith    = (hits + 1) / (nWith + 2)                           outcome rate with the signal
-qWithout = (outcomes − hits + 1) / (nWithout + 2)             outcome rate without it
-lift     = (qWith − qWithout) / (1 − qWithout)  if qWith ≥ qWithout,  else  (qWith − qWithout) / qWithout   → in [−1, 1]
-learned  = gain × |w₀| × lift                                 0 until the signal has history
-nEff     = (nWith × nWithout) / (nWith + nWithout)            0 if either side is 0
-effective = (k × w₀ + nEff × learned) / (k + nEff)            k = priorEpisodes
-```
-
-`w₀` is your initial weight, `gain` (default 2) caps how far a perfectly predictive signal can grow, and `priorEpisodes` (default 10) is how much contrast it takes for the user's own history to count as much as your guess. A signal's strength and your confidence in it are separate knobs. A signal is judged against the sessions in which it did *not* appear, so for an outcome that happens in 3% of sessions, a signal followed by it 30% of the time is strong evidence, not weak. And learning needs contrast: a signal that has never been absent has no counterfactual, so its weight stands until there are sessions without it. Nothing drifts after a single outcome.
-
-Learned counts never decay unless you set `learning.halfLife`.
-
-### Reveal only when confident
-
-`shouldReveal` is true when p ≥ threshold **and** p − z·sd ≥ threshold, where sd is the Beta standard deviation and z defaults to 1.28 (a one-sided 90% bound). Thin evidence with a high mean does not fire; it takes a few consistent signals. That lower bound is a normal approximation; `bound: 'exact'` swaps in the Beta distribution's own quantile at the same level, which asks for a little more on thin evidence. After you `markRevealed`, the intent stays revealed for a `cooldown` (default: its half-life) so you don't fire on every event. The same cooldown runs after the intent's outcome event. `predict` reports both: `revealed` is true inside a reveal cooldown, and `suppressedUntil` is when the later of the two cooldowns ends, or null when `shouldReveal` is free to fire.
-
-### Outcomes reset the slate and pause reveals
-
-When the outcome event arrives, the intent's evidence returns to the prior (α, β and contributions), while everything learned is kept. The user already upgraded; stop predicting that they will. Set `resetOnOutcome: false` for intents where the outcome can repeat inside one episode.
-
-The outcome also starts the intent's `cooldown`: `shouldReveal` stays false until it ends, however strong the fresh evidence, so a user who just bought is not immediately pitched again. The time of the last outcome is kept on the state as `lastOutcomeAt`.
-
-### Every answer comes with its reasons
-
-`explain` returns, per signal, how much evidence it currently holds and how much p would move without it, plus the initial, learned and effective weights and the hit/miss record. If a reveal looks wrong, you can see exactly why it fired.
 
 ## Examples
 
@@ -211,6 +158,66 @@ const willBuy = {
 ```
 
 More in the docs: [Recipes](https://yuribenjamin.github.io/oracular/guide/recipes) and the [Tuning guide](https://yuribenjamin.github.io/oracular/guide/tuning).
+
+## How it works
+
+### Intents are Beta distributions
+
+You declare intents. Each has a `prior` probability and a `priorStrength` (how many observations the prior is worth). Internally an intent is a Beta(α, β) distribution with α₀ = prior × priorStrength and β₀ = (1 − prior) × priorStrength. Its current estimate is p = α / (α + β).
+
+### Signals add evidence
+
+Each intent maps event names to weights. A positive weight is evidence *for* the intent and is added to α; a negative weight is evidence *against* and its magnitude is added to β. Events the config doesn't mention cost nothing.
+
+### Repeats within a session count for less
+
+Ten views of the pricing page in one sitting are one burst of interest, not ten independent pieces of evidence. Within an episode, the n-th occurrence of a signal adds less than the first:
+
+```
+n-th occurrence adds   w × log2(1 + 1/n)     1, 0.58, 0.42, 0.32 … of the weight
+n occurrences add      w × log2(1 + n)       every doubling adds one more weight; ten add 3.46, not 10
+```
+
+The count restarts when the episode ends or the intent's outcome arrives, so the same signal in a new session counts fully again. Saturation is on by default when `episodeTimeout` is set. Without it, episodes end only when you call `endEpisode`, so repeats add their full weight unless you set `saturate: true`. For intents where the repetition itself is the evidence (a user stuck on the same step), set `saturate: false` and every occurrence adds its full weight.
+
+### Evidence decays toward the prior
+
+Before any update or reading, the evidence decays by 2^(−Δt / halfLife), where Δt is the time since the intent was last updated. Only the *excess over the prior* decays: with no events, p drifts back to `prior` and α + β back to `priorStrength`. Someone who looked at pricing a month ago is not someone who looked at pricing today.
+
+### The user's history corrects your weights
+
+Events happen inside **episodes** (sessions). An episode ends when you call `endEpisode`, or on its own after `episodeTimeout` of inactivity. Signals seen in the episode are remembered per intent. When the intent's `outcome` event arrives, each remembered signal gets a **hit**; when the episode ends without it, each gets a **miss**, or, with `attribution` set on the intent, the episode waits and takes the share `2^(−age / halfLife)` of a hit if the outcome arrives inside the window. The engine also counts, per intent, how many episodes ended with and without the outcome: the intent's **base rate**.
+
+A signal's weight is then a blend of your prior and the learned estimate:
+
+```
+nWith    = hits + misses                                      episodes with the signal
+nWithout = episodes − nWith                                   episodes without it
+qWith    = (hits + 1) / (nWith + 2)                           outcome rate with the signal
+qWithout = (outcomes − hits + 1) / (nWithout + 2)             outcome rate without it
+lift     = (qWith − qWithout) / (1 − qWithout)  if qWith ≥ qWithout,  else  (qWith − qWithout) / qWithout   → in [−1, 1]
+learned  = gain × |w₀| × lift                                 0 until the signal has history
+nEff     = (nWith × nWithout) / (nWith + nWithout)            0 if either side is 0
+effective = (k × w₀ + nEff × learned) / (k + nEff)            k = priorEpisodes
+```
+
+`w₀` is your initial weight, `gain` (default 2) caps how far a perfectly predictive signal can grow, and `priorEpisodes` (default 10) is how much contrast it takes for the user's own history to count as much as your guess. A signal's strength and your confidence in it are separate knobs. A signal is judged against the sessions in which it did *not* appear, so for an outcome that happens in 3% of sessions, a signal followed by it 30% of the time is strong evidence, not weak. And learning needs contrast: a signal that has never been absent has no counterfactual, so its weight stands until there are sessions without it. Nothing drifts after a single outcome.
+
+Learned counts never decay unless you set `learning.halfLife`.
+
+### Reveal only when confident
+
+`shouldReveal` is true when p ≥ threshold **and** p − z·sd ≥ threshold, where sd is the Beta standard deviation and z defaults to 1.28 (a one-sided 90% bound). Thin evidence with a high mean does not fire; it takes a few consistent signals. That lower bound is a normal approximation; `bound: 'exact'` swaps in the Beta distribution's own quantile at the same level, which asks for a little more on thin evidence. After you `markRevealed`, the intent stays revealed for a `cooldown` (default: its half-life) so you don't fire on every event. The same cooldown runs after the intent's outcome event. `predict` reports both: `revealed` is true inside a reveal cooldown, and `suppressedUntil` is when the later of the two cooldowns ends, or null when `shouldReveal` is free to fire.
+
+### Outcomes reset the slate and pause reveals
+
+When the outcome event arrives, the intent's evidence returns to the prior (α, β and contributions), while everything learned is kept. The user already upgraded; stop predicting that they will. Set `resetOnOutcome: false` for intents where the outcome can repeat inside one episode.
+
+The outcome also starts the intent's `cooldown`: `shouldReveal` stays false until it ends, however strong the fresh evidence, so a user who just bought is not immediately pitched again. The time of the last outcome is kept on the state as `lastOutcomeAt`.
+
+### Every answer comes with its reasons
+
+`explain` returns, per signal, how much evidence it currently holds and how much p would move without it, plus the initial, learned and effective weights and the hit/miss record. If a reveal looks wrong, you can see exactly why it fired.
 
 ## Using with React
 

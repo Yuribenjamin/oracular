@@ -1,7 +1,8 @@
 import { type IntentStore, useIntent } from '@oracular/react';
 import { inspect } from 'oracular';
 import { renderInspector } from 'oracular/inspect';
-import { type CSSProperties, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useReducer, useRef, useState } from 'react';
+import type { DemoClock } from './demo';
 
 const PLANS = [
   { name: 'Free', price: '$0', blurb: 'One project, three exports a month' },
@@ -9,17 +10,27 @@ const PLANS = [
   { name: 'Team', price: '$40', blurb: 'Pro for five, with roles' },
 ];
 
-export function App({ store }: { store: IntentStore }) {
+export function App({ store, demo = null }: { store: IntentStore; demo?: DemoClock | null }) {
   const { state, track, reveal, predict, endEpisode } = useIntent(store);
   const [offer, setOffer] = useState(false);
   const panel = useRef<HTMLElement>(null);
+  // In demo mode the clock moves without an event; re-render so that reads at `now` follow it.
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
 
-  // The inspector is framework-free HTML; re-render it whenever the state changes.
+  // The inspector is framework-free HTML; re-render it whenever the state changes (and, in demo
+  // mode, whenever the clock moves, so decay is visible without an event).
   useEffect(() => {
-    if (panel.current !== null) {
-      panel.current.innerHTML = renderInspector(inspect(state, store.now()), { title: 'inspector' });
-    }
-  }, [state, store]);
+    const draw = () => {
+      if (panel.current !== null) {
+        panel.current.innerHTML = renderInspector(inspect(state, store.now()), { title: 'inspector' });
+      }
+    };
+    draw();
+    return demo?.subscribe(() => {
+      draw();
+      rerender();
+    });
+  }, [state, store, demo]);
 
   // Every signal is an ordinary event; the reveal check runs against the state after it.
   const signal = (name: string) => {
@@ -30,6 +41,12 @@ export function App({ store }: { store: IntentStore }) {
 
   return (
     <main style={styles.main}>
+      {demo !== null && (
+        <div style={styles.caption}>
+          <span style={styles.clock}>{new Date(store.now()).toUTCString().slice(0, 22)} UTC</span>
+          {demo.caption()}
+        </div>
+      )}
       <section>
         <h1>Pricing</h1>
         <p>
@@ -93,22 +110,30 @@ export function App({ store }: { store: IntentStore }) {
 const styles: Record<string, CSSProperties> = {
   main: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) 380px',
+    // The panel beside the page when there is room for both, below it otherwise.
+    gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
     gap: 24,
     padding: 24,
     fontFamily: 'system-ui, sans-serif',
   },
-  plans: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 },
+  caption: {
+    gridColumn: '1 / -1',
+    background: '#1f2328',
+    color: '#fff',
+    borderRadius: 8,
+    padding: '8px 12px',
+    fontSize: 15,
+  },
+  clock: {
+    fontFamily: 'ui-monospace, Menlo, monospace',
+    color: '#9ecbff',
+    marginRight: 12,
+  },
+  plans: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 },
   plan: { border: '1px solid #ddd', borderRadius: 8, padding: 16 },
   price: { fontSize: 24, margin: '4px 0' },
   row: { display: 'flex', gap: 8, flexWrap: 'wrap', margin: '16px 0' },
   meter: { color: '#555' },
   offer: { background: '#fff7e0', border: '1px solid #f0c060', borderRadius: 8, padding: 12 },
-  panel: {
-    borderLeft: '1px solid #ddd',
-    paddingLeft: 16,
-    fontSize: 14,
-    overflow: 'auto',
-    maxHeight: '90vh',
-  },
+  panel: { fontSize: 14, overflow: 'auto', maxHeight: '90vh' },
 };

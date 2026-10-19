@@ -48,6 +48,14 @@ Three possible reasons, all visible in `predict`: `lower` has not cleared the th
 
 `confidence` is `1 − 2·sd`, a heuristic. The standard deviation of a Beta distribution is largest near p = 0.5, so moving p from 0.05 toward 0.5 can widen it even though more is known. The engine decides with `lower`, not with `confidence`.
 
+## Why is the lower bound sometimes 0?
+
+`lower` is `p − z·sd`, clamped to [0, 1] ([Reveal & confidence](/guide/concepts/reveal-and-confidence#the-rule)). With a weak prior and little evidence the standard deviation is larger than p, so the normal approximation goes below zero and the clamp shows 0: the `willBuy` preset starts at p 0.048 with sd 0.096, the quickstart's `upgrade` at p 0.05 with sd 0.066. It means "too little evidence for a bound", which is also why `shouldReveal` is false there. With `bound: 'exact'`, the Beta distribution's own quantile, the lower bound is never exactly 0, though it can be vanishingly small when the prior is weak: Beta(0.192, 3.808), the `willBuy` preset's prior, gives about 1e-6. See [Normal or exact](/guide/concepts/reveal-and-confidence#normal-or-exact).
+
+## How many sessions until learning matters?
+
+Learning needs contrast: a signal is judged by comparing the sessions it appeared in with the sessions it did not, so the first confirmed session moves nothing, however it ended, and a signal seen in every session never moves ([Learning needs contrast](/guide/concepts/episodes-and-learning#learning-needs-contrast)). With the defaults, one session with the signal and the outcome followed by five with neither moves its weight by 1.7%; ten with and ten without, cleanly split, by 27%. `learning.priorEpisodes` (default 10) sets the pace: the same twenty sessions move the weight 58% at 2 and 7% at 50 ([Worked example](/guide/concepts/episodes-and-learning#worked-example)). In practice, a handful of sessions with the outcome and a handful without, so a few weeks for a weekly habit. On the [public clickstream](/guide/case-study-clickstream#scored-on-visitors-tune-never-saw), where 87% of visitors had one session, learning was worth two points of precision across everyone. Among the visitors with three or more sessions it was worth four points of precision and half again the recall with the printed config, and with the learning constants fit for that population the engine caught 27.9% of the orders at 48.9% precision, against 7.9% at 34.0% with learning off ([The rule a skeptic would write](/guide/case-study-clickstream#the-rule-a-skeptic-would-write)).
+
 ## How big is it?
 
 About 21 kB minified and 7.2 kB gzipped, zero dependencies. A state with a handful of intents serializes to a few kilobytes.
