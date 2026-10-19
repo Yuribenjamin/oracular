@@ -40,8 +40,10 @@ export function serialize(state: EngineState): string {
  * Always pass the app's current `config`: it is validated and replaces the stored snapshot,
  * intents and signals no longer declared are dropped (α and β are recomputed from the kept
  * contributions), and newly declared intents start at their prior. States saved by oracular
- * 0.1.0 to 0.5.x are upgraded to the current shape on their own; `migrate` is only for a version
- * this library does not know.
+ * 0.1.0 to 0.5.x are upgraded to the current shape on their own, and a state one version newer
+ * than {@link STATE_VERSION} (written by the next release, read after a rollback) is read as the
+ * current one, ignoring the fields it adds; `migrate` is only for a version this library does
+ * not know.
  *
  * @param json - A string produced by {@link serialize}.
  * @param opts - `config`: the app's current config. `migrate`: called as
@@ -51,8 +53,9 @@ export function serialize(state: EngineState): string {
  * @throws `SyntaxError` when `json` is not valid JSON.
  * @throws `TypeError` when the stored data, the result of `migrate`, `opts` or `opts.config`
  *   has the wrong shape.
- * @throws `RangeError` when the stored version is unknown and no `migrate` is given, when
- *   `migrate` does not return the current version, when a stored number is out of range, or
+ * @throws `RangeError` when the stored version is neither one this library reads (1 to one past
+ *   {@link STATE_VERSION}) nor handled by a given `migrate`, when `migrate` does not return the
+ *   current version, when a stored number is out of range, or
  *   when stored numbers are finite but too large to compute with (a tampered or corrupted state
  *   that would otherwise answer NaN).
  * @example
@@ -89,9 +92,14 @@ export function deserialize(json: string, opts: DeserializeOptions = {}): Engine
   if (parsed.version !== STATE_VERSION) {
     if (canMigrate(parsed.version)) {
       stored = migrateStored(parsed);
+    } else if (parsed.version === STATE_VERSION + 1) {
+      // The next state version only adds fields (the stability policy), so this release reads it
+      // as its own and ignores what it does not know: a rollback by one release keeps the user's
+      // history, and only what the newer version added is lost.
+      stored = { ...parsed, version: STATE_VERSION };
     } else if (opts.migrate === undefined) {
       throw new RangeError(
-        `oracular: stored state is version ${parsed.version} but this library reads versions 1 to ${STATE_VERSION}; pass a migrate function`,
+        `oracular: stored state is version ${parsed.version} but this library reads versions 1 to ${STATE_VERSION + 1}; pass a migrate function`,
       );
     } else {
       stored = opts.migrate(parsed, parsed.version);

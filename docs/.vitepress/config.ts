@@ -55,6 +55,7 @@ export default defineConfig({
             { text: 'Introduction', link: '/guide/introduction' },
             { text: 'Installation', link: '/guide/installation' },
             { text: 'Quickstart', link: '/guide/quickstart' },
+            { text: 'Presets', link: '/guide/presets' },
           ],
         },
         {
@@ -74,6 +75,7 @@ export default defineConfig({
           items: [
             { text: 'Persistence & migration', link: '/guide/persistence' },
             { text: 'Explainability', link: '/guide/explainability' },
+            { text: 'Inspect: see explain live', link: '/guide/inspect' },
             { text: 'Tuning guide', link: '/guide/tuning' },
             { text: 'Shadow mode', link: '/guide/shadow-mode' },
             { text: 'Case study: a clickstream', link: '/guide/case-study-clickstream' },
@@ -85,6 +87,7 @@ export default defineConfig({
           text: 'Project',
           items: [
             { text: 'FAQ', link: '/guide/faq' },
+            { text: 'Stability and 1.0', link: '/guide/stability' },
             { text: 'Roadmap', link: '/guide/roadmap' },
           ],
         },

@@ -60,6 +60,13 @@ describe('tuning tables in the docs', () => {
     expect(tables['independence-table']).toMatch(/alone, weight 2 \| 0\.208 \| 13 \|/);
     expect(tables['independence-table']).toMatch(/always together \| 0\.321 \| 5 \|/);
     expect(tables['independence-table']).toMatch(/then `a` \| 0\.321 \| 5 \|/);
+    // Presets: the tuned one carries its sample, the hand-written ones say so.
+    expect(tables['presets-table']).toContain(
+      '| `willBuy` | 0.048 | 4 | 1 hour | `cart.added` 2.3 | `checkout.completed` | cooldown 1 day | tuned: 181,080 sessions, 93,537 visitors |',
+    );
+    expect(tables['presets-table']).toContain(
+      '| `stuck` | 0.1 | 5 | 10 minutes | `editor.undo` 1, `search.empty` 2, `help.opened` 3, `task.completed` -4 | `help.article.read` | threshold 0.6, cooldown 1 hour, saturate off | hand-written |',
+    );
     expect(tables['attribution-table']).toContain('| pricing.viewed | Monday | 0 | 1 |');
     expect(tables['attribution-table']).toContain('| export.clicked | Tuesday | 1 | 0 |');
     // With attribution, Monday's signals get 2^(−age / 7d) of a hit: 0.906 after a day, 0.743

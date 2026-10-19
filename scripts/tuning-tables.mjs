@@ -12,6 +12,7 @@ import {
   predict,
   shouldReveal,
 } from 'oracular';
+import { presetSources, presets } from 'oracular/presets';
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -306,6 +307,32 @@ function attributionCreditRows() {
   return rows;
 }
 
+/** One row per preset: its knobs as shipped and where its numbers come from. */
+function presetRows() {
+  const duration = (x) =>
+    x % DAY === 0
+      ? `${x / DAY} day${x === DAY ? '' : 's'}`
+      : x % HOUR === 0
+        ? `${x / HOUR} hour${x === HOUR ? '' : 's'}`
+        : `${x / MINUTE} minutes`;
+  return Object.entries(presets).map(([name, p]) => {
+    const source = presetSources[name];
+    const signals = Object.entries(p.signals)
+      .map(([s, w]) => `\`${s}\` ${w}`)
+      .join(', ');
+    const reveal = p.reveal
+      ? Object.entries(p.reveal)
+          .map(([k, v]) => `${k} ${k === 'cooldown' ? duration(v) : v}`)
+          .join(', ')
+      : 'defaults';
+    const from =
+      source.kind === 'tuned'
+        ? `tuned: ${source.episodes.toLocaleString('en-US')} sessions, ${source.installs.toLocaleString('en-US')} visitors`
+        : 'hand-written';
+    return `| \`${name}\` | ${p.prior} | ${p.priorStrength} | ${duration(p.halfLife)} | ${signals} | \`${p.outcome}\` | ${reveal}${p.saturate === false ? ', saturate off' : ''} | ${from} |`;
+  });
+}
+
 /** Every table, keyed by the marker name used in the docs. */
 export function renderTables() {
   const strengths = [5, 10, 20, 50];
@@ -400,7 +427,14 @@ export function renderTables() {
     ...attributionCreditRows(),
   ];
 
+  const presetTable = [
+    '| preset | prior | strength | half-life | signals | outcome | reveal | numbers |',
+    '| ------ | ----- | -------- | --------- | ------- | ------- | ------ | ------- |',
+    ...presetRows(),
+  ];
+
   return {
+    'presets-table': presetTable.join('\n'),
     'repeating-outcome-table': repeating.join('\n'),
     'once-per-user-table': oncePerUser.join('\n'),
     'independence-table': independence.join('\n'),

@@ -116,6 +116,31 @@ describe('serialize / deserialize', () => {
     expect(() => deserialize(old, { migrate: () => JSON.parse(old) })).toThrow(RangeError);
   });
 
+  it('reads a state one version newer than its own, ignoring what that version added', () => {
+    // The stability policy: a state version bump only adds fields, so the previous release can
+    // read the newer state and a rollback by one release keeps the user's history.
+    const s = busyState();
+    const newer = JSON.parse(serialize(s));
+    newer.version = STATE_VERSION + 1;
+    newer.future = { anything: true };
+    newer.intents.upgrade.waiting = [1, 2, 3];
+    newer.episode.intents.upgrade.extra = 'ignored';
+    const migrate = vi.fn();
+    expect(load(JSON.stringify(newer), { migrate })).toStrictEqual(s);
+    expect(migrate).not.toHaveBeenCalled();
+    expect(load(JSON.stringify(newer), { config })).toStrictEqual(s);
+
+    // Two versions ahead is unknown: the error names the range, and migrate is consulted.
+    const further = { ...newer, version: STATE_VERSION + 2 };
+    expect(() => deserialize(JSON.stringify(further))).toThrow(RangeError);
+    expect(() => deserialize(JSON.stringify(further))).toThrow(
+      new RegExp(`reads versions 1 to ${STATE_VERSION + 1}`),
+    );
+    const handled = vi.fn(() => s);
+    expect(load(JSON.stringify(further), { migrate: handled })).toStrictEqual(s);
+    expect(handled).toHaveBeenCalledWith(JSON.parse(JSON.stringify(further)), STATE_VERSION + 2);
+  });
+
   it('rejects garbage', () => {
     const s = createState(config);
     const valid = JSON.parse(serialize(s));

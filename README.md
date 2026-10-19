@@ -64,9 +64,21 @@ With these numbers the offer fires after roughly six strong signals across separ
 
 That block is copied verbatim into the test suite, so it always runs.
 
+## The workflow: shadow, tune, ship, learn
+
+The weights above are a guess, and the point of oracular is that you do not have to live with a guess. The intended path:
+
+1. **Start from a preset or a guess.** `oracular/presets` has `willBuy`, `upgrade`, `stuck` and `churn` as plain configs to spread and override; each says whether its numbers were fitted or written by hand.
+2. **Run in shadow mode.** The engine computes every decision and your app records it with `createRecord`, one JSON line per event, and shows nothing yet.
+3. **Tune.** `npx oracular tune shadow.ndjson --config oracular.config.json` reads what the engine itself counted across your users and prints the config to ship: the base rate as the prior, each signal's measured lift as its weight, the half-life that predicts the log best, with sample sizes and intervals. `npx oracular replay` scores any config on the same log before you commit to it.
+4. **Ship, and let it learn.** The fitted config is the population's answer; on each device the engine corrects it from that user's own outcomes.
+
+On a public clickstream of 2.7 million events, a hand-written config scored worse than always guessing the base rate, and the tuned one 10% better, with a reveal followed by an order six times as often as chance. Against the rule a skeptic would write, reveal on the third cart add, it ties for first-time visitors, as it must, and for returning ones catches 43% more orders at three points higher precision, because it has learned who fills carts without buying. The [case study](https://yuribenjamin.github.io/oracular/guide/case-study-clickstream) has every number; the [Shadow mode guide](https://yuribenjamin.github.io/oracular/guide/shadow-mode) has the workflow.
+
 ## Contents
 
 - [Why oracular](#why-oracular)
+- [The workflow: shadow, tune, ship, learn](#the-workflow-shadow-tune-ship-learn)
 - [How it works](#how-it-works)
 - [Examples](#examples)
 - [Using with React](#using-with-react)
@@ -188,12 +200,12 @@ const churn = {
 ### Ad placement
 
 ```ts
+import { presets } from 'oracular/presets';
+
+// The tuned preset (prior 0.048, strength 4, cart.added 2.3, from a real clickstream), plus your own signals.
 const willBuy = {
-  prior: 0.02,
-  priorStrength: 50,
-  halfLife: 3 * 24 * 60 * 60 * 1000,
-  signals: { 'product.viewed': 1, 'cart.added': 3, 'wishlist.added': 2, 'cart.emptied': -3 },
-  outcome: 'checkout.completed',
+  ...presets.willBuy,
+  signals: { ...presets.willBuy.signals, 'wishlist.added': 2, 'cart.emptied': -3 },
 };
 // shouldReveal(state, 'willBuy', now) → show the sponsored placement, then markRevealed.
 ```
@@ -244,6 +256,7 @@ shouldReveal(state, intent: string, at: number, opts?: RevealOptions): boolean
 markRevealed(state, intent: string, at: number): EngineState
 explain(state, intent: string, at: number, opts?: { nonZero?: boolean; limit?: number }): SignalExplanation[]
 evaluate(state, intent: string, at: number, opts?): { prediction, reveal, explanation }  // all three, one decay pass
+inspect(state, at: number, opts?): { at, intents: [{ intent, prediction, reveal, explanation }] }  // evaluate for every intent
 evidenceToReveal(intentConfig, opts?): number   // pseudo-counts at which shouldReveal first becomes true
 episodeClosed(prev, next): boolean               // did an episode close between two states?
 createRecord(state, event, { installId, mode }): EventRecord   // one recorder line: the event and what was decided
@@ -364,6 +377,8 @@ explain(state, 'upgrade', Date.now());
 
 Rows are sorted by the size of their impact. `limit.hit` has no history yet, so its effective weight is exactly the initial one. `pricing.viewed` was followed by an upgrade in six of its seven sessions while the three sessions without it saw one upgrade, so it learned a weight above the initial 3. `export.clicked` appeared in every session: it has no counterfactual, so whatever its hit rate, its weight stands at exactly the initial 1 until a session happens without it. See [Episodes & learning](https://yuribenjamin.github.io/oracular/guide/concepts/episodes-and-learning) for why learning needs contrast.
 
+`inspect(state, now)` returns all of that for every intent as one object, and `oracular/inspect` renders it as a live, framework-free panel: `mountInspector(element, () => inspect(state, Date.now()))`, then `update()` after each `observe`. See [Inspect](https://yuribenjamin.github.io/oracular/guide/inspect).
+
 ## Shadow mode, replay and tune
 
 Run oracular silently first. Record what it decides, export the log, and measure a config offline before any reveal is shown:
@@ -391,10 +406,11 @@ npx oracular tune shadow.ndjson --config oracular.config.json
 - **Portable.** No DOM, Node or React Native specific APIs; the source compiles against the ES2020 library alone. ESM and CommonJS builds with type declarations.
 - **Private.** Nothing leaves the device because nothing *can*: there is no I/O in the library.
 - **Honest about uncertainty.** `shouldReveal` needs both a high mean and a high lower bound.
+- **Committed.** What counts as public API, how the state format may change before 1.0 and what 1.0 will promise are written down in [Stability and 1.0](https://yuribenjamin.github.io/oracular/guide/stability).
 
 ## Roadmap
 
-Now is 0.4, themed **learning that matches how people behave**. Shipped so far: cross-episode attribution (`attribution` on an intent, so a session's signals earn a share of an outcome days later), `npx oracular tune` to seed a config from a shadow log, and small ergonomics (`validateConfig`, `ms`, a JSON Schema for the config). Presets come once tune has run on more real logs. 0.3 shipped shadow mode, `npx oracular replay` and per-episode saturation. Then a written stability policy before 1.0. Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
+The 0.4 theme, **learning that matches how people behave**, is complete: cross-episode attribution (`attribution` on an intent, so a session's signals earn a share of an outcome days later), `npx oracular tune` to seed a config from a shadow log, presets, and small ergonomics (`validateConfig`, `ms`, a JSON Schema for the config). 0.3 shipped shadow mode, `npx oracular replay` and per-episode saturation. Next is the road to 1.0, whose criteria are on [Stability and 1.0](https://yuribenjamin.github.io/oracular/guide/stability). Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
 
 ## Contributing
 

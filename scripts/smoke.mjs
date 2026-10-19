@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {
   createState,
+  inspect,
   ms,
   observe,
   predict,
@@ -9,6 +10,8 @@ import {
   shouldReveal,
   validateConfig,
 } from 'oracular';
+import { mountInspector, renderInspector } from 'oracular/inspect';
+import { presetSources, presets } from 'oracular/presets';
 
 const config = {
   intents: {
@@ -40,5 +43,14 @@ assert.ok(p1 > p0, 'a positive signal raises p');
 assert.equal(typeof shouldReveal(after, 'upgrade', 2), 'boolean');
 assert.deepEqual(validateConfig(config), before.config);
 assert.equal(ms.days(1), 86_400_000);
+// The presets subpath resolves through the exports map and every preset is a config the engine takes.
+assert.deepEqual(Object.keys(presets), ['willBuy', 'upgrade', 'stuck', 'churn']);
+assert.deepEqual(Object.keys(presetSources), Object.keys(presets));
+createState({ intents: presets });
+// The inspect subpath renders the main entry's snapshot into anything with an innerHTML.
+const panel = { innerHTML: '' };
+mountInspector(panel, () => inspect(after, 2));
+assert.match(panel.innerHTML, /<strong>upgrade<\/strong> p 0\.\d{3}/);
+assert.equal(renderInspector(inspect(after, 2)), panel.innerHTML);
 
 console.log(`smoke ok (esm, node ${process.version})`);

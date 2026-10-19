@@ -2,8 +2,10 @@
  * Version of the serialized state shape, stored in every state as `state.version`. Bumped only
  * when `EngineState` changes incompatibly, and every bump ships its migration: {@link deserialize}
  * upgrades states saved by earlier versions of this library on its own (version 1, written by
- * oracular 0.1.0 to 0.2.x, and version 2, written by 0.3.0 to 0.5.x, become version 3) and calls
- * your `migrate` function only for a version it does not know.
+ * oracular 0.1.0 to 0.2.x, and version 2, written by 0.3.0 to 0.5.x, become version 3), reads a
+ * state one version newer than its own as its own (a version bump only adds fields, so a rollback
+ * by one release keeps the user's history), and calls your `migrate` function only for a version
+ * it does not know.
  *
  * @example
  * ```ts

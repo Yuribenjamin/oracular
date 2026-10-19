@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const {
   createState,
+  inspect,
   ms,
   observe,
   predict,
@@ -10,6 +11,8 @@ const {
   STATE_VERSION,
   validateConfig,
 } = require('oracular');
+const { presets, presetSources } = require('oracular/presets');
+const { mountInspector, renderInspector } = require('oracular/inspect');
 
 const config = {
   intents: {
@@ -37,5 +40,13 @@ assert.ok(p1 > p0, 'a positive signal raises p');
 assert.equal(typeof shouldReveal(after, 'upgrade', 2), 'boolean');
 assert.deepEqual(validateConfig(config), before.config);
 assert.equal(ms.days(1), 86_400_000);
+assert.deepEqual(Object.keys(presets), ['willBuy', 'upgrade', 'stuck', 'churn']);
+assert.deepEqual(Object.keys(presetSources), Object.keys(presets));
+createState({ intents: presets });
+// The inspect subpath renders the main entry's snapshot into anything with an innerHTML.
+const panel = { innerHTML: '' };
+mountInspector(panel, () => inspect(after, 2));
+assert.match(panel.innerHTML, /<strong>upgrade<\/strong> p 0\.\d{3}/);
+assert.equal(renderInspector(inspect(after, 2)), panel.innerHTML);
 
 console.log(`smoke ok (cjs, node ${process.version})`);
