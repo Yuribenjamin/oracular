@@ -40,7 +40,7 @@ The stored state carries [`STATE_VERSION`](/api/variables/STATE_VERSION). A rele
 
 `migrate` is only for a version the library does not know, such as a state written by a newer oracular and read after a rollback. It receives the parsed JSON and its version and returns a current state; without it, such a state throws a `RangeError`. What may still change in the state format before 1.0, and what 1.0 promises about it, is on [Stability and 1.0](/guide/stability).
 
-**Rolling back.** An older release cannot read a newer state (0.5.x and a version 3 state, say); it throws a `RangeError`. If you might roll back, or simply want a launch never to fail on stored data, catch and start fresh:
+**Rolling back.** From 0.7, a release reads a state one version newer than its own as its own, ignoring the fields that version added: roll back by one release and every user keeps their history. What is lost is whatever the ignored fields held; the changelog entry of every version bump says what that is for that bump, because an ignored field can hold state that then never settles. A version bump only ever adds fields, which is what makes the rest safe ([Stability and 1.0](/guide/stability#the-state-format)). Two versions ahead, or any release before 0.7 reading a newer state, throws a `RangeError`. If you might roll back further, or simply want a launch never to fail on stored data, catch and start fresh:
 
 ```ts
 let state: EngineState;

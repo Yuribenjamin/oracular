@@ -317,7 +317,8 @@ export interface Evaluation {
 /**
  * Turns a stored state of a version this library cannot migrate itself into a current
  * `EngineState`. Receives the parsed JSON as-is and the version it declares. States saved by
- * oracular 0.1.0 to 0.5.x (versions 1 and 2) never reach it: `deserialize` upgrades those on its own.
+ * oracular 0.1.0 to 0.5.x (versions 1 and 2) never reach it, nor does a state one version newer
+ * than `STATE_VERSION`: `deserialize` handles both on its own.
  *
  * @example
  * ```ts
@@ -341,8 +342,9 @@ export interface DeserializeOptions {
   /** The app's current config. Validated, swapped in, and used to prune signals and intents no longer declared. */
   config?: EngineConfig;
   /**
-   * Called when the stored version is neither `STATE_VERSION` nor one this library migrates
-   * itself (states from oracular 0.1.0 to 0.5.x are upgraded without it).
+   * Called when the stored version is neither `STATE_VERSION`, nor one this library migrates
+   * itself (states from oracular 0.1.0 to 0.5.x are upgraded without it), nor the next version,
+   * which it reads as its own.
    */
   migrate?: Migrate;
 }

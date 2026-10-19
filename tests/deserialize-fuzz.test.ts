@@ -243,7 +243,7 @@ function* replacements(text: string, only?: (path: Path) => boolean): Iterable<[
       ];
     }
   }
-  for (const version of [0, 2, 3, '1', 1.5, -1, null]) {
+  for (const version of [0, 2, 3, 4, 5, '1', 1.5, -1, null]) {
     yield [`version ${String(version)}`, JSON.stringify(setAt(root, ['version'], version))];
   }
 }
