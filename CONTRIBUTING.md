@@ -75,6 +75,11 @@ browsers, Node and React Native.
 
 - Every public function is pure. `tests/purity.test.ts` deep-freezes inputs, calls each
   function twice and checks deep-equal output and untouched inputs.
+- `tests/property.test.ts` generates configs and event traces with fast-check (200 runs per
+  property, fixed seed) and checks the properties the stability page lists: purity, monotone
+  decay, the α/β invariant, serialize/deserialize identity and the reveal gate.
+  `PROPERTY_SEED=<n> npm test` runs them with another seed; a failure prints the seed and the
+  shrunk counterexample.
 - `tests/helpers.ts` exports `assertInvariants(state)`. It checks, for every intent, that
   α = α₀ + Σ contributions.alpha and β = β₀ + Σ contributions.beta within 1e-9, that every
   number is finite and p is in [0, 1], that no undeclared signal or intent key exists anywhere
