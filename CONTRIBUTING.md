@@ -27,6 +27,7 @@ Individual steps:
 | `npm run pack:check`    | packs the package, asserts the exact file list, runs publint (strict) and attw on the tarball |
 | `npm run docs:dev`      | the documentation site locally (regenerates the API reference first) |
 | `npm run docs:build`    | builds the site; dead links fail the build                    |
+| `npm run docs:gif`      | re-records `assets/inspector.gif` from the React example on its virtual clock, through the system Chrome (`playwright-core`, no browser download); deterministic on one machine, fonts differ across OSes |
 
 `npm ls react` lists two copies on purpose: VitePress depends on `@docsearch/react`, whose peer
 range pins React below 19, so npm hoists React 18 to the root and nests the React 19 that
