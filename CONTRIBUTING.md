@@ -169,17 +169,23 @@ The playground imports the engine from `src/` directly, so it always runs the cu
 
 ## Releasing
 
+The repository is an npm workspace whose root is the `oracular` package itself
+(`"workspaces": [".", "packages/*"]`), so Changesets versions and publishes the root like any
+other package. `npm run check` at the root stays the single gate; per-package checks fan out from
+it with explicit `-w` flags, never `--workspaces` (the root would recurse into itself).
+
 1. A pull request lands on `main` with a changeset.
 2. The release workflow (`.github/workflows/release.yml`) opens or updates a **"chore: version
    packages"** pull request that bumps `package.json` and writes the CHANGELOG entries from the
    pending changesets.
 3. Merging that pull request runs the workflow again. With no changesets left, it publishes to
-   npm through trusted publishing (OIDC, provenance attached, no tokens), creates the `vX.Y.Z`
-   tag and the GitHub release.
+   npm through trusted publishing (OIDC, provenance attached, no tokens), creates the
+   `oracular@X.Y.Z` tag and the GitHub release, one of each per package in the workspace
+   (releases up to 0.8.0 are tagged `vX.Y.Z`).
 
-Before the Changesets step, a release run whose `package.json` version is not on npm yet (that
-is, a run that is about to publish) rehearses the publish with
-`npm publish --dry-run --json --access public --tag latest`. That runs `prepublishOnly` (the full
+Before the Changesets step, a release run in which a workspace package's version is not on npm
+yet (that is, a run that is about to publish it) rehearses that publish in the package's directory
+with `npm publish --dry-run --json --access public --tag latest`. That runs `prepublishOnly` (the full
 `check`) in the real publish environment, including the npm flags that nested npm calls inherit,
 and prints its output. If `check` fails there, the job stops with the real error in the log and
 nothing is published; the Changesets step would only have reported "command failed". Runs whose

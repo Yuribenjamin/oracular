@@ -1,7 +1,9 @@
 # Changesets
 
 This folder is managed by [Changesets](https://github.com/changesets/changesets). Each
-Markdown file here describes one pending change to `oracular` and the version bump it needs.
+Markdown file here describes one pending change to a package in this repository (`oracular`, and the framework
+bindings under `packages/` as they arrive) and the version bump it needs; `npm run changeset`
+asks which package.
 `changeset version` turns them into a version bump and CHANGELOG entries; `changeset publish`
 publishes the result.
 
