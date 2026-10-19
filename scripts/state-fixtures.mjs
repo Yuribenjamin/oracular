@@ -14,7 +14,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const VERSIONS = ['0.1.0', '0.1.1', '0.1.2', '0.2.0', '0.2.1', '0.3.0', '0.4.0'];
+export const VERSIONS = [
+  '0.1.0',
+  '0.1.1',
+  '0.1.2',
+  '0.2.0',
+  '0.2.1',
+  '0.3.0',
+  '0.4.0',
+  '0.5.0',
+  '0.5.1',
+  '0.5.2',
+  '0.6.0',
+  '0.7.0',
+];
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
