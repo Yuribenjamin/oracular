@@ -1,16 +1,18 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import {
+  createState,
   deserialize,
   type EngineState,
   endEpisode,
   explain,
+  markRevealed,
   observe,
   predict,
   STATE_VERSION,
   serialize,
 } from 'oracular';
 import { describe, expect, it, vi } from 'vitest';
-import { fixtureConfig, VERSIONS } from '../scripts/state-fixtures.mjs';
+import { fixtureConfig, runScenario, VERSIONS } from '../scripts/state-fixtures.mjs';
 import { assertInvariants } from './helpers';
 
 const dir = new URL('./fixtures/state/', import.meta.url);
@@ -43,7 +45,38 @@ type Stored = {
   };
 };
 
+/** Deep equality that keeps key order and allows 1e-12 on numbers: V8 versions differ by an ulp. */
+function expectSameJson(actual: unknown, expected: unknown, path: string): void {
+  if (typeof expected === 'number') {
+    expect(typeof actual, path).toBe('number');
+    expect(Math.abs((actual as number) - expected), path).toBeLessThanOrEqual(
+      1e-12 * Math.max(1, Math.abs(expected)),
+    );
+  } else if (Array.isArray(expected)) {
+    expect(Array.isArray(actual), path).toBe(true);
+    const items = actual as unknown[];
+    expect(items.length, path).toBe(expected.length);
+    for (const [i, item] of expected.entries()) expectSameJson(items[i], item, `${path}[${i}]`);
+  } else if (expected !== null && typeof expected === 'object') {
+    expect(actual !== null && typeof actual === 'object', path).toBe(true);
+    const a = actual as Record<string, unknown>;
+    const e = expected as Record<string, unknown>;
+    expect(Object.keys(a), `${path}: keys, in order`).toStrictEqual(Object.keys(e));
+    for (const key of Object.keys(e)) expectSameJson(a[key], e[key], `${path}.${key}`);
+  } else {
+    expect(actual, path).toBe(expected);
+  }
+}
+
 describe('states saved by every published version', () => {
+  it('are what the current build writes for the same scenario, at this state version', () => {
+    // No estimate, timestamp or key has moved since the newest release that wrote this version,
+    // unless a deliberate change came with a new fixture.
+    const newest = [...VERSIONS].reverse().find((v) => WRITTEN_VERSION[v] === STATE_VERSION)!;
+    const current = runScenario({ createState, observe, endEpisode, markRevealed, serialize });
+    expectSameJson(JSON.parse(current), JSON.parse(read(newest)), newest);
+  });
+
   it('has one fixture per published version, produced by scripts/state-fixtures.mjs', () => {
     expect(readdirSync(dir).sort()).toStrictEqual(VERSIONS.map((v) => `${v}.json`).sort());
     expect(Object.keys(WRITTEN_VERSION).sort()).toStrictEqual([...VERSIONS].sort());
