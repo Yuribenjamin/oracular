@@ -19,6 +19,8 @@ It is about 7 kB gzipped, has no dependencies, and contains no I/O of any kind.
 - **Not a model you train offline.** You write down your beliefs as priors. The only training data is the one user's events, on their device, and it never leaves it.
 - **Not a scheduler or a store.** You pass time in; you persist the state. The library has no clock and no storage.
 
+Still deciding? [Is oracular for you?](/guide/is-it-for-me) is five questions, each with the page that answers it.
+
 ## Why on-device
 
 - **Privacy that doesn't depend on policy.** Nothing leaves the device because nothing in the library can send anything. There is no network code to audit, misconfigure or breach.
@@ -42,3 +44,4 @@ You own three things: **time** (every call takes an `at` timestamp), **persisten
 - The six concept pages, starting with [Intents & priors](/guide/concepts/intents-and-priors).
 - The [Tuning guide](/guide/tuning) when you want numbers.
 - The [Playground](/playground) to click through all of it in your browser.
+- [Migrating from rules](/guide/migrating-from-rules) if a hand-written rule does this job today.
