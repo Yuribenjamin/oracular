@@ -43,34 +43,37 @@ jobs:
 
       - run: npm ci
 
-      # The rehearsal below only makes sense when a publish would follow: npm refuses even a dry
-      # run of a version that is already on the registry ("cannot publish over"), which is the
-      # normal state of main between releases.
-      - name: Check whether this version is already on npm
+      # The rehearsal below only makes sense for a package about to be published: npm refuses even
+      # a dry run of a version that is already on the registry ("cannot publish over"), which is
+      # the normal state of main between releases. The root is itself the `oracular` workspace;
+      # scripts/packages.mjs lists every public workspace package.
+      - name: Check which packages are not on npm yet
         id: registry
         run: |
-          v=$(node -p "require('./package.json').version")
-          if npm view "oracular@$v" version >/dev/null 2>&1; then
-            echo "oracular@$v is already on npm: nothing will be published, rehearsal skipped"
-            echo "published=true" >> "$GITHUB_OUTPUT"
+          dirs=$(node scripts/packages.mjs --unpublished)
+          if [ -z "$dirs" ]; then
+            echo "every package version is already on npm: nothing will be published, rehearsal skipped"
           else
-            echo "oracular@$v is not on npm yet: rehearsing the publish"
-            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "not on npm yet, rehearsing the publish of: $dirs"
           fi
+          echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
 
       # npm reads package.json before prepublishOnly builds dist, and warns that the bin at
-      # dist/cli.js is missing. Build first so the rehearsal log stays clean.
+      # dist/cli.js is missing. Build first so the rehearsal log stays clean, and so that a
+      # workspace package's own checks can resolve `oracular` through the workspace link to dist/.
       - name: Build before the rehearsal
-        if: steps.registry.outputs.published == 'false'
         run: npm run build
 
-      # Rehearsal: runs prepublishOnly (npm run check) under the real publish environment, with
-      # npm's own flags inherited by every nested npm call exactly as they are during the publish,
-      # and prints the full output. A failure stops the job here with its cause in the log; inside
-      # `changeset publish` the same failure would only read "command failed: npm run check".
+      # Rehearsal: runs prepublishOnly (the package's check) under the real publish environment,
+      # with npm's own flags inherited by every nested npm call exactly as they are during the
+      # publish, and prints the full output. A failure stops the job here with its cause in the
+      # log; inside `changeset publish` the same failure would only read "command failed".
       - name: Rehearse publish
-        if: steps.registry.outputs.published == 'false'
-        run: npm publish --dry-run --json --access public --tag latest
+        if: steps.registry.outputs.dirs != ''
+        run: |
+          for dir in ${{ steps.registry.outputs.dirs }}; do
+            (cd "$dir" && npm publish --dry-run --json --access public --tag latest)
+          done
         env:
           NPM_CONFIG_PROVENANCE: "true"
 
@@ -80,6 +83,7 @@ jobs:
       # The PAT (not GITHUB_TOKEN) is what lets the Version Packages PR trigger CI.
       - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
+          version: npm run release:version
           publish-script: npm run release
           create-github-releases: true
           commit-message: "chore: version packages"
