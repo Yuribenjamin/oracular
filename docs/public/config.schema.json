@@ -120,6 +120,11 @@
           "type": "number",
           "minimum": 0,
           "description": "How long after a reveal or the outcome the intent stays quiet. Default: the intent's halfLife."
+        },
+        "bound": {
+          "type": "string",
+          "enum": ["normal", "exact"],
+          "description": "How lower is computed: the normal approximation p − z·sd (default) or the exact Beta quantile at the same one-sided level."
         }
       }
     },

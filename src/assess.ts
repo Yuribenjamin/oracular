@@ -2,7 +2,7 @@ import { settlePending } from './attribution';
 import type { ResolvedLearning, ResolvedReveal } from './config';
 import { decayIntent } from './intent';
 import { signalWeights } from './learning';
-import { betaMean, betaSd, clamp01 } from './math';
+import { betaMean, betaSd, clamp01, lowerBound } from './math';
 import { getIntentState } from './state';
 import type {
   EngineState,
@@ -56,7 +56,7 @@ export function buildPrediction(
     intent: name,
     p,
     sd,
-    lower: clamp01(p - reveal.z * sd),
+    lower: lowerBound(is.alpha, is.beta, reveal.z, reveal.bound),
     confidence: clamp01(1 - 2 * sd),
     evidence: is.alpha + is.beta,
     revealed: revealEnd !== null,

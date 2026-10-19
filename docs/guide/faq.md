@@ -50,7 +50,7 @@ Three possible reasons, all visible in `predict`: `lower` has not cleared the th
 
 ## How big is it?
 
-About 13 kB minified and 4.3 kB gzipped, zero dependencies. A state with a handful of intents serializes to a few kilobytes.
+About 21 kB minified and 7.2 kB gzipped, zero dependencies. A state with a handful of intents serializes to a few kilobytes.
 
 ## Why a Beta distribution?
 

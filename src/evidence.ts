@@ -1,12 +1,13 @@
 import { normalizeIntentConfig, resolveReveal } from './config';
 import { priorCounts } from './intent';
-import { betaMean, betaSd, clamp01 } from './math';
+import { betaMean, lowerBound } from './math';
 import type { IntentConfig, RevealOptions } from './types';
 
 /**
  * How much positive evidence an intent needs before {@link shouldReveal} first becomes true:
  * the smallest pseudo-count `w` such that Beta(α₀ + w, β₀) clears both `p ≥ threshold` and
- * `p − z·sd ≥ threshold`. Divide by a signal's weight and round up for the number of full-weight
+ * `lower ≥ threshold`, with `lower` as `bound` defines it (p − z·sd, or the exact Beta quantile).
+ * Divide by a signal's weight and round up for the number of full-weight
  * occurrences that open the gate: distinct signals, or one occurrence per episode. Repeats within
  * one episode add less (n of them add `w × log2(1 + n)`, see {@link IntentConfig.saturate}).
  * Solved numerically to 1e-9.
@@ -14,8 +15,8 @@ import type { IntentConfig, RevealOptions } from './types';
  * Cooldowns and decay are not part of the answer: this is the evidence needed at one instant.
  *
  * @param intent - One intent's config, validated as `createState` would.
- * @param opts - `threshold` and `z` overrides, resolved as call → intent → defaults (there is
- *   no engine config here). `cooldown` is accepted and ignored.
+ * @param opts - `threshold`, `z` and `bound` overrides, resolved as call → intent → defaults
+ *   (there is no engine config here). `cooldown` is accepted and ignored.
  * @returns The pseudo-count sum; 0 when the prior alone already clears the gate; `Infinity`
  *   when no finite amount of evidence can (threshold 1).
  * @throws `TypeError` or `RangeError` when `intent` or `opts` is invalid.
@@ -27,14 +28,12 @@ import type { IntentConfig, RevealOptions } from './types';
  */
 export function evidenceToReveal(intent: IntentConfig, opts?: RevealOptions): number {
   const config = normalizeIntentConfig(intent, 'intent');
-  const { threshold, z } = resolveReveal(undefined, config, opts);
+  const { threshold, z, bound } = resolveReveal(undefined, config, opts);
   const { alpha0, beta0 } = priorCounts(config);
 
-  const open = (w: number): boolean => {
-    const alpha = alpha0 + w;
-    const p = betaMean(alpha, beta0);
-    return p >= threshold && clamp01(p - z * betaSd(alpha, beta0)) >= threshold;
-  };
+  const open = (w: number): boolean =>
+    betaMean(alpha0 + w, beta0) >= threshold &&
+    lowerBound(alpha0 + w, beta0, z, bound) >= threshold;
 
   if (threshold >= 1) return Number.POSITIVE_INFINITY;
   if (open(0)) return 0;

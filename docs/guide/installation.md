@@ -20,7 +20,7 @@ bun add oracular
 
 :::
 
-oracular has **zero runtime dependencies**. The ESM build is about 13 kB minified and 4.3 kB gzipped.
+oracular has **zero runtime dependencies**. The ESM build is about 21 kB minified and 7.2 kB gzipped.
 
 ## Module formats
 

@@ -25,6 +25,7 @@ interface Schema {
   exclusiveMaximum?: number;
   minLength?: number;
   not?: { const?: unknown };
+  enum?: unknown[];
 }
 
 const schema = JSON.parse(text) as Schema;
@@ -123,7 +124,7 @@ describe('the config JSON Schema', () => {
   type Full = EngineConfig & {
     episodeTimeout: number;
     learning: { halfLife: number; gain: number; priorEpisodes: number };
-    reveal: { threshold: number; z: number; cooldown: number };
+    reveal: { threshold: number; z: number; cooldown: number; bound: 'normal' | 'exact' };
     intents: {
       upgrade: EngineConfig['intents'][string] & {
         reveal: Required<NonNullable<EngineConfig['intents'][string]['reveal']>>;
@@ -135,11 +136,11 @@ describe('the config JSON Schema', () => {
       ...upgradeConfig(),
       episodeTimeout: 1,
       learning: { halfLife: 1, gain: 2, priorEpisodes: 10 },
-      reveal: { threshold: 0.5, z: 1.28, cooldown: 1 },
+      reveal: { threshold: 0.5, z: 1.28, cooldown: 1, bound: 'normal' },
       intents: {
         upgrade: {
           ...upgradeConfig().intents.upgrade,
-          reveal: { threshold: 0.5, z: 1.28, cooldown: 1 },
+          reveal: { threshold: 0.5, z: 1.28, cooldown: 1, bound: 'normal' },
         },
       },
     }) as Full;
@@ -296,6 +297,39 @@ describe('the config JSON Schema', () => {
         if (b.exclusiveMaximum !== undefined) rejects(b.exclusiveMaximum);
         if (typeof b.not?.const === 'number') rejects(b.not.const);
       });
+    }
+  });
+
+  it('offers bound as an enum, and the engine accepts exactly those two strings', () => {
+    const cases: [string, Schema, (config: Full, value: string) => void][] = [
+      [
+        'config.reveal.bound',
+        revealSchema,
+        (c, v) => {
+          c.reveal.bound = v as 'normal';
+        },
+      ],
+      [
+        'config.intents["upgrade"].reveal.bound',
+        intentReveal,
+        (c, v) => {
+          c.intents.upgrade.reveal.bound = v as 'normal';
+        },
+      ],
+    ];
+    for (const [path, node, set] of cases) {
+      const b = resolve(property(node, 'bound'));
+      expect(b.type).toBe('string');
+      expect(b.enum).toStrictEqual(['normal', 'exact']);
+      for (const value of ['normal', 'exact']) {
+        const config = base();
+        set(config, value);
+        expect(() => validateConfig(config), `${path} = ${value}`).not.toThrow();
+      }
+      const config = base();
+      set(config, 'wilson');
+      expect(() => validateConfig(config)).toThrow(TypeError);
+      expect(() => validateConfig(config)).toThrow(`oracular: ${path} must be "normal" or "exact"`);
     }
   });
 });

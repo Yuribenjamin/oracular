@@ -334,6 +334,38 @@ function presetRows() {
 }
 
 /** Every table, keyed by the marker name used in the docs. */
+/** The normal approximation against the exact Beta quantile at z = 1.28, on bare priors. */
+function boundRows() {
+  const out = [
+    '| Beta(α, β) | p | normal: p − 1.28·sd | exact: Beta quantile at Φ(−1.28) |',
+    '| ---------- | - | ------------------- | -------------------------------- |',
+  ];
+  for (const [alpha, beta] of [
+    [1.5, 1.5],
+    [4, 3],
+    [6, 4],
+    [12, 8],
+    [30, 20],
+  ]) {
+    const state = createState({
+      intents: {
+        x: {
+          prior: alpha / (alpha + beta),
+          priorStrength: alpha + beta,
+          halfLife: DAY,
+          signals: { s: 1 },
+        },
+      },
+    });
+    const normal = predict(state, 'x', T);
+    const exact = predict(state, 'x', T, { bound: 'exact' });
+    out.push(
+      `| ${alpha}, ${beta} | ${fixed(normal.p, 3)} | ${fixed(normal.lower, 3)} | ${fixed(exact.lower, 3)} |`,
+    );
+  }
+  return out;
+}
+
 export function renderTables() {
   const strengths = [5, 10, 20, 50];
   const byStrength = [
@@ -443,6 +475,7 @@ export function renderTables() {
     'attribution-credit-table': attributionCredit.join('\n'),
     'priorStrength-table': byStrength.join('\n'),
     'threshold-z-table': byGate.join('\n'),
+    'bound-table': boundRows().join('\n'),
     'saturation-table': saturation.join('\n'),
     'full-weight-table': fullWeight.join('\n'),
     'pacing-table': pacing.join('\n'),

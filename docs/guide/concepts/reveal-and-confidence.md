@@ -35,9 +35,31 @@ Evidence the quickstart config needs, and how many full-weight `pricing.viewed` 
 
 `z = 0` turns the confidence requirement off and fires on the mean alone. `z = 1.64` is a one-sided 95% bound, `z = 2.33` about 99%. Raising `threshold` is far more expensive than raising `z`, because evidence has to push p itself, not just tighten it.
 
+## Normal or exact
+
+`lower = p − z·sd` is a normal approximation to the Beta distribution, and it is optimistic exactly where the gate matters: thin evidence near the threshold. `bound: 'exact'` replaces it with the Beta distribution's own quantile at the same one-sided level, Φ(−z), so `z` keeps its meaning: 1.28 is a 90% bound, 1.64 a 95% one. The table compares the two at z = 1.28; it is generated from the engine and checked by the test suite:
+
+<!-- generated:bound-table -->
+| Beta(α, β) | p | normal: p − 1.28·sd | exact: Beta quantile at Φ(−1.28) |
+| ---------- | - | ------------------- | -------------------------------- |
+| 1.5, 1.5 | 0.500 | 0.180 | 0.157 |
+| 4, 3 | 0.571 | 0.347 | 0.333 |
+| 6, 4 | 0.600 | 0.411 | 0.401 |
+| 12, 8 | 0.600 | 0.463 | 0.459 |
+| 30, 20 | 0.600 | 0.512 | 0.511 |
+<!-- /generated:bound-table -->
+
+By α + β = 20 the two differ by a few thousandths and by 50 they agree to one. On thinner evidence the exact bound is lower, so with `'exact'` the gate waits for a little more evidence, and [`evidenceToReveal`](/api/functions/evidenceToReveal) says how much. Two things read differently under `'exact'`: `z = 0` gives the median rather than the mean, and `lower` can sit above `p` for a prior near 1 with little strength, because the Beta is skewed the other way. Nothing moves unless the option is set, and it resolves per call → intent → engine → default like the others:
+
+```ts
+shouldReveal(state, 'upgrade', now, { bound: 'exact' });
+```
+
+A config that sets `bound` is read by 0.8 and later; 0.7 rejects the key, so remove it before rolling a deploy back.
+
 ## Where options come from
 
-`threshold`, `z` and `cooldown` are resolved per call → intent → engine → defaults:
+`threshold`, `z`, `cooldown` and `bound` are resolved per call → intent → engine → defaults:
 
 ```ts
 const config = {
@@ -64,7 +86,7 @@ interface Prediction {
   intent: string;
   p: number;                        // α / (α + β)
   sd: number;                       // Beta standard deviation
-  lower: number;                    // p − z·sd, clamped to [0, 1]; what shouldReveal tests
+  lower: number;                    // p − z·sd clamped to [0, 1], or the exact Beta quantile with bound: 'exact'; what shouldReveal tests
   confidence: number;               // 1 − 2·sd, clamped to [0, 1]; a heuristic
   evidence: number;                 // α + β, prior strength included
   revealed: boolean;                // inside the cooldown after markRevealed

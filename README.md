@@ -140,7 +140,7 @@ Learned counts never decay unless you set `learning.halfLife`.
 
 ### Reveal only when confident
 
-`shouldReveal` is true when p ≥ threshold **and** p − z·sd ≥ threshold, where sd is the Beta standard deviation and z defaults to 1.28 (a one-sided 90% bound). Thin evidence with a high mean does not fire; it takes a few consistent signals. After you `markRevealed`, the intent stays revealed for a `cooldown` (default: its half-life) so you don't fire on every event. The same cooldown runs after the intent's outcome event. `predict` reports both: `revealed` is true inside a reveal cooldown, and `suppressedUntil` is when the later of the two cooldowns ends, or null when `shouldReveal` is free to fire.
+`shouldReveal` is true when p ≥ threshold **and** p − z·sd ≥ threshold, where sd is the Beta standard deviation and z defaults to 1.28 (a one-sided 90% bound). Thin evidence with a high mean does not fire; it takes a few consistent signals. That lower bound is a normal approximation; `bound: 'exact'` swaps in the Beta distribution's own quantile at the same level, which asks for a little more on thin evidence. After you `markRevealed`, the intent stays revealed for a `cooldown` (default: its half-life) so you don't fire on every event. The same cooldown runs after the intent's outcome event. `predict` reports both: `revealed` is true inside a reveal cooldown, and `suppressedUntil` is when the later of the two cooldowns ends, or null when `shouldReveal` is free to fire.
 
 ### Outcomes reset the slate and pause reveals
 
@@ -299,6 +299,7 @@ interface RevealOptions {
   threshold?: number;  // default 0.5
   z?: number;          // default 1.28
   cooldown?: number;   // default: the intent's halfLife
+  bound?: 'normal' | 'exact';  // default 'normal': p − z·sd; 'exact': the Beta quantile at Φ(−z)
 }
 ```
 
@@ -311,7 +312,7 @@ interface Prediction {
   intent: string;
   p: number;            // α / (α + β)
   sd: number;           // Beta standard deviation
-  lower: number;        // p − z·sd, clamped to [0, 1]; what shouldReveal compares to threshold
+  lower: number;        // p − z·sd clamped to [0, 1], or the exact Beta quantile with bound: 'exact'; what shouldReveal compares to threshold
   confidence: number;   // 1 − 2·sd, clamped to [0, 1]. A heuristic: 1 is a sharp estimate, 0 is as vague as a Beta gets
   evidence: number;     // α + β, prior strength included
   revealed: boolean;    // inside the cooldown after markRevealed
