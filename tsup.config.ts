@@ -6,37 +6,9 @@ export default defineConfig([
     format: ['esm', 'cjs'],
     dts: true,
     sourcemap: true,
-    // tsup builds every config at the same time; keep the other entries' output when cleaning dist/.
-    clean: ['!cli.js', '!presets.*', '!inspect.*'],
-    target: 'es2020',
-    treeshake: true,
-    splitting: false,
-    minify: false,
-  },
-  {
-    // `oracular/presets`, built apart from the main entry so that each declaration file is
-    // self-contained: one shared dts build would split the types both entries use into a chunk with
-    // a hashed name, and the tarball's file list is pinned. The few bytes of `ms` it uses are
-    // bundled into it.
-    entry: ['src/presets.ts'],
-    format: ['esm', 'cjs'],
-    dts: true,
-    sourcemap: true,
-    clean: false,
-    target: 'es2020',
-    treeshake: true,
-    splitting: false,
-    minify: false,
-  },
-  {
-    // `oracular/inspect`: the HTML renderer and the mount helper. Built apart for the same reason
-    // as presets. It imports nothing from the engine at run time: it renders the snapshot that
-    // `inspect` from the main entry returns.
-    entry: ['src/inspect.ts'],
-    format: ['esm', 'cjs'],
-    dts: true,
-    sourcemap: true,
-    clean: false,
+    // This file's two configs build at the same time; keep the bin's output when cleaning dist/.
+    // The subpaths (tsup.presets.config.ts, tsup.inspect.config.ts) build afterwards, in turn.
+    clean: ['!cli.js'],
     target: 'es2020',
     treeshake: true,
     splitting: false,
