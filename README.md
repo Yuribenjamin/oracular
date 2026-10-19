@@ -214,34 +214,21 @@ More in the docs: [Recipes](https://yuribenjamin.github.io/oracular/guide/recipe
 
 ## Using with React
 
-oracular ships no framework code; this is the userland shape. Load with your current config, observe, persist on change:
+`@oracular/react` is the binding: a framework-free store, the `useIntent` hook, a provider, and adapters for `localStorage`, AsyncStorage and MMKV.
 
 ```tsx
-import { useEffect, useState } from 'react';
-import { createState, deserialize, markRevealed, observe, serialize, shouldReveal } from 'oracular';
+import { createIntentStore, localStorageAdapter, useIntent } from '@oracular/react';
 import { config } from './intent-config';
 
-function load() {
-  const saved = localStorage.getItem('oracular');
-  return saved ? deserialize(saved, { config }) : createState(config); // always pass the config you ship now
-}
+export const store = createIntentStore(config, { persist: localStorageAdapter() }); // once, for the app
 
-export function useIntent() {
-  const [state, setState] = useState(load);
-  useEffect(() => localStorage.setItem('oracular', serialize(state)), [state]);
-
-  const track = (name: string) => setState((s) => observe(s, { name, at: Date.now() }));
-  const reveal = (intent: string) => {
-    const now = Date.now();
-    if (!shouldReveal(state, intent, now)) return false;
-    setState((s) => markRevealed(s, intent, now));
-    return true;
-  };
-  return { track, reveal };
+export function Pricing() {
+  const { track, reveal } = useIntent(store);
+  return <button onClick={() => { track('pricing.viewed'); if (reveal('upgrade')) openOffer(); }}>See plans</button>;
 }
 ```
 
-Add `endEpisode` on `pagehide` and you have the whole lifecycle. The same loop for Vue, React Native and Node is on the [frameworks page](https://yuribenjamin.github.io/oracular/guide/frameworks).
+Reads go to the store's current state, so `track` then `reveal` in the same click sees the event. The hook loads the persisted state on mount, flushes the pending save when the page hides and on unmount, and never ends an episode on those events; set `episodeTimeout` and idle gaps end sessions on their own. The same loop for Vue, React Native and Node, and the hook written by hand, are on the [frameworks page](https://yuribenjamin.github.io/oracular/guide/frameworks); a runnable app is in [`examples/react-vite`](./examples/react-vite).
 
 ## API
 
@@ -411,7 +398,7 @@ npx oracular tune shadow.ndjson --config oracular.config.json
 
 ## Roadmap
 
-The 0.4 theme, **learning that matches how people behave**, is complete: cross-episode attribution (`attribution` on an intent, so a session's signals earn a share of an outcome days later), `npx oracular tune` to seed a config from a shadow log, presets, and small ergonomics (`validateConfig`, `ms`, a JSON Schema for the config). 0.3 shipped shadow mode, `npx oracular replay` and per-episode saturation. Next is the road to 1.0, whose criteria are on [Stability and 1.0](https://yuribenjamin.github.io/oracular/guide/stability). Framework bindings wait for a third integration. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
+The 0.4 theme, **learning that matches how people behave**, is complete: cross-episode attribution (`attribution` on an intent, so a session's signals earn a share of an outcome days later), `npx oracular tune` to seed a config from a shadow log, presets, and small ergonomics (`validateConfig`, `ms`, a JSON Schema for the config). 0.3 shipped shadow mode, `npx oracular replay` and per-episode saturation. Next is the road to 1.0, whose criteria are on [Stability and 1.0](https://yuribenjamin.github.io/oracular/guide/stability). `@oracular/react` ships the React binding; a Vue composable follows the same store. The full list, with the reasoning and what was declined, is on the [roadmap page](https://yuribenjamin.github.io/oracular/guide/roadmap).
 
 ## Contributing
 

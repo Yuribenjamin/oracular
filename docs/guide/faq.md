@@ -14,7 +14,7 @@ Learning is per user, on their device, from their own outcomes. The engine recor
 
 ## When do I call `endEpisode`?
 
-When the session ends: `pagehide` on the web, the app going to the background on mobile, sign-out. Also set `episodeTimeout` as a safety net. Without episodes ending there are no misses, and the engine cannot learn. See [Episodes & learning](/guide/concepts/episodes-and-learning#what-you-have-to-do).
+On sign-out; otherwise let `episodeTimeout` end it. Set it (30 idle minutes is the usual web convention) and idle gaps close episodes on their own. Do not end an episode on `pagehide`, `visibilitychange` or the app going to the background: a short switch away is not a session boundary. Flush your pending save on those events instead. Without episodes ending there are no misses, and the engine cannot learn. See [Episodes & learning](/guide/concepts/episodes-and-learning#what-you-have-to-do).
 
 ## Why did Monday's session get a miss for Tuesday's upgrade?
 

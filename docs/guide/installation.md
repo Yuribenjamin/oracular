@@ -20,7 +20,7 @@ bun add oracular
 
 :::
 
-oracular has **zero runtime dependencies**. The ESM build is about 21 kB minified and 7.2 kB gzipped.
+oracular has **zero runtime dependencies**. The ESM build is about 21 kB minified and 7.2 kB gzipped. For React, add the binding as well, `npm install oracular @oracular/react`; see [Using with frameworks](/guide/frameworks#react).
 
 ## Module formats
 

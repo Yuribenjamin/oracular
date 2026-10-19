@@ -1,11 +1,11 @@
 # Using with frameworks
 
-oracular ships no framework code. These are **userland examples** of the same lifecycle in four environments, and you should adapt them rather than copy them. Each one shows the full loop, because the loop is where mistakes happen:
+oracular ships one binding, [`@oracular/react`](#react). The Vue, React Native and Node sections are **userland examples** of the same lifecycle, to adapt rather than copy. Each one shows the full loop, because the loop is where mistakes happen:
 
 1. **Load** with `deserialize(saved, { config })`, falling back to `createState(config)`. Passing the current config is what makes new weights apply and removed signals disappear; loading without it restores the old snapshot and runs your old weights.
 2. **Observe** events with a timestamp.
 3. **Persist** every time the state changes.
-4. **Let episodes end.** On the web, call `endEpisode` on `pagehide`. On mobile, do **not** end it when the app goes to the background: set `episodeTimeout` and flush the pending save instead (see React Native below).
+4. **Let episodes end.** Set `episodeTimeout` and let idle gaps close episodes; call `endEpisode` on sign-out. Do **not** end an episode on `pagehide`, `visibilitychange` or the app going to the background: a short switch away is not a session boundary, and ending it there gives the signals seen so far a miss and leaves the outcome a minute later with nothing to credit. Flush the pending save on those events instead.
 5. **Reveal** when `shouldReveal` is true, then `markRevealed`.
 
 The config is shared by all examples:
@@ -28,12 +28,40 @@ export const config: EngineConfig = {
 
 ## React
 
-A small hook over `useState`, persisting to `localStorage` on every change and ending the episode on `pagehide`.
+Install the binding next to the engine:
+
+```sh
+npm install oracular @oracular/react
+```
+
+`createIntentStore` holds one engine state with a clock, subscribers and persistence; `useIntent` binds a component to it through `useSyncExternalStore`. Reads go to the store's current state, not to a render-time copy, so `track` followed by `reveal` in the same click sees the event.
+
+```tsx
+import { createIntentStore, localStorageAdapter, useIntent } from '@oracular/react';
+import { config } from './intent-config';
+
+// Once, for the app: persisted in localStorage, loaded on first mount.
+export const store = createIntentStore(config, { persist: localStorageAdapter() });
+
+export function Pricing() {
+  const { track, reveal, predict } = useIntent(store);
+  return (
+    <button onClick={() => { track('pricing.viewed'); if (reveal('upgrade')) openOffer(); }}>
+      See plans ({predict('upgrade').p.toFixed(2)})
+    </button>
+  );
+}
+```
+
+The hook returns `state` (the rendered snapshot), `track`, `shouldReveal`, `reveal` (check and mark in one step), `predict`, `explain`, `evaluate`, `endEpisode` and the `store`. On mount it loads the persisted state and replays anything tracked before the load resolved; it flushes the pending save when the page becomes hidden, on `pagehide` and on unmount, and never ends an episode on those events. Saves are debounced (250 ms) and skipped when nothing changed, and written at once when an episode closes. `IntentProvider` and `useIntentContext()` share one store through context; `useIntent(config, options)` gives a single component a store of its own. The clock is injectable (`now` in the options), so tests stay deterministic. A runnable version of this page, with the inspector in a side panel, is [`examples/react-vite`](https://github.com/Yuribenjamin/oracular/tree/main/examples/react-vite) in the repository.
+
+::: details Without the package
+The same loop over `useState`, persisting to `localStorage` on every change. It is what the package replaces: reads here see the state of the last render, so a `track` followed by a `reveal` in the same handler misses the event.
 
 ```tsx
 import { useCallback, useEffect, useState } from 'react';
 import {
-  createState, deserialize, endEpisode, markRevealed, observe, serialize, shouldReveal,
+  createState, deserialize, markRevealed, observe, serialize, shouldReveal,
   type EngineState,
 } from 'oracular';
 import { config } from './intent-config';
@@ -56,12 +84,6 @@ export function useIntent() {
     localStorage.setItem(KEY, serialize(state));
   }, [state]);
 
-  useEffect(() => {
-    const end = () => setState((s) => endEpisode(s, Date.now()));
-    window.addEventListener('pagehide', end);
-    return () => window.removeEventListener('pagehide', end);
-  }, []);
-
   const track = useCallback((name: string) => {
     setState((s) => observe(s, { name, at: Date.now() }));
   }, []);
@@ -80,6 +102,7 @@ export function useIntent() {
 // const { track, reveal } = useIntent();
 // <button onClick={() => { track('pricing.viewed'); if (reveal('upgrade')) openOffer(); }}>
 ```
+:::
 
 ## Vue
 
@@ -135,6 +158,8 @@ Three things differ from the web version, and all three come from a real integra
 - **Debounce the save.** Serialize on every change but write a couple of seconds later, and flush at once when the app leaves the foreground.
 
 The engine itself is plain ES2020 with no globals, so it runs unchanged on Hermes and through Metro, including Expo (verified with Expo SDK 57). No polyfills, no native module.
+
+With `@oracular/react` all three come built in: `createIntentStore(config, { persist: asyncStorageAdapter('oracular', AsyncStorage) })` (or `mmkvAdapter(key, mmkv)`), `useIntent(store)` in screens, and `store.flush()` from an `AppState` listener when the app leaves `active`. The store queues events until the load resolves, debounces saves, and never ends an episode on its own. The same loop by hand:
 
 ```tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -274,4 +299,4 @@ Run the per-user sequence under a lock or a single writer; `observe` is pure, so
 
 ## Shipped wrappers
 
-A React hook and a Vue composable are on the [Roadmap](/guide/roadmap). Until then, the snippets above are the recommended shape.
+[`@oracular/react`](https://www.npmjs.com/package/@oracular/react) is the React binding, versioned on its own. A Vue composable will follow the same store (`createIntentStore` is framework-free); until then the Vue snippet above is the recommended shape.

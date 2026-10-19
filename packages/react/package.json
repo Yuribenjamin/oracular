@@ -1,0 +1,80 @@
+{
+  "name": "@oracular/react",
+  "version": "0.0.0",
+  "description": "React bindings for oracular: a store, the useIntent hook and persistence adapters. Nothing leaves the device.",
+  "keywords": [
+    "oracular",
+    "react",
+    "hook",
+    "intent",
+    "on-device",
+    "privacy"
+  ],
+  "license": "MIT",
+  "author": "Ibrahim Ragab",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yuribenjamin/oracular.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/Yuribenjamin/oracular/issues"
+  },
+  "homepage": "https://yuribenjamin.github.io/oracular/guide/frameworks",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "default": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "oracular": ">=0.8.0 <2",
+    "react": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:react18": "node scripts/react18.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "smoke": "node scripts/smoke.cjs && node scripts/smoke.mjs",
+    "size": "size-limit",
+    "pack:check": "node scripts/pack-check.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run smoke && npm run size && npm run pack:check",
+    "prepublishOnly": "npm run check"
+  },
+  "devDependencies": {
+    "@size-limit/preset-small-lib": "^12.1.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "jsdom": "^29.1.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "size-limit": "^12.1.0"
+  }
+}

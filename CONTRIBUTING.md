@@ -28,6 +28,12 @@ Individual steps:
 | `npm run docs:dev`      | the documentation site locally (regenerates the API reference first) |
 | `npm run docs:build`    | builds the site; dead links fail the build                    |
 
+`npm ls react` lists two copies on purpose: VitePress depends on `@docsearch/react`, whose peer
+range pins React below 19, so npm hoists React 18 to the root and nests the React 19 that
+`packages/react` and the example develop against; the root `overrides` entry for `@types/react`
+exists for the same reason, so that one set of React types serves the whole tree. Neither should
+be "fixed" here; both disappear on their own once that peer range admits React 19.
+
 ## Repository layout
 
 ```
@@ -57,7 +63,12 @@ cli/            the `oracular` bin (`oracular replay`, `oracular tune`): Node on
 tests/          vitest suites, one per area, plus helpers.ts
   fixtures/     states saved by every published version, and the replay fixture logs
 examples/       quickstart.ts: the README's first code block, byte for byte; retailrocket/: the
-                converter and scripts behind the clickstream case study (the data is not here)
+                converter and scripts behind the clickstream case study (the data is not here);
+                react-vite/: a private workspace member, the upgrade preset on a pricing page with
+                the inspector beside it, built by `check` and never published
+packages/react/ `@oracular/react`: the store, the hook, the provider and the persistence adapters,
+                a workspace package with its own version, changelog, tests, smoke, size budget and
+                pack check, and `oracular` as a peer dependency
 scripts/        smoke scripts run against dist/ in CI on Node 18 and 20, pack-check, the
                 generated docs tables, and the state fixture generator
 schema/         config.schema.json, the JSON Schema for the config: published in the tarball and
@@ -170,9 +181,10 @@ The playground imports the engine from `src/` directly, so it always runs the cu
 ## Releasing
 
 The repository is an npm workspace whose root is the `oracular` package itself
-(`"workspaces": [".", "packages/*"]`), so Changesets versions and publishes the root like any
-other package. `npm run check` at the root stays the single gate; per-package checks fan out from
-it with explicit `-w` flags, never `--workspaces` (the root would recurse into itself).
+(`"workspaces": [".", "packages/*", "examples/react-vite"]`), so Changesets versions and
+publishes the root like any other package. `npm run check` at the root stays the single gate;
+per-package checks fan out from it with explicit `-w` flags, never `--workspaces` (the root would
+recurse into itself).
 
 1. A pull request lands on `main` with a changeset.
 2. The release workflow (`.github/workflows/release.yml`) opens or updates a **"chore: version

@@ -89,8 +89,12 @@
   },
   "workspaces": [
     ".",
-    "packages/*"
+    "packages/*",
+    "examples/react-vite"
   ],
+  "overrides": {
+    "@types/react": "^19.3.0"
+  },
   "scripts": {
     "build": "tsup && tsup --config tsup.presets.config.ts && tsup --config tsup.inspect.config.ts",
     "test": "vitest run",
@@ -102,7 +106,7 @@
     "size": "size-limit",
     "pack:check": "node scripts/pack-check.mjs",
     "check:core": "npm run lint && npm run typecheck && npm test && npm run build && npm run smoke && npm run size && npm run pack:check",
-    "check": "npm run check:core",
+    "check": "npm run check:core && npm run check -w packages/react && npm run build -w examples/react-vite",
     "prepublishOnly": "npm run check:core",
     "docs:api": "typedoc",
     "docs:dev": "npm run docs:api && vitepress dev docs",
