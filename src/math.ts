@@ -132,7 +132,7 @@ export function repeatFactor(n: number): number {
   return Math.log1p(1 / n) / Math.LN2;
 }
 
-/** Laplace-smoothed rate: (successes + 1) / (total + 2). Always strictly inside (0, 1). */
+/** Laplace-smoothed rate: (successes + 1) / (total + 2). Strictly inside (0, 1) in exact arithmetic. */
 export function laplace(successes: number, total: number): number {
   return (successes + 1) / (total + 2);
 }
@@ -142,8 +142,9 @@ export function laplace(successes: number, total: number): number {
  * `learningScore` before using it as signed evidence; raw ratios have a neutral value of 1.
  * For association-rule lift, `b` must be the overall outcome rate rather than the rate without
  * the signal: P(outcome | signal) / P(outcome) = P(signal, outcome) / (P(signal) P(outcome)).
- * Ratio/log inputs are bounded away from 0 and 1 to keep learned weights finite even when a
- * smoothed probability rounds to an endpoint. The default retains its original arithmetic.
+ * Ratio/log inputs are bounded away from 0 and 1: tune's Wilson interval endpoints can be
+ * exactly 0 or 1, and large smoothed counts can round there too. This keeps raw metrics and
+ * their evidence scores finite. The default retains its original arithmetic.
  */
 export function lift(q: number, b: number, type: LiftType = 'normalized-difference'): number {
   if (type === 'absolute-difference') return q - b;
@@ -157,7 +158,8 @@ export function lift(q: number, b: number, type: LiftType = 'normalized-differen
         return Math.log(rate / base);
       case 'odds-ratio':
         return rate / (1 - rate) / (base / (1 - base));
-      default:
+      case 'risk-ratio':
+      case 'association-rule':
         return rate / base;
     }
   }

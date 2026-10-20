@@ -650,6 +650,30 @@ describe('wilson', () => {
     expect(wilson(5, 5, 1.6449)[1]).toBe(1);
     expect(wilson(0, 5, 1.6449)[0]).toBe(0);
   });
+
+  it.each(['log-lift', 'odds-ratio'] as const)(
+    '%s keeps unseen-signal intervals finite at both exact Wilson endpoints',
+    (lift) => {
+      const config: EngineConfig = {
+        ...buyConfig,
+        learning: { lift },
+        intents: { buy: { ...buyConfig.intents.buy!, signals: { x: 3, unseen: 1 } } },
+      };
+      const fitted = tune(handLog(), config, { halfLives: [1e15] }).intents[0]!;
+      const unseen = fitted.signals.find((signal) => signal.signal === 'unseen')!;
+      // No observations: Wilson supplies [0, 1], not the Laplace-smoothed point estimate.
+      // Without the endpoint clamp, log(0) and odds(1) become infinities, then scores are NaN.
+      expect(unseen.hits + unseen.misses).toBe(0);
+      expect(unseen.qWith).toBe(0.5);
+      expect(unseen.weight).toBeNull();
+      expect(Number.isFinite(unseen.low)).toBe(true);
+      expect(Number.isFinite(unseen.high)).toBe(true);
+      expect(unseen.low).toBeLessThan(0);
+      expect(unseen.high).toBeGreaterThan(0);
+      expect(unseen.low).toBeGreaterThanOrEqual(-fitted.priorStrength.value);
+      expect(unseen.high).toBeLessThanOrEqual(fitted.priorStrength.value);
+    },
+  );
 });
 
 describe('DEFAULT_PRIOR_EPISODES', () => {

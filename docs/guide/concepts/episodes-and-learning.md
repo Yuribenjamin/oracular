@@ -121,8 +121,10 @@ of 1 therefore learns a weight of zero, a ratio of 3 gives a score of 0.5, and a
 gives −0.5. The transforms are monotone; they preserve direction but change scale. Relative lift
 is asymmetric: its raw minimum is −1, so its score approaches −0.5 for strong negative association,
 while its positive score can approach 1. Normalized and absolute difference keep their original
-arithmetic. Ratio/log inputs are clamped to `[Number.EPSILON, 1 − Number.EPSILON]` to keep raw
-reporting metrics finite when smoothed rates round to endpoints.
+arithmetic. Ratio/log inputs are clamped to `[Number.EPSILON, 1 − Number.EPSILON]`: tuning's
+Wilson interval endpoints can be exactly 0 or 1, even when the estimated rate is Laplace-smoothed.
+The clamp keeps both raw metrics and evidence scores finite at these endpoints, and when large
+smoothed counts round to them.
 
 `oracular tune` uses the same score for declared and candidate signal weights and intervals.
 Its JSON report includes both `lift` (raw) and `score`; the text table adds a score column when
