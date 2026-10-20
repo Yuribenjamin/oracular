@@ -38,9 +38,11 @@ function signalTable(fits: SignalFit[], priorEpisodes: number, withCurrent: bool
       f.signal,
       num(f.weight, 2),
       ...(withCurrent ? [num(f.current, 2)] : []),
-      `${f.low.toFixed(2)} to ${f.high.toFixed(2)}`,
-      signed(f.lift, 2),
-      ...(showScore ? [signed(f.score, 2)] : []),
+      f.low === null || f.high === null
+        ? 'no contrast'
+        : `${f.low.toFixed(2)} to ${f.high.toFixed(2)}`,
+      f.lift === null ? '' : signed(f.lift, 2),
+      ...(showScore ? [f.score === null ? '' : signed(f.score, 2)] : []),
       `${f.hits} / ${f.misses}`,
       `${f.outcomesWithout} / ${f.without}`,
       note(f, priorEpisodes),
@@ -89,7 +91,7 @@ function formatIntent(fit: IntentFit): string {
   }
   out.push('');
   out.push(
-    `Half-life grid, Brier score against "the outcome follows within ${formatDuration(fit.halfLife.window)}" (lower is better): ${fit.halfLife.curve
+    `Half-life grid, Brier score against "the outcome follows within ${formatDuration(fit.halfLife.window)}"${fit.halfLife.windowSource === 'halfLife' ? " (the intent's half-life, since its reveal cooldown is 0)" : ''} (lower is better): ${fit.halfLife.curve
       .map(
         (p) =>
           `${formatDuration(p.halfLife)} ${num(p.brier, 4)}${p.halfLife === fit.halfLife.value && p.brier !== null ? ' *' : ''}`,

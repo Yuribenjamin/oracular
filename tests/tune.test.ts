@@ -232,14 +232,21 @@ describe('tune, on a log small enough to count by hand', () => {
     expect(() => tune(handLog(), config, { intents: ['nope'] })).toThrow(RangeError);
   });
 
-  it('asks for a window when the intent has no cooldown', () => {
+  it('scores an intent with no cooldown over its half-life, unless a window is given', () => {
     const noCooldown: EngineConfig = {
       intents: { buy: { ...buyConfig.intents.buy, reveal: { cooldown: 0 } } as never },
     };
-    expect(() => tune(handLog(), noCooldown)).toThrow(/pass --window/);
+    expect(tune(handLog(), noCooldown, { halfLives: [1e15] }).intents[0]?.halfLife).toMatchObject({
+      window: buyConfig.intents.buy!.halfLife,
+      windowSource: 'halfLife',
+    });
+    expect(tune(handLog(), buyConfig, { halfLives: [1e15] }).intents[0]?.halfLife).toMatchObject({
+      window: 100,
+      windowSource: 'cooldown',
+    });
     expect(
-      tune(handLog(), noCooldown, { window: 100, halfLives: [1e15] }).intents[0]?.halfLife.window,
-    ).toBe(100);
+      tune(handLog(), noCooldown, { window: 100, halfLives: [1e15] }).intents[0]?.halfLife,
+    ).toMatchObject({ window: 100, windowSource: 'option' });
     expect(() => tune(handLog(), noCooldown, { window: 0 })).toThrow(RangeError);
   });
 
@@ -305,12 +312,22 @@ describe('tune preserves the evidence score contract', () => {
         0,
       );
       for (const signal of [...fitted.signals, ...fitted.candidates]) {
+        if (signal.score === null) {
+          // Seen in every counted episode: nothing to compare with, so no lift and no interval.
+          expect([signal.without, signal.lift, signal.low, signal.high]).toStrictEqual([
+            0,
+            null,
+            null,
+            null,
+          ]);
+          continue;
+        }
         expect(signal.score).toBeGreaterThanOrEqual(-1);
         expect(signal.score).toBeLessThanOrEqual(1);
         expect(Math.abs(signal.weight ?? 0)).toBeLessThanOrEqual(10);
         expect(signal.low).toBeGreaterThanOrEqual(-10);
         expect(signal.high).toBeLessThanOrEqual(10);
-        expect(signal.low).toBeLessThanOrEqual(signal.high);
+        expect(signal.low as number).toBeLessThanOrEqual(signal.high as number);
       }
       expect(() => validateConfig(report.config)).not.toThrow();
       if (lift === 'risk-ratio' || lift === 'odds-ratio' || lift === 'association-rule') {
@@ -417,6 +434,11 @@ describe('tune, on a population with planted structure', () => {
     expect(opened?.share).toBe(1);
     expect(opened?.ubiquitous).toBe(true);
     expect(opened?.weight).toBeNull();
+    // Nothing to compare its rate with: no lift and no interval, rather than numbers against a made-up baseline.
+    expect(opened?.lift).toBeNull();
+    expect(opened?.score).toBeNull();
+    expect(opened?.low).toBeNull();
+    expect(opened?.high).toBeNull();
   });
 
   it('reads the prior strength from the spread of per-install base rates, inside the range', () => {
