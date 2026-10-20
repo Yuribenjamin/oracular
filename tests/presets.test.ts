@@ -88,4 +88,21 @@ describe('presets', () => {
     // The preset itself is untouched by the spread.
     expect(presets.willBuy.signals).toStrictEqual({ 'cart.added': 2.3 });
   });
+
+  it('is frozen through and through: a shared object cannot be changed by one caller for every other', () => {
+    expect(Object.isFrozen(presets)).toBe(true);
+    expect(Object.isFrozen(presetSources)).toBe(true);
+    for (const name of names) {
+      expect(Object.isFrozen(presets[name])).toBe(true);
+      expect(Object.isFrozen(presets[name].signals)).toBe(true);
+      expect(Object.isFrozen(presetSources[name])).toBe(true);
+    }
+    expect(() => {
+      (presets.willBuy.signals as Record<string, number>)['cart.added'] = 9;
+    }).toThrow(TypeError);
+    // Spreading still gives a plain object to override, and the engine copies what it validates.
+    const own = { ...presets.willBuy, prior: 0.1 };
+    expect(Object.isFrozen(own)).toBe(false);
+    assertInvariants(createState({ intents: { buy: own } }));
+  });
 });

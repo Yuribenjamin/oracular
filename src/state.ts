@@ -15,10 +15,13 @@ import { STATE_VERSION } from './version';
  * @param config - Intents with their priors and signals, plus engine-wide options. Validated
  *   strictly: unknown keys, non-finite numbers and out-of-range values throw.
  * @returns A new, JSON-serializable state. `config` is not mutated.
- * @throws `TypeError` when a value has the wrong type or a key is not recognised.
+ * @throws `TypeError` when a value has the wrong type, a key is not recognised, or an intent's
+ *   `outcome` is also one of its signals while `resetOnOutcome` is on (the reset would wipe what
+ *   the signal just added).
  * @throws `RangeError` when a number is out of range, for example a `prior` outside (0, 1), a
- *   signal weight of 0, or a weight, `priorStrength`, `learning.gain` or
- *   `learning.priorEpisodes` beyond 1e6 (larger values could overflow the arithmetic).
+ *   signal weight of 0, a reveal `threshold` of 0 or 1, a `z` above 10, or a weight,
+ *   `priorStrength`, `learning.gain` or `learning.priorEpisodes` beyond 1e6 (larger values could
+ *   overflow the arithmetic).
  * @example
  * ```ts
  * const state = createState({

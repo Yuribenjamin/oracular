@@ -8,6 +8,7 @@ import {
   LEARNING_KEYS,
   LIFT_TYPES,
   MAX_MAGNITUDE,
+  MAX_Z,
   REVEAL_KEYS,
 } from '../src/config';
 import { clone, upgradeConfig } from './helpers';
@@ -97,6 +98,15 @@ describe('the config JSON Schema', () => {
     expect(propertyKeys(learningSchema)).toStrictEqual([...LEARNING_KEYS].sort());
   });
 
+  it('bounds threshold strictly inside (0, 1) and z at MAX_Z, as the engine does', () => {
+    for (const reveal of [revealSchema, resolve(property(intentSchema, 'reveal'))]) {
+      const threshold = resolve(property(reveal, 'threshold'));
+      expect([threshold.exclusiveMinimum, threshold.exclusiveMaximum]).toStrictEqual([0, 1]);
+      expect(threshold.minimum).toBeUndefined();
+      expect(resolve(property(reveal, 'z')).maximum).toBe(MAX_Z);
+    }
+  });
+
   it('allows a $schema pointer that the engine itself rejects, so the CLI must drop it', () => {
     expect(property(schema, '$schema').type).toBe('string');
     expect(() => validateConfig({ ...upgradeConfig(), $schema: schema.$id })).toThrow(TypeError);
@@ -116,7 +126,7 @@ describe('the config JSON Schema', () => {
     );
     // An object literal would set the prototype; parsed JSON makes an own property named __proto__.
     const proto = JSON.parse(
-      '{"intents":{"__proto__":{"prior":0.5,"priorStrength":1,"halfLife":1,"signals":{}}}}',
+      '{"intents":{"__proto__":{"prior":0.5,"priorStrength":1,"halfLife":1,"signals":{"x":1}}}}',
     );
     expect(() => validateConfig(proto)).toThrow(TypeError);
     const signal = JSON.parse(

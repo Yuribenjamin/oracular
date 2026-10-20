@@ -7,7 +7,7 @@ import type {
   LiftType,
   RevealOptions,
 } from './types';
-import { isRecord } from './util';
+import { hasOwn, isRecord } from './util';
 
 export const DEFAULT_THRESHOLD = 0.5;
 export const DEFAULT_Z = 1.28;
@@ -19,6 +19,8 @@ export const DEFAULT_PRIOR_EPISODES = 10;
  * learning arithmetic can never overflow to Infinity or NaN.
  */
 export const MAX_MAGNITUDE = 1e6;
+/** Largest accepted `z`: 3.09 is already a one-sided 99.9% bound, and 128 is a misplaced 1.28. */
+export const MAX_Z = 10;
 
 // Exported for tests/schema.test.ts, which pins schema/config.schema.json to these lists.
 export const CONFIG_KEYS = ['intents', 'episodeTimeout', 'learning', 'reveal'] as const;
@@ -124,15 +126,24 @@ function expectKeyName(name: string, path: string): string {
   return name;
 }
 
-/** Validates reveal options and returns a copy with only the defined keys. */
-export function normalizeRevealOptions(value: unknown, path: string): RevealOptions {
+/**
+ * Validates reveal options and returns a copy with only the defined keys. `strict` adds the checks
+ * that catch a config that cannot work (a threshold of 0 or 1, a `z` past {@link MAX_Z}); a
+ * stored config is read without them, so a state saved before those checks existed still loads.
+ */
+export function normalizeRevealOptions(value: unknown, path: string, strict = true): RevealOptions {
   const record = expectRecord(value, path);
   expectKeys(record, REVEAL_KEYS, path);
   const out: RevealOptions = {};
   if (record.threshold !== undefined) {
-    out.threshold = expectClosedUnit(record.threshold, `${path}.threshold`);
+    out.threshold = strict
+      ? expectOpenUnit(record.threshold, `${path}.threshold`)
+      : expectClosedUnit(record.threshold, `${path}.threshold`);
   }
-  if (record.z !== undefined) out.z = expectNonNegative(record.z, `${path}.z`);
+  if (record.z !== undefined) {
+    out.z = expectNonNegative(record.z, `${path}.z`);
+    if (strict && out.z > MAX_Z) rangeError(`${path}.z`, `must be at most ${MAX_Z}`);
+  }
   if (record.cooldown !== undefined) {
     out.cooldown = expectNonNegative(record.cooldown, `${path}.cooldown`);
   }
@@ -164,8 +175,12 @@ function normalizeLearning(value: unknown, path: string): LearningConfig {
   return out;
 }
 
-/** Validates one intent's config and returns a copy with only the defined, recognised keys. */
-export function normalizeIntentConfig(value: unknown, path: string): IntentConfig {
+/**
+ * Validates one intent's config and returns a copy with only the defined, recognised keys. See
+ * {@link normalizeRevealOptions} for `strict`: here it also rejects an outcome that is one of the
+ * intent's own signals while `resetOnOutcome` is on.
+ */
+export function normalizeIntentConfig(value: unknown, path: string, strict = true): IntentConfig {
   const record = expectRecord(value, path);
   expectKeys(record, INTENT_KEYS, path);
   const signalsRecord = expectRecord(record.signals, `${path}.signals`);
@@ -207,16 +222,29 @@ export function normalizeIntentConfig(value: unknown, path: string): IntentConfi
   if (record.attribution !== undefined) {
     out.attribution = expectPositive(record.attribution, `${path}.attribution`);
   }
-  if (record.reveal !== undefined)
-    out.reveal = normalizeRevealOptions(record.reveal, `${path}.reveal`);
+  if (record.reveal !== undefined) {
+    out.reveal = normalizeRevealOptions(record.reveal, `${path}.reveal`, strict);
+  }
+  if (
+    strict &&
+    out.outcome !== undefined &&
+    hasOwn(signals, out.outcome) &&
+    out.resetOnOutcome !== false
+  ) {
+    typeError(
+      `${path}.outcome`,
+      'is also one of its signals: the reset on outcome would wipe what it adds; set resetOnOutcome: false to keep it',
+    );
+  }
   return out;
 }
 
 /**
  * Validates a config and returns a fresh copy holding only the defined, recognised keys,
- * so that it survives a JSON round trip unchanged.
+ * so that it survives a JSON round trip unchanged. `strict` (the default) adds the checks that
+ * catch a config that cannot work; `deserialize` reads a stored config without them.
  */
-export function normalizeConfig(value: unknown): EngineConfig {
+export function normalizeConfig(value: unknown, strict = true): EngineConfig {
   const record = expectRecord(value, 'config');
   expectKeys(record, CONFIG_KEYS, 'config');
   const intentsRecord = expectRecord(record.intents, 'config.intents');
@@ -228,6 +256,7 @@ export function normalizeConfig(value: unknown): EngineConfig {
     intents[name] = normalizeIntentConfig(
       intentsRecord[name],
       `config.intents[${JSON.stringify(name)}]`,
+      strict,
     );
   }
   const out: EngineConfig = { intents };
@@ -236,8 +265,9 @@ export function normalizeConfig(value: unknown): EngineConfig {
   }
   if (record.learning !== undefined)
     out.learning = normalizeLearning(record.learning, 'config.learning');
-  if (record.reveal !== undefined)
-    out.reveal = normalizeRevealOptions(record.reveal, 'config.reveal');
+  if (record.reveal !== undefined) {
+    out.reveal = normalizeRevealOptions(record.reveal, 'config.reveal', strict);
+  }
   return out;
 }
 
@@ -274,7 +304,7 @@ export function splitEvaluateOptions(
     else explain[key] = v;
   }
   return {
-    reveal: normalizeRevealOptions(reveal, path),
+    reveal: normalizeRevealOptions(reveal, path, false),
     explain: normalizeExplainOptions(explain, path),
   };
 }
@@ -292,7 +322,10 @@ export function resolveReveal(
   opts: RevealOptions | undefined,
   normalized = false,
 ): ResolvedReveal {
-  const o = opts === undefined ? {} : normalized ? opts : normalizeRevealOptions(opts, 'options');
+  // Per-call options are read without the strict checks: a probe at threshold 0 or 1 is a
+  // legitimate question (evidenceToReveal asks it); a config that commits to one is not.
+  const o =
+    opts === undefined ? {} : normalized ? opts : normalizeRevealOptions(opts, 'options', false);
   return {
     threshold:
       o.threshold ?? intent.reveal?.threshold ?? config?.reveal?.threshold ?? DEFAULT_THRESHOLD,
