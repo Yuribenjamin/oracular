@@ -1,7 +1,0 @@
----
-"oracular": minor
----
-
-**Configs that cannot work are refused.** `createState`, `validateConfig` and the `config` passed to `deserialize` now throw for a reveal `threshold` of 0 or 1 (`RangeError`, strictly between 0 and 1), a `z` above 10 (`RangeError`; 3.09 is already a one-sided 99.9% bound, and 128 is a misplaced 1.28), and an `outcome` that is also one of the intent's own signals while `resetOnOutcome` is on (`TypeError`: the reset wipes the evidence the signal just added; set `resetOnOutcome: false` to keep such a signal, which then reads as "did it once, will again"). The JSON Schema says the same. Per-call reveal options keep accepting 0 and 1, since a probe such as `evidenceToReveal` at those values is a legitimate question. A stored state whose config predates these checks still loads: `deserialize` reads the stored config without them and replaces it with the one you pass. An intent with no signals stays accepted; it is a prior-only gate. The presets in `oracular/presets` are now frozen through and through, so a change by one caller cannot reach every other; spread one to change a value, as the guide shows.
-
-**Size.** The checks, the anchor pin and the duplicate-outcome rule add about 0.2 kB: the core goes from 7.5 kB to 7.72 kB minified and gzipped, under the 7.9 kB ceiling, and the quickstart entry (`createState`, `observe`, `shouldReveal`, `markRevealed`) from 4.43 kB to 4.63 kB, past its 4.5 kB budget, which moves to 4.7 kB.
