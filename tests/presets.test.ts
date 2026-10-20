@@ -29,10 +29,10 @@ describe('presets', () => {
     });
     expect(presetSources.willBuy).toMatchObject({
       kind: 'tuned',
-      episodes: 181_080,
+      episodes: 181_055,
       installs: 93_537,
     });
-    expect(presetSources.willBuy.note).toMatch(/0\.0477 and 2\.32 rounded/);
+    expect(presetSources.willBuy.note).toMatch(/0\.0475 and 2\.32 rounded/);
   });
 
   it('the hand-written three say so and carry no sample', () => {
