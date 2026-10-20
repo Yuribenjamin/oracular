@@ -58,4 +58,62 @@ describe('persistence adapters', () => {
     m.save('2');
     expect(m.load()).toBe('2');
   });
+
+  it('remove deletes the key through removeItem, removeItem and delete', async () => {
+    const memory = new Map<string, string>();
+    const web = localStorageAdapter('k', {
+      getItem: (key) => memory.get(key) ?? null,
+      setItem: (key, value) => {
+        memory.set(key, value);
+      },
+      removeItem: (key) => {
+        memory.delete(key);
+      },
+    });
+    await web.save('1');
+    await web.remove?.();
+    expect(memory.has('k')).toBe(false);
+
+    const native = asyncStorageAdapter('a', {
+      getItem: async (key) => memory.get(key) ?? null,
+      setItem: async (key, value) => {
+        memory.set(key, value);
+      },
+      removeItem: async (key) => {
+        memory.delete(key);
+      },
+    });
+    await native.save('2');
+    await native.remove?.();
+    expect(memory.has('a')).toBe(false);
+
+    const mmkv = mmkvAdapter('m', {
+      getString: (key) => memory.get(key),
+      set: (key, value) => {
+        memory.set(key, value);
+      },
+      delete: (key) => {
+        memory.delete(key);
+      },
+    });
+    mmkv.save('3');
+    mmkv.remove?.();
+    expect(memory.has('m')).toBe(false);
+
+    const global = localStorageAdapter();
+    await global.save('x');
+    await global.remove?.();
+    expect(localStorage.getItem('oracular')).toBeNull();
+  });
+
+  it('remove on a storage without the method fails with a clear message', () => {
+    const bare = { getItem: () => null, setItem: () => {} };
+    expect(() => localStorageAdapter('k', bare).remove?.()).toThrow('has no removeItem');
+    expect(() =>
+      mmkvAdapter('m', { getString: () => undefined, set: () => {} }).remove?.(),
+    ).toThrow('has no delete');
+    expect(() =>
+      asyncStorageAdapter('a', { getItem: async () => null, setItem: async () => {} }).remove?.(),
+    ).toThrow('has no removeItem');
+  });
 });

@@ -5,7 +5,7 @@ What you can rely on today, what may still change before 1.0, and what 1.0 will 
 ## What is public API
 
 - **Every export of `oracular`** and of `oracular/presets`, with the behaviour its documentation describes: the functions, the types, `STATE_VERSION` and `RECORD_VERSION`. The exports test in the repository pins the list; adding to it is an API decision, removing from it follows the deprecation rule below.
-- **`@oracular/react`** is a separate package with its own 0.x version and changelog. Its exports are API under the same rules, with `oracular` as a peer dependency; its size budget lives in its own budget file (1.5 kB for the hook and the localStorage adapter).
+- **`@oracular/react`** is a separate package with its own 0.x version and changelog. Its exports are API under the same rules, with `oracular` as a peer dependency; its size budget lives in its own budget file (2 kB for the hook and the localStorage adapter, 2.7 kB for the whole package).
 - **`oracular/inspect` is experimental.** `inspect` in the main entry is API like any other export; the renderer and the mount helper in the subpath may change their markup, styles and options in a minor without the deprecation rule, until this page says otherwise.
 - **The serialized state.** The shape `serialize` writes and `deserialize` reads, versioned by `STATE_VERSION`.
 - **The recorder format**, versioned by `RECORD_VERSION`: the lines `createRecord` and `createEndRecord` write, which `oracular replay` and `oracular tune` read.

@@ -53,7 +53,23 @@ export function Pricing() {
 }
 ```
 
-The hook returns `state` (the rendered snapshot), `track`, `shouldReveal`, `reveal` (check and mark in one step), `predict`, `explain`, `evaluate`, `endEpisode` and the `store`. On mount it loads the persisted state and replays anything tracked before the load resolved; it flushes the pending save when the page becomes hidden, on `pagehide` and on unmount, and never ends an episode on those events. Saves are debounced (250 ms) and skipped when nothing changed, and written at once when an episode closes. `IntentProvider` and `useIntentContext()` share one store through context; `useIntent(config, options)` gives a single component a store of its own. The clock is injectable (`now` in the options), so tests stay deterministic. A runnable version of this page, with the inspector in a side panel, is [`examples/react-vite`](https://github.com/Yuribenjamin/oracular/tree/main/examples/react-vite) in the repository.
+The hook returns `state` (the rendered snapshot), `track`, `shouldReveal`, `reveal` (check and mark in one step), `predict`, `explain`, `evaluate`, `endEpisode` and the `store`. The functions keep their identity across renders, so a memo that should follow the state depends on `state`, not on them. On mount it loads the persisted state; it flushes the pending save when the page becomes hidden, on `pagehide` and on unmount, and never ends an episode on those events. `IntentProvider` and `useIntentContext()` share one store through context, and the provider runs the same lifecycle; `useIntent(config, options)` gives a single component a store of its own, created on the first render and kept whatever config later renders pass. The clock is injectable (`now` in the options), so tests stay deterministic. A runnable version of this page, with the inspector in a side panel, is [`examples/react-vite`](https://github.com/Yuribenjamin/oracular/tree/main/examples/react-vite) in the repository.
+
+**What the store does with persistence.** It never writes before the stored state has been read, so an early flush (StrictMode's double effect, a component unmounting at once, a slow first read) cannot put a fresh state over the history: a flush during the read waits for it, and everything tracked meanwhile, even before `load()` was called, is replayed onto the loaded state stamped at the time it happened. Saves are debounced (`saveDelay`, 250 ms), skipped when nothing changed, written at once when an episode closes, and run one at a time. A read that fails or stored data that cannot be parsed is reported through `onError(error, phase)`, with the phase `'load'`, `'parse'`, `'save'` or `'clear'`; the store keeps working in memory, writes nothing until a later read succeeds (the next save, `flush()` or `load()` retries), and `clear()` starts over. Without `onError`, a development build warns once per phase in the console. `store.getStatus()` reports `memory`, `idle`, `loading`, `loaded`, `failed` or `disposed`.
+
+**Sign-out.** `await store.clear()` forgets the user: a fresh state, the stored key removed, writes allowed again. To wipe the storage yourself, `await store.dispose()` first, which cancels the pending save and stops further writes, resolving once nothing is in flight; `flush()` before it if the last state should be kept.
+
+**Rendering less.** `useIntent` re-renders on every change, including events no intent declares, because every event extends the episode. `usePrediction(store, intent, opts?)` re-renders only when that intent's state changes, `useIntentSelector(store, selector, isEqual?)` only when its selection does, and `useIntentStore()` returns the provider's store without subscribing:
+
+```tsx
+function Badge() {
+  const store = useIntentStore(); // from the nearest IntentProvider, no subscription
+  const { p, suppressedUntil } = usePrediction(store, 'upgrade');
+  return <span>{suppressedUntil === null ? p.toFixed(2) : 'later'}</span>;
+}
+```
+
+A prediction is as of the last change or render: a cooldown ending on its own does not re-render, so schedule a check on `suppressedUntil` where the screen must react to it.
 
 ::: details Without the package
 The same loop over `useState`, persisting to `localStorage` on every change. It is what the package replaces: reads here see the state of the last render, so a `track` followed by a `reveal` in the same handler misses the event.
@@ -159,7 +175,7 @@ Three things differ from the web version, and all three come from a real integra
 
 The engine itself is plain ES2020 with no globals, so it runs unchanged on Hermes and through Metro, including Expo (verified with Expo SDK 57). No polyfills, no native module.
 
-With `@oracular/react` all three come built in: `createIntentStore(config, { persist: asyncStorageAdapter('oracular', AsyncStorage) })` (or `mmkvAdapter(key, mmkv)`), `useIntent(store)` in screens, and `store.flush()` from an `AppState` listener when the app leaves `active`. The store queues events until the load resolves, debounces saves, and never ends an episode on its own. The same loop by hand:
+With `@oracular/react` all three come built in: `createIntentStore(config, { persist: asyncStorageAdapter('oracular', AsyncStorage) })` (or `mmkvAdapter(key, mmkv)`), `useIntent(store)` in screens, and `flushOnBackground(store, AppState)` once, with React Native's `AppState`, since `pagehide` and `visibilitychange` do not exist there and the hook alone would only flush on unmount. The store replays events tracked before the read settled onto the loaded state, never writes before that read, debounces saves, and never ends an episode on its own; the helper flushes when the app leaves `active` and retries a failed read when it returns. The same loop by hand:
 
 ```tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';

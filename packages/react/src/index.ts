@@ -1,6 +1,9 @@
+export type { AppStateLike } from './appState';
+export { flushOnBackground } from './appState';
 export type { AsyncStorageLike, MmkvLike, PersistAdapter, StorageLike } from './persist';
 export { asyncStorageAdapter, localStorageAdapter, mmkvAdapter } from './persist';
-export type { IntentStore, IntentStoreOptions } from './store';
+export type { IntentStore, IntentStoreOptions, PersistPhase, StoreStatus } from './store';
 export { createIntentStore } from './store';
 export type { IntentProviderProps, UseIntent } from './useIntent';
-export { IntentProvider, useIntent, useIntentContext } from './useIntent';
+export { IntentProvider, useIntent, useIntentContext, useIntentStore } from './useIntent';
+export { useIntentSelector, usePrediction } from './useSelector';

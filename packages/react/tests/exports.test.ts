@@ -15,10 +15,14 @@ describe('@oracular/react packaging', () => {
       'IntentProvider',
       'asyncStorageAdapter',
       'createIntentStore',
+      'flushOnBackground',
       'localStorageAdapter',
       'mmkvAdapter',
       'useIntent',
       'useIntentContext',
+      'useIntentSelector',
+      'useIntentStore',
+      'usePrediction',
     ]);
   });
 
