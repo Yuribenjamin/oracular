@@ -1,6 +1,6 @@
 {
   "name": "@oracular/react",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "React bindings for oracular: a store, the useIntent hook and persistence adapters. Nothing leaves the device.",
   "keywords": [
     "oracular",
