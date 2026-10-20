@@ -57,8 +57,9 @@ For a signal with initial weight `w₀`, `hits` and `misses`, inside an intent t
 ```
 nWith     = hits + misses                                       episodes in which the signal was seen
 nWithout  = episodes − nWith                                    episodes in which it was not
-qWith     = (hits + 1) / (nWith + 2)                            outcome rate with the signal
-qWithout  = (outcomes − hits + 1) / (nWithout + 2)              outcome rate without it
+q₀        = outcomes / episodes                                 the intent's own base rate
+qWith     = (hits + 2 × q₀) / (nWith + 2)                       outcome rate with the signal
+qWithout  = (outcomes − hits + 2 × q₀) / (nWithout + 2)         outcome rate without it
 lift      = (qWith − qWithout) / (1 − qWithout)   if qWith ≥ qWithout
           = (qWith − qWithout) / qWithout         otherwise      → in [−1, 1]
 learned   = gain × |w₀| × lift                                  0 while nWith = 0
@@ -66,7 +67,7 @@ nEff      = (nWith × nWithout) / (nWith + nWithout)             0 if either sid
 effective = (k × w₀ + nEff × learned) / (k + nEff)              k = learning.priorEpisodes
 ```
 
-Both rates are Laplace-smoothed (+1 / +2). The formula shown is the default normalized difference. Learning options live under `config.learning`:
+Both rates are shrunk toward the intent's own base rate by two pseudo-episodes, rather than toward 0.5 as Laplace smoothing would: a signal whose outcome rate equals the base rate learns nothing, whatever the sample sizes, and before the first outcome every rate is 0, so no weight moves. The formula shown is the default normalized difference. Learning options live under `config.learning`:
 
 - **`gain`** (default 2) caps the learned estimate for every lift option: `learned` lives in [−gain·|w₀|, gain·|w₀|]. The effective weight blends this estimate with your initial weight, so when `gain < 1` it can initially exceed the learned cap while it moves away from the prior.
 - **`priorEpisodes`** (default 10) is how much contrast it takes for the user's history to weigh as much as your initial weight. The signal's strength (`w₀`) and your confidence in it (`k`) are deliberately separate things.
@@ -88,7 +89,7 @@ const state = createState({
 ```
 
 `learning.lift` accepts these names. Here `q` is the outcome rate with the signal and `b` the
-outcome rate without it, both Laplace-smoothed as above.
+outcome rate without it, both shrunk toward the base rate as above.
 
 | Name | Raw formula | Common use case |
 | --- | --- | --- |
@@ -101,12 +102,11 @@ outcome rate without it, both Laplace-smoothed as above.
 | `'association-rule'` | `P(A,B) / (P(A) × P(B))` | Market baskets, recommendations |
 
 For association-rule lift, `A` means the signal occurred and `B` means the outcome occurred.
-The engine adds one to each of the four cells of this contingency table, consistent with the
-Laplace smoothing of `q` and `b`. The overall outcome rate is therefore
-`P(B) = (outcomes + 2) / (episodes + 4)`, and lift is `q / P(B)`. This differs from the risk
-ratio, which compares with episodes without the signal. For example, two successful signal
-episodes and three unsuccessful episodes without it give `P(A,B) = 3/9`, `P(A) = 4/9`,
-`P(B) = 4/9`, and lift `27/16`.
+The baseline is the overall outcome rate `P(B)`, shrunk toward the base rate like `q`, which
+leaves it at the base rate itself, and lift is `q / P(B)`. This differs from the risk ratio,
+which compares with episodes without the signal. For example, two successful signal episodes
+and three unsuccessful episodes without it give a base rate of 0.4, `q = (2 + 0.8) / 4 = 0.7`,
+`P(B) = 0.4`, and lift `1.75`.
 
 The raw measure is converted before it enters `learned = gain × |w₀| × score`:
 
@@ -122,7 +122,7 @@ gives −0.5. The transforms are monotone; they preserve direction but change sc
 is asymmetric: its raw minimum is −1, so its score approaches −0.5 for strong negative association,
 while its positive score can approach 1. Normalized and absolute difference keep their original
 arithmetic. Ratio/log inputs are clamped to `[Number.EPSILON, 1 − Number.EPSILON]`: tuning's
-Wilson interval endpoints can be exactly 0 or 1, even when the estimated rate is Laplace-smoothed.
+Wilson interval endpoints can be exactly 0 or 1, even when the estimated rate is smoothed.
 The clamp keeps both raw metrics and evidence scores finite at these endpoints, and when large
 smoothed counts round to them.
 

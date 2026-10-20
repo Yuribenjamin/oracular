@@ -193,8 +193,9 @@ A signal's weight is then a blend of your prior and the learned estimate:
 ```
 nWith    = hits + misses                                      episodes with the signal
 nWithout = episodes − nWith                                   episodes without it
-qWith    = (hits + 1) / (nWith + 2)                           outcome rate with the signal
-qWithout = (outcomes − hits + 1) / (nWithout + 2)             outcome rate without it
+q₀       = outcomes / episodes                                the intent's own base rate
+qWith    = (hits + 2·q₀) / (nWith + 2)                        outcome rate with the signal
+qWithout = (outcomes − hits + 2·q₀) / (nWithout + 2)          outcome rate without it
 lift     = (qWith − qWithout) / (1 − qWithout)  if qWith ≥ qWithout,  else  (qWith − qWithout) / qWithout   → in [−1, 1]
 learned  = gain × |w₀| × lift                                 0 until the signal has history
 nEff     = (nWith × nWithout) / (nWith + nWithout)            0 if either side is 0

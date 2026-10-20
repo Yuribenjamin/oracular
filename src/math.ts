@@ -138,6 +138,16 @@ export function laplace(successes: number, total: number): number {
 }
 
 /**
+ * A rate shrunk toward `rate` by two pseudo-episodes: (successes + 2·rate) / (total + 2). With a
+ * `rate` of 0.5 this is Laplace smoothing; with the intent's own base rate, two groups whose
+ * observed rates both equal it agree exactly whatever their sizes, and with no outcome yet every
+ * rate is 0.
+ */
+export function smoothRate(successes: number, total: number, rate: number): number {
+  return (successes + 2 * rate) / (total + 2);
+}
+
+/**
  * The raw association measure comparing rate `q` with baseline `b`. Convert it with
  * `learningScore` before using it as signed evidence; raw ratios have a neutral value of 1.
  * For association-rule lift, `b` must be the overall outcome rate rather than the rate without

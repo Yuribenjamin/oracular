@@ -1,5 +1,5 @@
 import type { ResolvedLearning } from './config';
-import { decayFactor, laplace, learningScore, lift } from './math';
+import { decayFactor, learningScore, lift, smoothRate } from './math';
 import type { IntentConfig, IntentState, SignalRecord } from './types';
 import { getOwn, mapRecord } from './util';
 
@@ -35,10 +35,12 @@ export interface SignalWeights {
 
 /**
  * initial:   the developer's weight w0.
- * learned:   gain · |w0| · the signed, bounded score of the configured lift. qWith is the
- *            Laplace-smoothed outcome rate where the signal was seen (hits / (hits + misses));
- *            qWithout the Laplace-smoothed outcome rate of the intent's other episodes
- *            (episodes without the signal). 0 until the signal has completed an episode.
+ * learned:   gain · |w0| · the signed, bounded score of the configured lift. qWith is the outcome
+ *            rate where the signal was seen (hits / (hits + misses)) and qWithout the outcome rate
+ *            of the intent's other episodes, both shrunk toward the intent's own base rate by two
+ *            pseudo-episodes, so that a signal whose rate equals the base rate learns nothing
+ *            whatever the sample sizes, and nothing moves before the first outcome. 0 until the
+ *            signal has completed an episode.
  * effective: (k · w0 + nEff · learned) / (k + nEff), with k = learning.priorEpisodes and
  *            nEff = (nWith · nWithout) / (nWith + nWithout): the comparison is only trusted once
  *            the signal has been both present and absent. A signal that has never been absent
@@ -56,18 +58,21 @@ export function signalWeights(
   }
   const record = getOwn(state.learned, signal) ?? NONE;
   const nWith = record.hits + record.misses;
-  const qWith = laplace(record.hits, nWith);
   // The contrast: episodes of this intent in which the signal was not seen. hits + misses counts
   // the episodes it was seen in (one record per episode), so the rest is the complement.
   const totalEpisodes = state.episodes.hits + state.episodes.misses;
   const nWithout = Math.max(0, totalEpisodes - nWith);
   const outcomesWithout = Math.min(nWithout, Math.max(0, state.episodes.hits - record.hits));
-  const qWithout = laplace(outcomesWithout, nWithout);
-  // Nothing has been learned about a signal until it has been seen in a completed episode.
-  // +1 in each cell of the signal × outcome table agrees with the two Laplace-smoothed rates.
+  // Both rates are shrunk toward the intent's own base rate, not toward 0.5: two groups that
+  // differ only in size then agree, and before the first outcome every rate is 0.
+  const base = totalEpisodes === 0 ? 0 : state.episodes.hits / totalEpisodes;
+  const qWith = smoothRate(record.hits, nWith, base);
+  const qWithout = smoothRate(outcomesWithout, nWithout, base);
+  // Nothing has been learned about a signal until it has been seen in a completed episode. The
+  // association-rule baseline is the pooled rate, shrunk the same way (so, the base rate itself).
   const baseline =
     learning.lift === 'association-rule'
-      ? (record.hits + outcomesWithout + 2) / (nWith + nWithout + 4)
+      ? smoothRate(record.hits + outcomesWithout, nWith + nWithout, base)
       : qWithout;
   const score = learningScore(lift(qWith, baseline, learning.lift), learning.lift);
   const learned = nWith === 0 ? 0 : learning.gain * Math.abs(initial) * score;
