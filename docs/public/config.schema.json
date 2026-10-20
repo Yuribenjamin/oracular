@@ -138,11 +138,24 @@
         },
         "gain": {
           "$ref": "#/$defs/bounded",
-          "description": "A perfectly predictive signal converges to gain × |initial weight|. Default 2."
+          "description": "Caps learned magnitude at gain × |initial weight| for every lift option. Default 2."
         },
         "priorEpisodes": {
           "$ref": "#/$defs/bounded",
           "description": "Pseudo-count behind the developer's initial weight: how many observed episodes it takes to weigh as much as the prior. Default 10."
+        },
+        "lift": {
+          "type": "string",
+          "enum": [
+            "absolute-difference",
+            "relative-lift",
+            "risk-ratio",
+            "log-lift",
+            "odds-ratio",
+            "normalized-difference",
+            "association-rule"
+          ],
+          "description": "Association measure, converted to an evidence score in [-1, 1], neutral at zero. Ratios use (R - 1)/(R + 1), relative/log lift use x/(1 + abs(x)), and absolute/normalized differences keep their scale. Default normalized-difference preserves existing behavior. Association-rule compares with the overall outcome rate."
         }
       }
     }

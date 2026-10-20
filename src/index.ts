@@ -22,6 +22,7 @@ export type {
   IntentSnapshot,
   IntentState,
   LearningConfig,
+  LiftType,
   Migrate,
   PendingEpisode,
   Prediction,

@@ -1,3 +1,5 @@
+import type { LiftType } from './types';
+
 /** 2^(−elapsed / halfLife). Returns 1 for zero, negative or non-finite elapsed time. */
 export function decayFactor(elapsed: number, halfLife: number): number {
   if (!(elapsed > 0) || !Number.isFinite(elapsed)) return 1;
@@ -130,16 +132,56 @@ export function repeatFactor(n: number): number {
   return Math.log1p(1 / n) / Math.LN2;
 }
 
-/** Laplace-smoothed rate: (successes + 1) / (total + 2). Always strictly inside (0, 1). */
+/** Laplace-smoothed rate: (successes + 1) / (total + 2). Strictly inside (0, 1) in exact arithmetic. */
 export function laplace(successes: number, total: number): number {
   return (successes + 1) / (total + 2);
 }
 
 /**
- * How far a rate `q` sits from a base rate `b`, scaled to [−1, 1]:
- * +1 when q is 1, 0 when q equals b, −1 when q is 0.
+ * The raw association measure comparing rate `q` with baseline `b`. Convert it with
+ * `learningScore` before using it as signed evidence; raw ratios have a neutral value of 1.
+ * For association-rule lift, `b` must be the overall outcome rate rather than the rate without
+ * the signal: P(outcome | signal) / P(outcome) = P(signal, outcome) / (P(signal) P(outcome)).
+ * Ratio/log inputs are bounded away from 0 and 1: tune's Wilson interval endpoints can be
+ * exactly 0 or 1, and large smoothed counts can round there too. This keeps raw metrics and
+ * their evidence scores finite. The default retains its original arithmetic.
  */
-export function lift(q: number, b: number): number {
+export function lift(q: number, b: number, type: LiftType = 'normalized-difference'): number {
+  if (type === 'absolute-difference') return q - b;
+  if (type !== 'normalized-difference') {
+    const rate = Math.max(Number.EPSILON, Math.min(1 - Number.EPSILON, q));
+    const base = Math.max(Number.EPSILON, Math.min(1 - Number.EPSILON, b));
+    switch (type) {
+      case 'relative-lift':
+        return (rate - base) / base;
+      case 'log-lift':
+        return Math.log(rate / base);
+      case 'odds-ratio':
+        return rate / (1 - rate) / (base / (1 - base));
+      case 'risk-ratio':
+      case 'association-rule':
+        return rate / base;
+    }
+  }
   if (q >= b) return b >= 1 ? 0 : (q - b) / (1 - b);
   return b <= 0 ? 0 : (q - b) / b;
+}
+
+/**
+ * Converts raw lift to signed evidence in [−1, 1], with independence at 0. Bounded differences
+ * keep their original scale. Ratios use (R − 1)/(R + 1); unbounded differences and log lift use
+ * x/(1 + |x|). Both transforms are monotone, so direction and interval ordering are preserved.
+ */
+export function learningScore(value: number, type: LiftType = 'normalized-difference'): number {
+  switch (type) {
+    case 'risk-ratio':
+    case 'odds-ratio':
+    case 'association-rule':
+      return (value - 1) / (value + 1);
+    case 'relative-lift':
+    case 'log-lift':
+      return value / (1 + Math.abs(value));
+    default:
+      return value;
+  }
 }

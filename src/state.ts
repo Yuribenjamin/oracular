@@ -9,7 +9,8 @@ import { STATE_VERSION } from './version';
  * Builds a fresh engine state from a config. Every intent starts at its prior and no episode is
  * open. The config is validated and a normalized copy is stored inside the state, so a persisted
  * state remembers the weights it was built with; pass your current config to {@link deserialize}
- * when loading.
+ * when loading. `config.learning.lift` selects the lift formula; omitting it preserves the
+ * normalized difference used by existing configs and states.
  *
  * @param config - Intents with their priors and signals, plus engine-wide options. Validated
  *   strictly: unknown keys, non-finite numbers and out-of-range values throw.

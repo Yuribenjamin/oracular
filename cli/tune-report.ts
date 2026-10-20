@@ -20,12 +20,14 @@ function note(fit: SignalFit, priorEpisodes: number): string {
 }
 
 function signalTable(fits: SignalFit[], priorEpisodes: number, withCurrent: boolean): string {
+  const showScore = fits.some((fit) => fit.score !== fit.lift);
   const headers = [
     'signal',
     'weight',
     ...(withCurrent ? ['was'] : []),
     '90% interval',
     'lift',
+    ...(showScore ? ['score'] : []),
     'with: hits / misses',
     'without: outcomes / episodes',
     'note',
@@ -38,6 +40,7 @@ function signalTable(fits: SignalFit[], priorEpisodes: number, withCurrent: bool
       ...(withCurrent ? [num(f.current, 2)] : []),
       `${f.low.toFixed(2)} to ${f.high.toFixed(2)}`,
       signed(f.lift, 2),
+      ...(showScore ? [signed(f.score, 2)] : []),
       `${f.hits} / ${f.misses}`,
       `${f.outcomesWithout} / ${f.without}`,
       note(f, priorEpisodes),

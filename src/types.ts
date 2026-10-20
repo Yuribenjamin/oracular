@@ -25,6 +25,16 @@ export interface RevealOptions {
   bound?: 'normal' | 'exact';
 }
 
+/** The association measure converted to a signed, bounded score when learning signal weights. */
+export type LiftType =
+  | 'absolute-difference'
+  | 'relative-lift'
+  | 'risk-ratio'
+  | 'log-lift'
+  | 'odds-ratio'
+  | 'normalized-difference'
+  | 'association-rule';
+
 /**
  * How the engine learns from the user's own outcomes.
  *
@@ -37,9 +47,17 @@ export interface RevealOptions {
  * ```
  */
 export interface LearningConfig {
+  /**
+   * Optional association measure. Every choice is converted to a score in [−1, 1], neutral at
+   * zero, before learning: ratios use (R − 1)/(R + 1), relative/log lift use x/(1 + |x|), and
+   * absolute/normalized differences keep their scale. Omit to preserve the existing normalized
+   * difference exactly. 'association-rule' uses the overall outcome rate as its baseline; the
+   * others use episodes without the signal. Raw ratios are reporting metrics, never weights.
+   */
+  lift?: LiftType;
   /** Half-life of learned hit/miss counts, in the same unit as `at`. Omit for no forgetting. */
   halfLife?: number;
-  /** A perfectly predictive signal converges to `gain × |initial weight|`. Default 2; at most 1e6. */
+  /** Caps learned magnitude at `gain × |initial weight|` for every lift option. Default 2; at most 1e6. */
   gain?: number;
   /** Pseudo-count behind the developer's initial weight: how many observed episodes it takes to weigh as much as the prior. Default 10; at most 1e6. */
   priorEpisodes?: number;

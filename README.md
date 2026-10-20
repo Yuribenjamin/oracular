@@ -201,7 +201,17 @@ nEff     = (nWith × nWithout) / (nWith + nWithout)            0 if either side 
 effective = (k × w₀ + nEff × learned) / (k + nEff)            k = priorEpisodes
 ```
 
-`w₀` is your initial weight, `gain` (default 2) caps how far a perfectly predictive signal can grow, and `priorEpisodes` (default 10) is how much contrast it takes for the user's own history to count as much as your guess. A signal's strength and your confidence in it are separate knobs. A signal is judged against the sessions in which it did *not* appear, so for an outcome that happens in 3% of sessions, a signal followed by it 30% of the time is strong evidence, not weak. And learning needs contrast: a signal that has never been absent has no counterfactual, so its weight stands until there are sessions without it. Nothing drifts after a single outcome.
+`w₀` is your initial weight, `gain` (default 2) caps the learned magnitude at `gain × |w₀|` for every lift option, and `priorEpisodes` (default 10) is how much contrast it takes for the user's own history to count as much as your guess. A signal's strength and your confidence in it are separate knobs. A signal is judged against the sessions in which it did *not* appear, so for an outcome that happens in 3% of sessions, a signal followed by it 30% of the time is strong evidence, not weak. And learning needs contrast: a signal that has never been absent has no counterfactual, so its weight stands until there are sessions without it. Nothing drifts after a single outcome.
+
+The formula above is the default **normalized difference**. `learning.lift` is an optional
+setting for advanced users who want to choose the learning scale. Choose another at construction with
+`createState({ intents, learning: { lift: 'relative-lift' } })`. Omit `learning.lift` to keep the
+current behavior, including when loading older saved states. The available names and formulas
+are listed in [Episodes & learning](https://yuribenjamin.github.io/oracular/guide/concepts/episodes-and-learning#choosing-a-lift-formula).
+Every choice produces a signed evidence score in [−1, 1], with independence at zero. Ratios use
+`(R − 1) / (R + 1)`, relative/log lift use `x / (1 + |x|)`, and absolute/normalized differences
+keep their scale. Learning uses `gain × |w₀| × score`; `oracular tune` uses the same score for
+weights and intervals and reports raw lift separately when it differs from the score.
 
 Learned counts never decay unless you set `learning.halfLife`.
 
@@ -271,7 +281,8 @@ interface EngineConfig {
   episodeTimeout?: number;   // idle gap that ends an episode; off if omitted
   learning?: {
     halfLife?: number;       // forgetting of learned counts; off if omitted
-    gain?: number;           // learned weight cap = gain × |initial|; default 2, at most 1e6
+    gain?: number;           // learned weight multiplier; default 2, at most 1e6
+    lift?: LiftType;         // default 'normalized-difference'; see Episodes & learning
     priorEpisodes?: number;  // pseudo-count behind your weights; default 10, at most 1e6
   };
   reveal?: RevealOptions;    // defaults for every intent

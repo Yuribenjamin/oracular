@@ -21,6 +21,7 @@ import {
   validateConfig,
 } from 'oracular';
 import { describe, expect, it } from 'vitest';
+import { LIFT_TYPES } from '../src/config';
 import { decayIntent, priorCounts } from '../src/intent';
 import { assertInvariants, clone, DAY, deepFreeze, HOUR, MINUTE } from './helpers';
 
@@ -95,6 +96,7 @@ const config: fc.Arbitrary<EngineConfig> = fc.record(
     learning: fc.record(
       {
         halfLife,
+        lift: fc.constantFrom(...LIFT_TYPES),
         gain: fc.integer({ min: 1, max: 10 }).map((n) => n / 2),
         priorEpisodes: fc.integer({ min: 1, max: 40 }).map((n) => n / 2),
       },
