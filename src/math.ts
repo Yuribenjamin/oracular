@@ -1,8 +1,8 @@
 import type { LiftType } from './types';
 
-/** 2^(−elapsed / halfLife). Returns 1 for zero, negative or non-finite elapsed time. */
+/** 2^(−elapsed / halfLife): 1 for zero, negative or NaN elapsed time, 0 for an infinite one. */
 export function decayFactor(elapsed: number, halfLife: number): number {
-  if (!(elapsed > 0) || !Number.isFinite(elapsed)) return 1;
+  if (!(elapsed > 0)) return 1;
   return 2 ** (-elapsed / halfLife);
 }
 

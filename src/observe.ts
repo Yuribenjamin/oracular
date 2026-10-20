@@ -25,7 +25,9 @@ import { hasOwn } from './util';
  * `w × log2(1 + 1/n)`, counted since the episode started or the intent's outcome last arrived.
  * That is the default when `config.episodeTimeout` is set, and `IntentConfig.saturate` overrides
  * it either way; otherwise every occurrence adds all of `w`. For every intent the event is the
- * outcome of: give the remembered signals a hit, count the episode toward the base rate, credit
+ * outcome of: give the signals remembered since the episode started or the outcome last arrived a
+ * hit and count the episode toward the base rate (a repeated outcome with nothing seen since
+ * counts nothing), credit
  * the closed episodes still waiting under `IntentConfig.attribution` by `2^(−age / halfLife)`
  * each, record `lastOutcomeAt`, and (by default) reset the evidence to the prior. Any event opens
  * or extends the current episode; an idle gap longer than `config.episodeTimeout` closes the
@@ -65,6 +67,7 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
     let is = getIntentState(s, intentName, intent);
     is = decayIntent(is, intent, at);
     is = settlePending(is, intent, learning, at);
+    is = pinAnchors(is, at);
 
     if (isSignal) {
       const { effective } = signalWeights(is, intent, learning, name);
@@ -77,7 +80,11 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
     }
 
     if (isOutcome) {
-      is = recordEpisode(is, episodeRecord(episode, intentName).seen, 1);
+      // The signals seen since the episode started, or since the intent's outcome last arrived,
+      // get the hit. A repeated outcome with no signal seen since is a duplicate, not another
+      // episode, so it does not count toward the base rate.
+      const record = episodeRecord(episode, intentName);
+      if (!record.resolved || record.seen.length > 0) is = recordEpisode(is, record.seen, 1);
       is = creditPending(is, intent, at);
       episode = markResolved(episode, intentName);
       is = { ...is, lastOutcomeAt: at };
@@ -88,6 +95,22 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
   }
 
   return { ...s, intents, episode };
+}
+
+/**
+ * A reveal or outcome stamped ahead of `at` was stamped by a clock that was ahead; it is pinned
+ * to `at`, as `predict` already reads it, so its cooldown runs from this event rather than from a
+ * date that may never come.
+ */
+function pinAnchors(is: IntentState, at: number): IntentState {
+  const reveal = is.lastRevealedAt !== null && is.lastRevealedAt > at;
+  const outcome = is.lastOutcomeAt !== null && is.lastOutcomeAt > at;
+  if (!reveal && !outcome) return is;
+  return {
+    ...is,
+    lastRevealedAt: reveal ? at : is.lastRevealedAt,
+    lastOutcomeAt: outcome ? at : is.lastOutcomeAt,
+  };
 }
 
 /**
@@ -123,6 +146,8 @@ function closeEpisode(state: EngineState, at: number): EngineState {
   const intents: Record<string, IntentState> = { ...state.intents };
   for (const [intentName, intent] of Object.entries(state.config.intents)) {
     const record = episodeRecord(state.episode, intentName);
+    // Resolved: the outcome arrived. Signals seen after it stay neutral at the close; they are
+    // judged only if another outcome follows them in the same episode.
     if (record.resolved) continue;
     let is = getIntentState(state, intentName, intent);
     is = settlePending(is, intent, learning, at);

@@ -173,6 +173,27 @@ describe('observe', () => {
     expect(s.intents.upgrade!.episodes).toStrictEqual({ hits: 1, misses: 0 });
   });
 
+  it('an event stamped before the last one moves the episode clock back, and the idle gap is measured from there', () => {
+    let s = observe(createState(sessions), { name: 'pricing.viewed', at: T });
+    s = observe(s, { name: 'limit.hit', at: T + 20 * MINUTE }); // a clock that was ahead
+    s = observe(s, { name: 'export.clicked', at: T + MINUTE }); // corrected: no gap to time out
+    expect(s.episode).toMatchObject({ startedAt: T, lastEventAt: T + MINUTE });
+    s = observe(s, { name: 'pricing.viewed', at: T + 32 * MINUTE }); // 31 idle minutes: a new episode
+    assertInvariants(s);
+    expect(s.episode.startedAt).toBe(T + 32 * MINUTE);
+    expect(s.intents.upgrade!.episodes).toStrictEqual({ hits: 0, misses: 1 });
+  });
+
+  it('a repeated outcome with no signal seen since the last one is not another episode', () => {
+    let s = observe(createState(config), { name: 'pricing.viewed', at: T });
+    s = observe(s, { name: 'upgrade.completed', at: T + 1 });
+    s = observe(s, { name: 'upgrade.completed', at: T + 2 }); // a duplicate event
+    assertInvariants(s);
+    expect(s.intents.upgrade!.learned).toStrictEqual({ 'pricing.viewed': { hits: 1, misses: 0 } });
+    expect(s.intents.upgrade!.episodes).toStrictEqual({ hits: 1, misses: 0 });
+    expect(s.intents.upgrade!.lastOutcomeAt).toBe(T + 2);
+  });
+
   it('a second outcome in the same episode rewards the signals seen since the first', () => {
     const keep = patchIntent(config, { resetOnOutcome: false });
     let s = observe(createState(keep), { name: 'pricing.viewed', at: T });

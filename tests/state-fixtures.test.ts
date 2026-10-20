@@ -68,13 +68,29 @@ function expectSameJson(actual: unknown, expected: unknown, path: string): void 
   }
 }
 
+/**
+ * Set while a deliberate behaviour change is unreleased: what moved since the newest fixture, in
+ * one line, matching its changeset. Back to null once the release that ships it has its fixture.
+ */
+const UNRELEASED_CHANGE: string | null = null;
+
 describe('states saved by every published version', () => {
-  it('are what the current build writes for the same scenario, at this state version', () => {
+  it('are what the current build writes for the same scenario, at this state version, unless a change is on its way', () => {
     // No estimate, timestamp or key has moved since the newest release that wrote this version,
-    // unless a deliberate change came with a new fixture.
+    // unless a deliberate change is waiting for its release and fixture.
     const newest = [...VERSIONS].reverse().find((v) => WRITTEN_VERSION[v] === STATE_VERSION)!;
-    const current = runScenario({ createState, observe, endEpisode, markRevealed, serialize });
-    expectSameJson(JSON.parse(current), JSON.parse(read(newest)), newest);
+    const current = JSON.parse(
+      runScenario({ createState, observe, endEpisode, markRevealed, serialize }),
+    );
+    const stored = JSON.parse(read(newest));
+    if (UNRELEASED_CHANGE === null) {
+      expectSameJson(current, stored, newest);
+    } else {
+      // Same shape, same keys; the numbers moved for the stated reason, and the result still loads.
+      expect(Object.keys(current)).toStrictEqual(Object.keys(stored));
+      expect(() => expectSameJson(current, stored, newest), UNRELEASED_CHANGE).toThrow();
+      assertInvariants(deserialize(JSON.stringify(current)));
+    }
   });
 
   it('has one fixture per published version, produced by scripts/state-fixtures.mjs', () => {

@@ -45,17 +45,20 @@ export function withContributions(
   return { ...state, alpha, beta, contributions };
 }
 
-/** Decays evidence toward the prior by 2^(−Δt / halfLife) and moves the anchor to `at`. */
+/**
+ * Decays evidence toward the prior by 2^(−Δt / halfLife) and moves the anchor to `at`, even when
+ * `at` is earlier: a backwards step holds the evidence and decay resumes from there, so an event
+ * stamped ahead of the clock cannot hold the intent until the clock catches up.
+ */
 export function decayIntent(state: IntentState, intent: IntentConfig, at: number): IntentState {
   if (state.updatedAt === null) return { ...state, updatedAt: at };
   const d = decayFactor(at - state.updatedAt, intent.halfLife);
-  const updatedAt = Math.max(state.updatedAt, at);
-  if (d === 1) return updatedAt === state.updatedAt ? state : { ...state, updatedAt };
+  if (d === 1) return at === state.updatedAt ? state : { ...state, updatedAt: at };
   const contributions = mapRecord(state.contributions, (c) => ({
     alpha: c.alpha * d,
     beta: c.beta * d,
   }));
-  return withContributions({ ...state, updatedAt }, intent, contributions);
+  return withContributions({ ...state, updatedAt: at }, intent, contributions);
 }
 
 /** Adds `weight` pseudo-counts for the intent (positive → α) or against it (negative → β). */
