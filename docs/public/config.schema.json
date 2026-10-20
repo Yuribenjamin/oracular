@@ -138,7 +138,7 @@
         },
         "gain": {
           "$ref": "#/$defs/bounded",
-          "description": "Multiplier of |initial weight| × lift. With the default lift, caps the learned magnitude at gain × |initial weight|. Default 2."
+          "description": "Caps learned magnitude at gain × |initial weight| for every lift option. Default 2."
         },
         "priorEpisodes": {
           "$ref": "#/$defs/bounded",
@@ -155,7 +155,7 @@
             "normalized-difference",
             "association-rule"
           ],
-          "description": "Lift formula. Default normalized-difference preserves the bounded comparison. Ratios use their raw values (neutral at 1); association-rule compares with the overall outcome rate. Ratio/log inputs are clamped to [Number.EPSILON, 1 - Number.EPSILON] for finite arithmetic."
+          "description": "Association measure, converted to an evidence score in [-1, 1], neutral at zero. Ratios use (R - 1)/(R + 1), relative/log lift use x/(1 + abs(x)), and absolute/normalized differences keep their scale. Default normalized-difference preserves existing behavior. Association-rule compares with the overall outcome rate."
         }
       }
     }

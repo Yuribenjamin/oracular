@@ -1,3 +1,4 @@
+import fc from 'fast-check';
 import {
   createState,
   deserialize,
@@ -6,12 +7,14 @@ import {
   explain,
   type LiftType,
   observe,
+  predict,
   serialize,
+  shouldReveal,
   validateConfig,
 } from 'oracular';
 import { describe, expect, it } from 'vitest';
 import { LIFT_TYPES } from '../src/config';
-import { lift } from '../src/math';
+import { learningScore, lift } from '../src/math';
 import { assertInvariants, DAY, upgradeConfig } from './helpers';
 
 const T = 1_700_000_000_000;
@@ -26,6 +29,17 @@ const examples: [LiftType, number][] = [
   ['normalized-difference', 2 / 3],
   ['association-rule', 1.5],
 ];
+
+// Expected evidence scores for the same rates, independently calculated from the documented transforms.
+const scores: Record<LiftType, number> = {
+  'absolute-difference': 0.5,
+  'relative-lift': 2 / 3,
+  'risk-ratio': 0.5,
+  'log-lift': Math.log(3) / (1 + Math.log(3)),
+  'odds-ratio': 0.8,
+  'normalized-difference': 2 / 3,
+  'association-rule': 0.2,
+};
 
 describe('lift formulas', () => {
   for (const [type, expected] of examples) {
@@ -95,7 +109,8 @@ function train(type?: LiftType): EngineState {
 }
 
 describe('constructor lift selection', () => {
-  for (const [type, expected] of examples) {
+  for (const type of LIFT_TYPES) {
+    const expected = scores[type];
     it(`learns, applies and persists ${type}`, () => {
       const state = train(type);
       const at = T + 4 * DAY;
@@ -146,7 +161,7 @@ describe('constructor lift selection', () => {
     expect(
       explain(restored, 'upgrade', T + 4 * DAY).find((s) => s.signal === 'pricing.viewed')!
         .learnedWeight,
-    ).toBe(18);
+    ).toBe(3);
   });
 
   it('uses the marginal outcome rate for association-rule lift on unequal group sizes', () => {
@@ -159,7 +174,7 @@ describe('constructor lift selection', () => {
       (s) => s.signal === 'pricing.viewed',
     )!;
     // +1 per cell: P(A,B)=3/9, P(A)=4/9, P(B)=4/9; lift = 27/16.
-    expect(signal.learnedWeight).toBeCloseTo(6 * (27 / 16), 12);
+    expect(signal.learnedWeight).toBeCloseTo(6 * (11 / 43), 12);
   });
 
   it('rejects invalid selectors with the config path', () => {
@@ -169,5 +184,123 @@ describe('constructor lift selection', () => {
       expect(() => validateConfig(config)).toThrow('oracular: config.learning.lift');
       expect(() => createState(config as Parameters<typeof createState>[0])).toThrow(TypeError);
     }
+  });
+});
+
+describe('learning score contract', () => {
+  const score = (q: number, b: number, type: LiftType) => learningScore(lift(q, b, type), type);
+
+  it.each(LIFT_TYPES)('%s is neutral at zero, signed, bounded and monotone', (type) => {
+    const rates = [0, Number.EPSILON, 0.001, 0.1, 0.5, 0.9, 0.999, 1 - Number.EPSILON, 1];
+    for (const baseline of rates) {
+      expect(score(baseline, baseline, type)).toBe(0);
+      let previous = -1;
+      for (const rate of rates) {
+        const value = score(rate, baseline, type);
+        expect(Number.isFinite(value)).toBe(true);
+        expect(value).toBeGreaterThanOrEqual(-1);
+        expect(value).toBeLessThanOrEqual(1);
+        expect(value).toBeGreaterThanOrEqual(previous);
+        previous = value;
+      }
+    }
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 999 }), fc.integer({ min: 1, max: 999 }), (q, b) => {
+        expect(Math.sign(score(q / 1000, b / 1000, type))).toBe(Math.sign(q - b));
+      }),
+      { seed: 20261020, numRuns: 100 },
+    );
+  });
+
+  it.each(['risk-ratio', 'odds-ratio', 'association-rule'] as const)(
+    '%s gives reciprocal ratios equal and opposite evidence',
+    (type) => {
+      for (const ratio of [0.01, 0.5, 1, 2, 100]) {
+        expect(learningScore(ratio, type)).toBeCloseTo(-learningScore(1 / ratio, type), 14);
+      }
+    },
+  );
+});
+
+/** Balanced groups with a neutral, predictive or anti-predictive pricing signal. */
+function trainAssociation(
+  type: LiftType,
+  association: 'neutral' | 'positive' | 'negative',
+  count = 20,
+  initial = 3,
+  gain = 2,
+): EngineState {
+  const base = upgradeConfig({ learning: { lift: type, gain } });
+  let state = createState({
+    ...base,
+    intents: { upgrade: { ...base.intents.upgrade!, signals: { 'pricing.viewed': initial } } },
+  });
+  assertInvariants(state);
+  for (let i = 0; i < count; i++) {
+    const withSignal = i < count / 2;
+    const outcome =
+      association === 'neutral' ? i % 2 === 0 : withSignal === (association === 'positive');
+    const at = T + i * DAY;
+    state = observe(state, { name: withSignal ? 'pricing.viewed' : 'app.opened', at });
+    assertInvariants(state);
+    if (outcome) {
+      state = observe(state, { name: 'upgrade.completed', at });
+      assertInvariants(state);
+    }
+    state = endEpisode(state, at);
+    assertInvariants(state);
+  }
+  return state;
+}
+
+describe.each(LIFT_TYPES)('%s learning behavior', (type) => {
+  it('shrinks a neutral signal toward zero for either initial sign', () => {
+    for (const initial of [3, -3]) {
+      const state = trainAssociation(type, 'neutral', 20, initial);
+      const signal = explain(state, 'upgrade', T + 20 * DAY)[0]!;
+      expect([signal.hits, signal.misses]).toStrictEqual([5, 5]);
+      expect(signal.learnedWeight).toBe(0);
+      // Ten sessions on each side: nEff = 5. The prior keeps 10 / (10 + 5) of its weight.
+      expect(signal.effectiveWeight).toBe(initial * (2 / 3));
+    }
+  });
+
+  it('bounds learned magnitude by gain for either initial sign, including gain below one', () => {
+    for (const gain of [0.25, 2, 10]) {
+      for (const initial of [3, -3]) {
+        const state = trainAssociation(type, 'positive', 20, initial, gain);
+        const signal = explain(state, 'upgrade', T + 20 * DAY)[0]!;
+        expect(signal.learnedWeight).toBeGreaterThan(0);
+        expect(Math.abs(signal.learnedWeight)).toBeLessThanOrEqual(gain * Math.abs(initial));
+        expect(signal.effectiveWeight).toBeGreaterThanOrEqual(
+          Math.min(initial, signal.learnedWeight),
+        );
+        expect(signal.effectiveWeight).toBeLessThanOrEqual(Math.max(initial, signal.learnedWeight));
+      }
+    }
+  });
+
+  it('turns an anti-predictive signal into evidence against the intent with enough history', () => {
+    const count = 200;
+    const state = trainAssociation(type, 'negative', count);
+    const at = T + count * DAY;
+    const signal = explain(state, 'upgrade', at)[0]!;
+    expect(signal.learnedWeight).toBeLessThan(0);
+    expect(signal.learnedWeight).toBeGreaterThanOrEqual(-6);
+    expect(signal.effectiveWeight).toBeLessThan(0);
+    const next = observe(state, { name: 'pricing.viewed', at });
+    assertInvariants(next);
+    expect(next.intents.upgrade!.alpha).toBe(state.intents.upgrade!.alpha);
+    expect(next.intents.upgrade!.beta).toBeGreaterThan(state.intents.upgrade!.beta);
+    expect(predict(next, 'upgrade', at).p).toBeLessThan(predict(state, 'upgrade', at).p);
+  });
+
+  it('cannot turn one occurrence into hundreds of evidence units and open the default gate', () => {
+    const state = trainAssociation(type, 'positive');
+    const at = T + 20 * DAY;
+    const next = observe(state, { name: 'pricing.viewed', at });
+    assertInvariants(next);
+    expect(predict(next, 'upgrade', at).evidence).toBeLessThanOrEqual(10 + 6);
+    expect(shouldReveal(next, 'upgrade', at)).toBe(false);
   });
 });

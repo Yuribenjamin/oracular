@@ -2,4 +2,4 @@
 "oracular": minor
 ---
 
-Add `learning.lift` to `createState(config)` with absolute difference, relative lift, risk ratio, log lift, odds ratio, normalized difference and association-rule lift. Omitting it preserves the current normalized difference and existing saved states. CLI tuning uses the selected formula too. Ratio formulas retain their raw values (neutral at 1), and ratio/log inputs are kept away from floating-point endpoints for finite weights.
+Add `learning.lift` to `createState(config)` with absolute difference, relative lift, risk ratio, log lift, odds ratio, normalized difference and association-rule lift. Every choice is converted to a signed score in [−1, 1], neutral at zero, before learning or tuning weights and intervals. Ratios use (R − 1)/(R + 1), relative/log lift use x/(1 + |x|), and bounded differences keep their scale. Omitting the selector preserves the existing normalized difference exactly. CLI reports retain raw lift alongside the evidence score when they differ. Existing learned counts are retained; previously accumulated evidence is not rebuilt and continues to decay or reset on outcome.

@@ -25,6 +25,7 @@ import {
   wilson,
 } from '../cli/tune';
 import { formatTuneText } from '../cli/tune-report';
+import { LIFT_TYPES } from '../src/config';
 import { DAY, deepFreeze, MINUTE } from './helpers';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -90,27 +91,28 @@ describe('tune, on a log small enough to count by hand', () => {
   const report = tune(deepFreeze(handLog()), buyConfig, { halfLives: [1e15] });
   const [fit] = report.intents;
 
-  it.each<[LiftType, number]>([
-    ['absolute-difference', 0.35],
-    ['relative-lift', 1.4],
-    ['risk-ratio', 2.4],
-    ['log-lift', Math.log(2.4)],
-    ['odds-ratio', 4.5],
-    ['normalized-difference', 0.35 / 0.75],
-    ['association-rule', 1.35],
-  ])('fits %s with the same formula as the engine', (lift, expected) => {
+  it.each<[LiftType, number, number]>([
+    ['absolute-difference', 0.35, 0.35],
+    ['relative-lift', 1.4, 1.4 / 2.4],
+    ['risk-ratio', 2.4, 1.4 / 3.4],
+    ['log-lift', Math.log(2.4), Math.log(2.4) / (1 + Math.log(2.4))],
+    ['odds-ratio', 4.5, 3.5 / 5.5],
+    ['normalized-difference', 0.35 / 0.75, 0.35 / 0.75],
+    ['association-rule', 1.35, 0.35 / 2.35],
+  ])('reports raw %s and fits its signed evidence score', (lift, expected, score) => {
     const config = { ...buyConfig, learning: { lift } };
     const selected = tune(handLog(), config, { halfLives: [1e15], allEvents: true });
     const x = selected.intents[0]!.signals.find((s) => s.signal === 'x')!;
     expect(x.lift).toBeCloseTo(expected, 12);
-    expect(x.weight).toBe(Math.round(2 * expected * 100) / 100);
+    expect(x.score).toBeCloseTo(score, 12);
+    expect(x.weight).toBe(Math.round(2 * score * 100) / 100);
     expect(Number.isFinite(x.low)).toBe(true);
     expect(Number.isFinite(x.high)).toBe(true);
     expect(selected.config.learning?.lift).toBe(lift);
     expect(() => validateConfig(selected.config)).not.toThrow();
   });
 
-  it('caps unbounded fitted weights at the accepted config magnitude', () => {
+  it('scales a bounded score even at the maximum configured prior strength', () => {
     const config: EngineConfig = {
       ...buyConfig,
       learning: { lift: 'odds-ratio' },
@@ -119,7 +121,10 @@ describe('tune, on a log small enough to count by hand', () => {
     const selected = tune(handLog(), config, { halfLives: [1e15] });
     const x = selected.intents[0]!.signals.find((s) => s.signal === 'x')!;
     expect(x.lift).toBeCloseTo(4.5, 12);
-    expect(x.weight).toBe(1e6);
+    expect(x.score).toBeCloseTo(3.5 / 5.5, 12);
+    expect(x.weight).toBe(636363.64);
+    expect(x.low).toBeGreaterThanOrEqual(-1e6);
+    expect(x.high).toBeLessThanOrEqual(1e6);
     expect(() => validateConfig(selected.config)).not.toThrow();
   });
 
@@ -256,6 +261,64 @@ describe('tune, on a log small enough to count by hand', () => {
     // Probing candidates changes nothing about the declared signals.
     expect(f?.signals).toStrictEqual(report.intents[0]?.signals);
   });
+});
+
+describe('tune preserves the evidence score contract', () => {
+  const entries: LogEntry[] = [];
+  for (let i = 0; i < 20; i++) {
+    const at = T + i * DAY;
+    entries.push(ev('balanced', at, 'app.opened'));
+    entries.push(ev('balanced', at + 1, i < 10 ? 'good' : 'bad'));
+    if (i % 2 === 0) entries.push(ev('balanced', at + 2, 'neutral'));
+    if (i < 10) {
+      entries.push(ev('balanced', at + 3, 'candidate.good'));
+      entries.push(ev('balanced', at + 4, 'buy.done'));
+    }
+    entries.push(end('balanced', at + 5));
+  }
+
+  it.each(LIFT_TYPES)(
+    '%s drops neutral signals and fits bounded signed weights and intervals',
+    (lift) => {
+      const config: EngineConfig = {
+        ...buyConfig,
+        learning: { lift },
+        intents: {
+          buy: {
+            ...buyConfig.intents.buy!,
+            priorStrength: 10,
+            signals: { good: 3, bad: 3, neutral: 3 },
+          },
+        },
+      };
+      const report = tune(entries, config, { halfLives: [1e15], allEvents: true });
+      const fitted = report.intents[0]!;
+      const good = fitted.signals.find((s) => s.signal === 'good')!;
+      const bad = fitted.signals.find((s) => s.signal === 'bad')!;
+      const neutral = fitted.signals.find((s) => s.signal === 'neutral')!;
+      expect(neutral.score).toBe(0);
+      expect(neutral.weight).toBeNull();
+      expect(report.config.intents.buy!.signals).not.toHaveProperty('neutral');
+      expect(good.weight).toBeGreaterThan(0);
+      expect(bad.weight).toBeLessThan(0);
+      expect(fitted.candidates.find((s) => s.signal === 'candidate.good')!.weight).toBeGreaterThan(
+        0,
+      );
+      for (const signal of [...fitted.signals, ...fitted.candidates]) {
+        expect(signal.score).toBeGreaterThanOrEqual(-1);
+        expect(signal.score).toBeLessThanOrEqual(1);
+        expect(Math.abs(signal.weight ?? 0)).toBeLessThanOrEqual(10);
+        expect(signal.low).toBeGreaterThanOrEqual(-10);
+        expect(signal.high).toBeLessThanOrEqual(10);
+        expect(signal.low).toBeLessThanOrEqual(signal.high);
+      }
+      expect(() => validateConfig(report.config)).not.toThrow();
+      if (lift === 'risk-ratio' || lift === 'odds-ratio' || lift === 'association-rule') {
+        expect(neutral.lift).toBe(1);
+        expect(formatTuneText(report)).toContain('| score');
+      }
+    },
+  );
 });
 
 // ---- a population with planted structure ----

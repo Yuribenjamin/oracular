@@ -68,15 +68,15 @@ effective = (k × w₀ + nEff × learned) / (k + nEff)              k = learning
 
 Both rates are Laplace-smoothed (+1 / +2). The formula shown is the default normalized difference. Learning options live under `config.learning`:
 
-- **`gain`** (default 2) scales the learned estimate. With the default lift, it caps how far a perfectly predictive signal can grow: `learned` lives in [−gain·|w₀|, gain·|w₀|].
+- **`gain`** (default 2) caps the learned estimate for every lift option: `learned` lives in [−gain·|w₀|, gain·|w₀|]. The effective weight blends this estimate with your initial weight, so when `gain < 1` it can initially exceed the learned cap while it moves away from the prior.
 - **`priorEpisodes`** (default 10) is how much contrast it takes for the user's history to weigh as much as your initial weight. The signal's strength (`w₀`) and your confidence in it (`k`) are deliberately separate things.
 
 ## Choosing a lift formula
 
-`learning.lift` is an optional setting for advanced users who want to control the learning
-scale. Leave it unset to keep the existing bounded behavior. Alternatives use the raw formulas
-below, so select one whose scale and neutral value suit your application, and tune `gain` and
-signal weights accordingly.
+`learning.lift` chooses an association measure. Each measure is converted to a signed evidence
+score in [−1, 1], where zero means no association. Leave it unset to keep the existing normalized
+difference exactly. Different choices change sensitivity to differences in outcome rates, while
+preserving the meaning of negative weights and the cap set by `gain`.
 
 Choose a formula when constructing the engine:
 
@@ -90,7 +90,7 @@ const state = createState({
 `learning.lift` accepts these names. Here `q` is the outcome rate with the signal and `b` the
 outcome rate without it, both Laplace-smoothed as above.
 
-| Name | Formula | Common use case |
+| Name | Raw formula | Common use case |
 | --- | --- | --- |
 | `'absolute-difference'` | `q − b` | A/B testing, changes in conversion probability |
 | `'relative-lift'` | `(q − b) / b` | Marketing, percentage improvement |
@@ -108,16 +108,27 @@ ratio, which compares with episodes without the signal. For example, two success
 episodes and three unsuccessful episodes without it give `P(A,B) = 3/9`, `P(A) = 4/9`,
 `P(B) = 4/9`, and lift `27/16`.
 
-Omitting the option keeps the existing normalized difference exactly, including for saved states
-without the option. All formulas feed the same `gain × |w₀| × lift` and contrast blend. Ratios
-have a neutral value of **1**, stay positive below the baseline, and are used as written rather
-than shifted by 1. Differences and log lift have a neutral value of **0** and can be negative.
-Only normalized difference guarantees lift in [−1, 1]; with other choices `gain` is a multiplier,
-not a hard cap. Ratio/log inputs are clamped to `[Number.EPSILON, 1 − Number.EPSILON]` to keep
-arithmetic finite when large smoothed counts approach floating-point endpoints.
+The raw measure is converted before it enters `learned = gain × |w₀| × score`:
 
-`oracular tune` uses the selected formula for weights, candidate signals and intervals. Its
-fitted config weights stay within the accepted ±1e6 range even with unbounded formulas.
+| Measure | Evidence score |
+| --- | --- |
+| Absolute and normalized difference | The raw value, already in [−1, 1] |
+| Risk ratio, odds ratio, association-rule lift | `(R − 1) / (R + 1)` |
+| Relative and log lift | `x / (1 + abs(x))` |
+
+Every score is neutral at zero, negative below the baseline, and bounded within [−1, 1]. A ratio
+of 1 therefore learns a weight of zero, a ratio of 3 gives a score of 0.5, and a ratio of 1/3
+gives −0.5. The transforms are monotone; they preserve direction but change scale. Relative lift
+is asymmetric: its raw minimum is −1, so its score approaches −0.5 for strong negative association,
+while its positive score can approach 1. Normalized and absolute difference keep their original
+arithmetic. Ratio/log inputs are clamped to `[Number.EPSILON, 1 − Number.EPSILON]` to keep raw
+reporting metrics finite when smoothed rates round to endpoints.
+
+`oracular tune` uses the same score for declared and candidate signal weights and intervals.
+Its JSON report includes both `lift` (raw) and `score`; the text table adds a score column when
+they differ. Weights are `priorStrength × score`, rounded to two decimals, and interval endpoints
+stay within ±`priorStrength`. Existing learned counts remain usable. Evidence already accumulated
+with an older formula is retained until decay or an outcome reset; it is not replayed on load.
 
 ## Learning needs contrast
 

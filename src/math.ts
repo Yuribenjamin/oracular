@@ -138,7 +138,8 @@ export function laplace(successes: number, total: number): number {
 }
 
 /**
- * Compares a rate `q` with baseline `b`. By default, scales the difference to [−1, 1].
+ * The raw association measure comparing rate `q` with baseline `b`. Convert it with
+ * `learningScore` before using it as signed evidence; raw ratios have a neutral value of 1.
  * For association-rule lift, `b` must be the overall outcome rate rather than the rate without
  * the signal: P(outcome | signal) / P(outcome) = P(signal, outcome) / (P(signal) P(outcome)).
  * Ratio/log inputs are bounded away from 0 and 1 to keep learned weights finite even when a
@@ -162,4 +163,23 @@ export function lift(q: number, b: number, type: LiftType = 'normalized-differen
   }
   if (q >= b) return b >= 1 ? 0 : (q - b) / (1 - b);
   return b <= 0 ? 0 : (q - b) / b;
+}
+
+/**
+ * Converts raw lift to signed evidence in [−1, 1], with independence at 0. Bounded differences
+ * keep their original scale. Ratios use (R − 1)/(R + 1); unbounded differences and log lift use
+ * x/(1 + |x|). Both transforms are monotone, so direction and interval ordering are preserved.
+ */
+export function learningScore(value: number, type: LiftType = 'normalized-difference'): number {
+  switch (type) {
+    case 'risk-ratio':
+    case 'odds-ratio':
+    case 'association-rule':
+      return (value - 1) / (value + 1);
+    case 'relative-lift':
+    case 'log-lift':
+      return value / (1 + Math.abs(value));
+    default:
+      return value;
+  }
 }

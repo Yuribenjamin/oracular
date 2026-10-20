@@ -25,7 +25,7 @@ export interface RevealOptions {
   bound?: 'normal' | 'exact';
 }
 
-/** The formula used to compare outcome rates when learning signal weights. */
+/** The association measure converted to a signed, bounded score when learning signal weights. */
 export type LiftType =
   | 'absolute-difference'
   | 'relative-lift'
@@ -48,17 +48,16 @@ export type LiftType =
  */
 export interface LearningConfig {
   /**
-   * Optional lift formula for advanced users. Omit to preserve the existing bounded [−1, 1]
-   * comparison (`'normalized-difference'`). Choose the scale and neutral value deliberately.
-   * Other choices use their raw formulas: ratios have a neutral value of 1 and are not centered
-   * or capped. `'association-rule'` compares with the overall outcome rate; the others compare
-   * episodes with the signal against episodes without it. Ratio/log inputs are kept within
-   * [Number.EPSILON, 1 − Number.EPSILON] for finite arithmetic.
+   * Optional association measure. Every choice is converted to a score in [−1, 1], neutral at
+   * zero, before learning: ratios use (R − 1)/(R + 1), relative/log lift use x/(1 + |x|), and
+   * absolute/normalized differences keep their scale. Omit to preserve the existing normalized
+   * difference exactly. 'association-rule' uses the overall outcome rate as its baseline; the
+   * others use episodes without the signal. Raw ratios are reporting metrics, never weights.
    */
   lift?: LiftType;
   /** Half-life of learned hit/miss counts, in the same unit as `at`. Omit for no forgetting. */
   halfLife?: number;
-  /** Multiplier of `|initial weight| × lift`. With the default lift, caps the learned magnitude at `gain × |initial weight|`. Default 2; at most 1e6. */
+  /** Caps learned magnitude at `gain × |initial weight|` for every lift option. Default 2; at most 1e6. */
   gain?: number;
   /** Pseudo-count behind the developer's initial weight: how many observed episodes it takes to weigh as much as the prior. Default 10; at most 1e6. */
   priorEpisodes?: number;
