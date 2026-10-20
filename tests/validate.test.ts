@@ -1,4 +1,11 @@
-import { createState, type EngineConfig, validateConfig } from 'oracular';
+import {
+  createState,
+  deserialize,
+  type EngineConfig,
+  predict,
+  serialize,
+  validateConfig,
+} from 'oracular';
 import { describe, expect, it } from 'vitest';
 import { assertPlainJson, clone, deepFreeze, MINUTE, upgradeConfig } from './helpers';
 
@@ -113,5 +120,62 @@ describe('validateConfig', () => {
     const parsed: unknown = JSON.parse(text);
     const out = validateConfig(parsed);
     expect(out).toStrictEqual(createState(out).config);
+  });
+});
+
+describe('validateConfig: configs that cannot work', () => {
+  const intent = { prior: 0.1, priorStrength: 2, halfLife: 1000, signals: { x: 1 } };
+
+  it('still accepts an intent without signals: a prior-only gate', () => {
+    expect(
+      validateConfig({ intents: { a: { ...intent, signals: {} } } }).intents.a?.signals,
+    ).toStrictEqual({});
+  });
+
+  it("rejects an outcome that is one of the intent's own signals, unless resetOnOutcome is off", () => {
+    const own = { ...intent, signals: { x: 1, done: 2 }, outcome: 'done' };
+    expect(() => validateConfig({ intents: { a: own } })).toThrow(
+      /config\.intents\["a"\]\.outcome is also one of its signals/,
+    );
+    expect(() => validateConfig({ intents: { a: { ...own, resetOnOutcome: true } } })).toThrow(
+      TypeError,
+    );
+    const kept = validateConfig({ intents: { a: { ...own, resetOnOutcome: false } } });
+    expect(kept.intents.a?.signals).toStrictEqual({ x: 1, done: 2 });
+  });
+
+  it('rejects a threshold of 0 or 1 and a z past 10 in a config, while a call may still probe them', () => {
+    for (const bad of [{ threshold: 0 }, { threshold: 1 }, { z: 10.5 }, { z: 1e9 }]) {
+      expect(() => validateConfig({ intents: { a: intent }, reveal: bad })).toThrow(RangeError);
+      expect(() => validateConfig({ intents: { a: { ...intent, reveal: bad } } })).toThrow(
+        RangeError,
+      );
+      expect(() => predict(createState({ intents: { a: intent } }), 'a', 0, bad)).not.toThrow();
+    }
+    expect(() => validateConfig({ intents: { a: intent }, reveal: { threshold: 0 } })).toThrow(
+      /config\.reveal\.threshold must be strictly between 0 and 1/,
+    );
+    expect(() => validateConfig({ intents: { a: intent }, reveal: { z: 11 } })).toThrow(
+      /config\.reveal\.z must be at most 10/,
+    );
+    expect(
+      validateConfig({ intents: { a: intent }, reveal: { z: 10, threshold: 0.999 } }),
+    ).toMatchObject({ reveal: { z: 10, threshold: 0.999 } });
+  });
+
+  it('a stored config is read without these checks, so a state saved before them still loads', () => {
+    const valid = validateConfig({ intents: { a: intent } });
+    const stored = JSON.parse(serialize(createState(valid)));
+    stored.config.reveal = { threshold: 0, z: 100 };
+    stored.config.intents.a.signals = { x: 1, done: 2 };
+    stored.config.intents.a.outcome = 'done';
+    const json = JSON.stringify(stored);
+    // With the app's config, as documented: the stored one is replaced.
+    expect(deserialize(json, { config: valid }).config).toStrictEqual(valid);
+    // Without one, the stored config runs as it is.
+    const alone = deserialize(json);
+    expect(alone.config.reveal).toStrictEqual({ threshold: 0, z: 100 });
+    expect(alone.config.intents.a?.outcome).toBe('done');
+    expect(predict(alone, 'a', 0).lower).toBe(0);
   });
 });

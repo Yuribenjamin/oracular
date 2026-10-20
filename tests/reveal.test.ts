@@ -284,3 +284,40 @@ describe('markRevealed', () => {
     expect(() => markRevealed(s, 'tip', Number.POSITIVE_INFINITY)).toThrow(TypeError);
   });
 });
+
+describe('a cooldown stamped by a clock that was ahead', () => {
+  it('counts as having happened now, and the next event pins it there', () => {
+    const config = thinConfig(); // the cooldown is the week-long half-life
+    let s = createState(config);
+    for (let i = 0; i < 4; i++) s = observe(s, { name: 'x', at: T });
+    expect(shouldReveal(s, 'tip', T)).toBe(true);
+    s = markRevealed(s, 'tip', T + 365 * DAY); // stamped a year ahead
+    // Read at the right time: suppressed for one cooldown from now, not until next year.
+    expect(predict(s, 'tip', T + HOUR).suppressedUntil).toBe(T + HOUR + 7 * DAY);
+    expect(shouldReveal(s, 'tip', T + HOUR)).toBe(false);
+    // The next event pins the reveal to its own time; from there the cooldown ends normally.
+    s = observe(s, { name: 'x', at: T + HOUR });
+    assertInvariants(s);
+    expect(s.intents.tip!.lastRevealedAt).toBe(T + HOUR);
+    expect(predict(s, 'tip', T + HOUR + 7 * DAY - MINUTE).suppressedUntil).toBe(T + HOUR + 7 * DAY);
+    expect(predict(s, 'tip', T + HOUR + 7 * DAY + MINUTE).suppressedUntil).toBeNull();
+  });
+
+  it('the outcome cooldown is pinned the same way', () => {
+    let s = createState(thinConfig());
+    s = observe(s, { name: 'x', at: T });
+    s = observe(s, { name: 'tip.used', at: T + 365 * DAY });
+    expect(predict(s, 'tip', T + HOUR).suppressedUntil).toBe(T + HOUR + 7 * DAY);
+    s = observe(s, { name: 'x', at: T + HOUR });
+    expect(s.intents.tip!.lastOutcomeAt).toBe(T + HOUR);
+  });
+
+  it('markRevealed trusts the time it is given: an earlier at moves the cooldown start back', () => {
+    let s = createState(thinConfig());
+    s = markRevealed(s, 'tip', T);
+    s = markRevealed(s, 'tip', T - DAY);
+    expect(s.intents.tip!.lastRevealedAt).toBe(T - DAY);
+    expect(s.intents.tip!.revealCount).toBe(2);
+    expect(predict(s, 'tip', T + 6 * DAY + MINUTE).suppressedUntil).toBeNull();
+  });
+});

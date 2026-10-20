@@ -107,13 +107,14 @@
       "properties": {
         "threshold": {
           "type": "number",
-          "minimum": 0,
-          "maximum": 1,
-          "description": "Probability the intent must reach. Default 0.5."
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1,
+          "description": "Probability the intent must reach, strictly between 0 and 1. Default 0.5."
         },
         "z": {
           "type": "number",
           "minimum": 0,
+          "maximum": 10,
           "description": "How many standard deviations below p must still clear the threshold. Default 1.28."
         },
         "cooldown": {

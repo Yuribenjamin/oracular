@@ -222,16 +222,22 @@ describe('learning', () => {
   });
 
   it('forgets with learning.halfLife, and never without it', () => {
+    // Ten episodes a day apart (a clock that never runs backwards), read one half-life after the last.
     const run = (config: EngineConfig) => {
       let s = createState(config);
-      for (let i = 0; i < 10; i++) s = episode(s, T, ['A'], true);
-      s = observe(s, { name: 'A', at: T + MINUTE + 7 * DAY });
+      for (let i = 0; i < 10; i++) s = episode(s, T + i * DAY, ['A'], true);
+      s = observe(s, { name: 'A', at: T + 9 * DAY + MINUTE + 7 * DAY });
       assertInvariants(s);
       return s.intents.buy!;
     };
     const forgetful = run(buyConfig({ learning: { halfLife: 7 * DAY } }));
-    expect(forgetful.learned.A).toStrictEqual({ hits: 5, misses: 0 });
-    expect(forgetful.episodes).toStrictEqual({ hits: 5, misses: 0 });
+    // Each hit has aged one half-life plus its distance from the last episode.
+    let expected = 0;
+    for (let i = 0; i < 10; i++) expected += 2 ** (-(7 + (9 - i)) / 7);
+    expect(forgetful.learned.A?.hits).toBeCloseTo(expected, 9);
+    expect(forgetful.learned.A?.misses).toBe(0);
+    expect(forgetful.episodes.hits).toBeCloseTo(expected, 9);
+    expect(forgetful.episodes.misses).toBe(0);
 
     const steady = run(buyConfig());
     expect(steady.learned.A).toStrictEqual({ hits: 10, misses: 0 });

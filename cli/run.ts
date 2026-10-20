@@ -97,6 +97,7 @@ Options:
                          the signals
   --json                 print the report as JSON
   -h, --help             show this help
+  -v, --version          print the version
 
 Only shadow periods are counted by default: an episode in which any record was live is left out,
 a log with live records gets a warning, and a log with nothing but live records is refused unless
@@ -189,6 +190,7 @@ interface CommonArgs {
   includeLive: boolean;
   json: boolean;
   help: boolean;
+  version: boolean;
 }
 
 function commonFlags(out: CommonArgs): Flags {
@@ -216,11 +218,18 @@ function commonFlags(out: CommonArgs): Flags {
     '-h': () => {
       out.help = true;
     },
+    '--version': (_value, noValue) => {
+      noValue();
+      out.version = true;
+    },
+    '-v': () => {
+      out.version = true;
+    },
   };
 }
 
 function requireLogsAndConfig(out: CommonArgs, command: string): void {
-  if (out.help) return;
+  if (out.help || out.version) return;
   if (out.logs.length === 0) throw new UsageError(`${command} needs at least one log file`);
   if (out.config === undefined) throw new UsageError(`${command} needs --config <file>`);
 }
@@ -230,7 +239,13 @@ interface ReplayArgs extends CommonArgs {
 }
 
 function parseReplayArgs(argv: readonly string[]): ReplayArgs {
-  const out: ReplayArgs = { logs: [], includeLive: false, json: false, help: false };
+  const out: ReplayArgs = {
+    logs: [],
+    includeLive: false,
+    json: false,
+    help: false,
+    version: false,
+  };
   parseFlags(
     argv,
     {
@@ -256,6 +271,7 @@ function parseTuneArgs(argv: readonly string[]): TuneArgs {
     includeLive: false,
     json: false,
     help: false,
+    version: false,
     allEvents: false,
   };
   parseFlags(
@@ -370,6 +386,10 @@ async function replayCommand(argv: readonly string[], io: Io): Promise<number> {
     io.stdout(REPLAY_HELP);
     return 0;
   }
+  if (args.version) {
+    io.stdout(`${version()}\n`);
+    return 0;
+  }
   const config = await loadCheckedConfig(args, io);
   const entries = readLogs(args.logs, io);
   checkModes(entries, args.includeLive, io, {
@@ -401,6 +421,10 @@ async function tuneCommand(argv: readonly string[], io: Io): Promise<number> {
   const args = parseTuneArgs(argv);
   if (args.help) {
     io.stdout(TUNE_HELP);
+    return 0;
+  }
+  if (args.version) {
+    io.stdout(`${version()}\n`);
     return 0;
   }
   const config = await loadCheckedConfig(args, io);

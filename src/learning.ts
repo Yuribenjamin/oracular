@@ -5,19 +5,21 @@ import { getOwn, mapRecord } from './util';
 
 const NONE: SignalRecord = { hits: 0, misses: 0 };
 
-/** Decays learned counts toward 0 by 2^(−Δt / learning.halfLife) and moves the anchor to `at`. */
+/**
+ * Decays learned counts toward 0 by 2^(−Δt / learning.halfLife) and moves the anchor to `at`,
+ * even when `at` is earlier (as `decayIntent` does for the evidence).
+ */
 export function decayLearned(
   state: IntentState,
   learning: ResolvedLearning,
   at: number,
 ): IntentState {
   if (state.learnedAt === null) return { ...state, learnedAt: at };
-  const learnedAt = Math.max(state.learnedAt, at);
   const d = learning.halfLife === null ? 1 : decayFactor(at - state.learnedAt, learning.halfLife);
-  if (d === 1) return learnedAt === state.learnedAt ? state : { ...state, learnedAt };
+  if (d === 1) return at === state.learnedAt ? state : { ...state, learnedAt: at };
   return {
     ...state,
-    learnedAt,
+    learnedAt: at,
     learned: mapRecord(state.learned, (r) => ({ hits: r.hits * d, misses: r.misses * d })),
     episodes: { hits: state.episodes.hits * d, misses: state.episodes.misses * d },
   };

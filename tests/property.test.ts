@@ -58,7 +58,7 @@ const episodeTimeout = fc.oneof(
 
 const reveal = fc.record(
   {
-    threshold: fc.integer({ min: 0, max: 10 }).map((n) => n / 10),
+    threshold: fc.integer({ min: 1, max: 9 }).map((n) => n / 10),
     z: fc.constantFrom(0, 0.5, 1.28, 1.64, 2, 3),
     cooldown: fc.constantFrom(0, MINUTE, HOUR, DAY),
     bound: fc.constantFrom('normal' as const, 'exact' as const),

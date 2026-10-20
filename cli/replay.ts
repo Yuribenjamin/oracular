@@ -64,6 +64,9 @@ export interface IntentReport {
   outcome: string;
   window: number;
   /** Whether `window` is the intent's reveal cooldown (true) or was given explicitly. */
+  /** Where the window came from. */
+  windowSource: WindowSource;
+  /** `windowSource === 'cooldown'`, kept for readers of earlier reports. */
   windowIsCooldown: boolean;
   installs: number;
   thresholds: ThresholdResult[];
@@ -96,6 +99,27 @@ export interface ReplayReport {
 export const DEFAULT_THRESHOLDS = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
 /** The engine's documented default for reveal.threshold; a test pins it to the engine. */
 export const DEFAULT_THRESHOLD = 0.5;
+
+/** Where an intent's scoring window comes from: `--window`, its reveal cooldown, or its half-life when the cooldown is 0. */
+export type WindowSource = 'option' | 'cooldown' | 'halfLife';
+
+/**
+ * The window outcomes must follow a reveal within: as given, else the intent's reveal cooldown,
+ * else (a cooldown of 0) its half-life. With an empty window no outcome could ever follow a
+ * reveal: every reveal would score as wrong and every point as a non-outcome, silently.
+ */
+export function scoringWindow(
+  given: number | undefined,
+  cooldown: number,
+  halfLife: number,
+): { window: number; windowSource: WindowSource } {
+  if (given !== undefined) {
+    if (!(given > 0)) throw new RangeError('the scoring window must be greater than 0');
+    return { window: given, windowSource: 'option' };
+  }
+  if (cooldown > 0) return { window: cooldown, windowSource: 'cooldown' };
+  return { window: halfLife, windowSource: 'halfLife' };
+}
 
 /** Runs every install's records through the engine and measures each intent at each threshold. */
 export function replay(
@@ -135,23 +159,17 @@ export function replay(
     const thresholds = [...new Set(list)].sort((a, b) => a - b);
     // The cooldown exactly as the engine resolves it: the suppression a reveal at 0 starts.
     const cooldown = predict(markRevealed(base, name, 0), name, 0).suppressedUntil ?? 0;
-    const window = options.window ?? cooldown;
-    if (!(window > 0)) {
-      // With an empty window no outcome could ever follow a reveal: every reveal would score as
-      // wrong and every point as a non-outcome, silently.
-      throw new RangeError(
-        options.window === undefined
-          ? `intent ${JSON.stringify(name)} has a reveal cooldown of 0, so there is no default scoring window; pass --window (for example --window 7d)`
-          : 'the scoring window must be greater than 0',
-      );
-    }
+    // Without a cooldown there is no window to inherit: the intent's half-life stands in, the
+    // horizon its evidence is sized for.
+    const { window, windowSource } = scoringWindow(options.window, cooldown, intent.halfLife);
     return {
       name,
       outcome: intent.outcome as string,
       configured,
       thresholds,
       window,
-      windowIsCooldown: options.window === undefined,
+      windowSource,
+      windowIsCooldown: windowSource === 'cooldown',
     };
   });
   const allThresholds = [...new Set(plans.flatMap((p) => p.thresholds))].sort((a, b) => a - b);
@@ -287,6 +305,7 @@ export function replay(
       intent: plan.name,
       outcome: plan.outcome,
       window: plan.window,
+      windowSource: plan.windowSource,
       windowIsCooldown: plan.windowIsCooldown,
       installs,
       thresholds: totals.map((s) => {

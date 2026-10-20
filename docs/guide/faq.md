@@ -30,7 +30,7 @@ Whatever you choose. `at` is a timestamp and every duration (`halfLife`, `cooldo
 
 ## What if the clock goes backwards?
 
-Nothing breaks. Events with an `at` earlier than the last update are applied without decay and the engine does not move its anchor back. No value becomes negative or NaN; the test suite replays thousands of random sequences with backwards jumps to make sure.
+Nothing breaks. Events with an `at` earlier than the last update are applied without decay, and the anchor moves to the new time so decay resumes from there; no value becomes negative or NaN, and the test suite replays thousands of random sequences with backwards jumps to make sure. The same rule covers a clock that was ahead: one event stamped in the future cannot hold an intent, because the next event at the right time re-anchors it, and a reveal or outcome stamped ahead of the clock counts as having happened now. See [Decay → Clocks](/guide/concepts/decay#clocks).
 
 ## Can I change the config after shipping?
 

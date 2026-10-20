@@ -103,12 +103,21 @@ const churn: IntentConfig = {
  * };
  * ```
  */
-export const presets: Readonly<Record<PresetName, IntentConfig>> = {
+/** Frozen through and through: a preset is shared, so a change by one caller would reach every other. */
+function freeze<T>(value: T): T {
+  if (typeof value === 'object' && value !== null) {
+    for (const inner of Object.values(value)) freeze(inner);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+export const presets: Readonly<Record<PresetName, IntentConfig>> = freeze({
   willBuy,
   upgrade,
   stuck,
   churn,
-};
+});
 
 /**
  * Where each preset's numbers come from. Read it before trusting a preset: a tuned one carries its
@@ -120,7 +129,7 @@ export const presets: Readonly<Record<PresetName, IntentConfig>> = {
  * presetSources.willBuy.kind; // 'tuned'
  * ```
  */
-export const presetSources: Readonly<Record<PresetName, PresetSource>> = {
+export const presetSources: Readonly<Record<PresetName, PresetSource>> = freeze({
   willBuy: {
     kind: 'tuned',
     note: 'oracular tune on a public e-commerce clickstream: one shop, May to September 2015, 2.7 million events, 4.8% of sessions ending with an order; fitted October 2026, the fitted 0.0477 and 2.32 rounded',
@@ -145,4 +154,4 @@ export const presetSources: Readonly<Record<PresetName, PresetSource>> = {
     episodes: null,
     installs: null,
   },
-};
+});

@@ -96,7 +96,7 @@ Brier score 0.166 over 35 points (always predicting the base rate of 51.4%: 0.25
 That output is checked by the test suite against the command itself. What the columns mean:
 
 - **Replay.** Each install starts from `createState(config)` at its first record; anything it learned before the log began is not known. For every threshold the replay follows the policy of the guide above: whenever `shouldReveal` is true after an event, that is a reveal, and `markRevealed` starts the cooldown. `end` records call `endEpisode`; `episodeTimeout` closes idle episodes as on the device.
-- **Window.** How long after a reveal an outcome still counts for it: the intent's reveal cooldown unless you pass `--window` (`3d`, `12h`, `90m`; durations with a unit assume `at` is in milliseconds). An intent with a cooldown of 0 has no default window, so replay asks for one.
+- **Window.** How long after a reveal an outcome still counts for it: the intent's reveal cooldown unless you pass `--window` (`3d`, `12h`, `90m`; durations with a unit assume `at` is in milliseconds). An intent with a cooldown of 0 is scored over its half-life instead, and the report says so.
 - **Precision.** Reveals followed by the intent's outcome within the window, out of all reveals.
 - **Recall.** Outcomes preceded by a reveal within the window, out of all outcomes.
 - **Median lead time.** For the correct reveals, the time from the reveal to the outcome: how much notice the reveal gives.
@@ -131,7 +131,7 @@ Exit codes: 0 when the report is printed, 1 for unreadable input or nothing to s
 npx oracular tune shadow-week-1.ndjson shadow-week-2.ndjson --config oracular.config.json
 ```
 
-Options: `--intent <name>` to fit some intents only; `--half-lives 12h,1d,3d` for the grid (default 1h, 6h, 1d, 3d, 7d, 14d, 30d plus the current value); `--window` for the scoring window when the intent has no cooldown; `--all-events` to measure every other event name in the log as a candidate signal; `--include-live`; `--json`. On the fixture log in the repository, restricted to the `stuck` intent:
+Options: `--intent <name>` to fit some intents only; `--half-lives 12h,1d,3d` for the grid (default 1h, 6h, 1d, 3d, 7d, 14d, 30d plus the current value); `--window` to override the scoring window (by default the intent's reveal cooldown, or its half-life when the cooldown is 0); `--all-events` to measure every other event name in the log as a candidate signal; `--include-live`; `--json`. On the fixture log in the repository, restricted to the `stuck` intent:
 
 ```sh
 npx oracular tune tests/fixtures/replay/shadow.ndjson --config tests/fixtures/replay/config.json --intent stuck

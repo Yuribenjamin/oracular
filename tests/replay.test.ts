@@ -131,20 +131,28 @@ describe('replay, on a log small enough to check by hand', () => {
     expect(at05).toMatchObject({ reveals: 2, correct: 0, precision: 0, caught: 0, recall: 0 });
   });
 
-  it('refuses an empty scoring window instead of scoring every reveal as wrong', () => {
+  it('scores an intent with no cooldown over its half-life, and refuses an explicit empty window', () => {
     const noCooldown: EngineConfig = {
       intents: { buy: { ...buyConfig.intents.buy!, reveal: { cooldown: 0 } } },
     };
-    expect(() => replay(buyLog(), noCooldown, { thresholds: [0.5] })).toThrow(RangeError);
-    expect(() => replay(buyLog(), noCooldown, { thresholds: [0.5] })).toThrow(
-      /intent "buy" has a reveal cooldown of 0, so there is no default scoring window/,
-    );
+    const fallback = replay(buyLog(), noCooldown, { thresholds: [0.5] }).intents[0]!;
+    expect(fallback).toMatchObject({
+      window: buyConfig.intents.buy!.halfLife,
+      windowSource: 'halfLife',
+      windowIsCooldown: false,
+    });
+    expect(replay(buyLog(), buyConfig, { thresholds: [0.5] }).intents[0]).toMatchObject({
+      window: 100,
+      windowSource: 'cooldown',
+      windowIsCooldown: true,
+    });
+    // An empty window would score every reveal as wrong and every point as a non-outcome, silently.
     expect(() => replay(buyLog(), buyConfig, { thresholds: [0.5], window: 0 })).toThrow(
       /window must be greater than 0/,
     );
     // Given a window, the intent is scored like any other.
     const buy = replay(buyLog(), noCooldown, { thresholds: [0.5], window: 100 }).intents[0]!;
-    expect(buy).toMatchObject({ window: 100, windowIsCooldown: false });
+    expect(buy).toMatchObject({ window: 100, windowSource: 'option', windowIsCooldown: false });
     expect(buy.thresholds[0]).toMatchObject({ reveals: 2, correct: 1, precision: 0.5 });
   });
 
@@ -479,6 +487,19 @@ describe('oracular replay', () => {
     expect(future.out.stderr).toMatch(/warning: .*skipped 1 record of unknown kind "reveal"/);
   });
 
+  it('prints the version for replay and tune too, as the help says', async () => {
+    for (const argv of [
+      ['replay', '--version'],
+      ['replay', '-v'],
+      ['tune', '--version'],
+    ]) {
+      const x = io();
+      expect(await run(argv, x.io), argv.join(' ')).toBe(0);
+      expect(x.out.stdout).toMatch(/^\d+\.\d+\.\d+\S*\n$/);
+      expect(x.out.stderr).toBe('');
+    }
+  });
+
   it('reports usage errors with exit code 2', async () => {
     const cases: Array<[string[], RegExp]> = [
       [['frobnicate'], /unknown command "frobnicate"/],
@@ -508,7 +529,7 @@ describe('oracular replay', () => {
     }
   });
 
-  it('asks for --window when an intent has no cooldown', async () => {
+  it('scores an intent with no cooldown over its half-life and says so, unless --window is given', async () => {
     const noCooldown: EngineConfig = {
       ...config,
       intents: {
@@ -518,11 +539,16 @@ describe('oracular replay', () => {
     };
     const readFile = (path: string) =>
       path.endsWith('config.json') ? JSON.stringify(noCooldown) : readFileSync(path, 'utf8');
-    const refused = io();
-    refused.io.readFile = readFile;
-    expect(await run(replayArgs('shadow.ndjson'), refused.io)).toBe(2);
-    expect(refused.out.stderr).toMatch(/intent "upgrade" has a reveal cooldown of 0/);
-    expect(refused.out.stderr).toMatch(/pass --window/);
+    const fallback = io();
+    fallback.io.readFile = readFile;
+    expect(await run(replayArgs('shadow.ndjson'), fallback.io)).toBe(0);
+    expect(fallback.out.stdout).toMatch(/the intent's half-life, since its reveal cooldown is 0/);
+    const json = io();
+    json.io.readFile = readFile;
+    expect(await run(replayArgs('shadow.ndjson', '--json'), json.io)).toBe(0);
+    expect(
+      JSON.parse(json.out.stdout).intents.find((i: { intent: string }) => i.intent === 'upgrade'),
+    ).toMatchObject({ window: noCooldown.intents.upgrade!.halfLife, windowSource: 'halfLife' });
 
     const given = io();
     given.io.readFile = readFile;

@@ -9,9 +9,11 @@ import type { EngineConfig } from './types';
  *
  * @param config - The config to check. Typed `unknown` so parsed JSON can be passed as it is.
  * @returns A fresh, normalized {@link EngineConfig}. `config` is not mutated.
- * @throws `TypeError` when a value has the wrong type or a key is not recognised.
+ * @throws `TypeError` when a value has the wrong type, a key is not recognised, or an intent's
+ *   `outcome` is also one of its signals while `resetOnOutcome` is on.
  * @throws `RangeError` when a number is out of range: a `prior` outside (0, 1), a signal weight of
- *   0, or a weight, `priorStrength`, `learning.gain` or `learning.priorEpisodes` beyond 1e6.
+ *   0, a reveal `threshold` of 0 or 1, a `z` above 10, or a weight, `priorStrength`,
+ *   `learning.gain` or `learning.priorEpisodes` beyond 1e6.
  * @example
  * ```ts
  * import { readFileSync } from 'node:fs';

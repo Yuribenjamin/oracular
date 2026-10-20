@@ -29,10 +29,15 @@ export function assessIntent(
   return settlePending(is, intent, learning, at);
 }
 
-/** The end of a cooldown that started at `since`, if it is still running at `at`. */
+/**
+ * The end of a cooldown that started at `since`, if it is still running at `at`. A start ahead of
+ * `at` (stamped by a clock that was ahead) counts as having happened now, so the cooldown ends
+ * one `cooldown` from `at` rather than from a date that may never come; the next event pins the
+ * stored time to `at` (see `observe`).
+ */
 function cooldownEnd(since: number | null, cooldown: number, at: number): number | null {
   if (since === null) return null;
-  const end = since + cooldown;
+  const end = Math.min(since, at) + cooldown;
   return at < end ? end : null;
 }
 

@@ -37,7 +37,9 @@ export function serialize(state: EngineState): string {
 /**
  * Restores a state saved with {@link serialize}.
  *
- * Always pass the app's current `config`: it is validated and replaces the stored snapshot,
+ * Always pass the app's current `config`: it is validated and replaces the stored snapshot (the
+ * stored one is read without the checks that refuse a config that cannot work, so a state saved
+ * before those checks existed still loads),
  * intents and signals no longer declared are dropped (α and β are recomputed from the kept
  * contributions), and newly declared intents start at their prior. States saved by oracular
  * 0.1.0 to 0.5.x are upgraded to the current shape on their own, and a state one version newer
@@ -237,7 +239,9 @@ function parseState(value: unknown): EngineState {
   }
   return {
     version: STATE_VERSION,
-    config: normalizeConfig(r.config),
+    // Without the strict checks: a config this release would refuse at createState still loads
+    // when it is only stored, and the config passed in replaces it anyway.
+    config: normalizeConfig(r.config, false),
     intents: mapOwn(r.intents, 'state.intents', intentState),
     episode: episodeState(r.episode, 'state.episode'),
   };

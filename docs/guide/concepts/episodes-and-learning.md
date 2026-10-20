@@ -23,7 +23,7 @@ upgrade: { signals: { 'pricing.viewed': 3, 'limit.hit': 2 }, outcome: 'upgrade.c
 - When the episode ends without the outcome, every seen signal gets a **miss** and the intent counts one episode *without* the outcome. Episodes in which the intent saw no signal at all still count toward the base rate, because they are sessions in which the outcome did not happen. With `attribution` set, the episode waits for the outcome instead; see [Credit across episodes](#credit-across-episodes).
 - Signals seen *after* an outcome in the same episode are neutral at episode end: they get a hit if a second outcome arrives, nothing otherwise.
 
-An outcome event that no episode preceded still counts toward the base rate. An event that is both a signal and the outcome of the same intent is never remembered as seen, so it cannot learn from itself.
+An outcome event that no episode preceded still counts toward the base rate. Within one episode, the signals seen after an outcome earn a hit only if another outcome follows them, and stay neutral at the close; a repeated outcome with nothing seen since is a duplicate and counts nothing. An event that is both a signal and the outcome of the same intent is never remembered as seen, so it cannot learn from itself; `validateConfig` refuses that pairing unless `resetOnOutcome` is `false`, since the reset would wipe the evidence the signal just added.
 
 ## Credit across episodes
 

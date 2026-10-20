@@ -11,7 +11,7 @@
     "path": "dist/index.js",
     "import": "{ createState, observe, shouldReveal, markRevealed }",
     "gzip": true,
-    "limit": "4.5 kB"
+    "limit": "4.7 kB"
   },
   {
     "name": "presets subpath (ESM, min+gzip)",

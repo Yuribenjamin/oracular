@@ -49,7 +49,12 @@ export function table(headers: string[], rows: string[][]): string {
 
 function formatIntent(intent: IntentReport): string {
   const window = formatDuration(intent.window);
-  const source = intent.windowIsCooldown ? "the intent's reveal cooldown" : 'as given';
+  const source =
+    intent.windowSource === 'cooldown'
+      ? "the intent's reveal cooldown"
+      : intent.windowSource === 'halfLife'
+        ? "the intent's half-life, since its reveal cooldown is 0"
+        : 'as given';
   const out: string[] = [];
   out.push(
     `${intent.intent}: outcome ${intent.outcome}, window ${window} (${source}), ${intent.installs} install${intent.installs === 1 ? '' : 's'}`,

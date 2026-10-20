@@ -25,7 +25,7 @@ import {
 } from 'oracular';
 import { laplace, learningScore, lift } from '../src/math';
 import { groupByInstall, type LogEntry } from './log';
-import { DEFAULT_THRESHOLD, replay } from './replay';
+import { DEFAULT_THRESHOLD, replay, scoringWindow, type WindowSource } from './replay';
 import { formatDuration } from './report';
 
 const HOUR = 3_600_000;
@@ -83,10 +83,13 @@ export interface SignalFit {
   /** Laplace-smoothed outcome rates with and without the signal, as the engine computes them. */
   qWith: number;
   qWithout: number;
-  /** Raw association measure: neutral at 1 for ratios, 0 for differences/log lift. 0 if never seen. */
-  lift: number;
-  /** Signed evidence score in [−1, 1], neutral at 0, used by both the engine and the fitted weights. */
-  score: number;
+  /**
+   * Raw association measure: neutral at 1 for ratios, 0 for differences/log lift. 0 if never
+   * seen; null when no counted episode lacked the signal, so there is nothing to compare with.
+   */
+  lift: number | null;
+  /** Signed evidence score in [−1, 1], neutral at 0, used by both the engine and the fitted weights; null as `lift`. */
+  score: number | null;
   /**
    * priorStrength × score, rounded to two decimals; null when the signal was never seen, is
    * ubiquitous, or the weight rounds to 0. Null means the signal is left out of the fitted config.
@@ -96,9 +99,9 @@ export interface SignalFit {
   share: number;
   /** Seen in more than {@link UBIQUITY_SHARE} of counted episodes: left out, whatever its lift. */
   ubiquitous: boolean;
-  /** The weight at the ends of a 90% Wilson interval on the outcome rate with the signal. */
-  low: number;
-  high: number;
+  /** The weight at the ends of a 90% Wilson interval on the outcome rate with the signal; null as `lift`. */
+  low: number | null;
+  high: number | null;
   /** nWith × nWithout / (nWith + nWithout): how much of both sides has been seen. */
   contrast: number;
   /** Contrast below learning.priorEpisodes: the engine itself would not yet trust this comparison. */
@@ -132,6 +135,8 @@ export interface IntentFit {
     note: string;
     /** The scoring window every grid point was replayed with. */
     window: number;
+    /** Where it came from: the reveal cooldown, the half-life when the cooldown is 0, or --window. */
+    windowSource: WindowSource;
     curve: HalfLifePoint[];
     /** The Brier score of always predicting the base rate, for comparison. */
     brierBaseline: number | null;
@@ -247,11 +252,14 @@ function fitSignal(
     liftType === 'association-rule'
       ? (hits + outcomesWithout + 2) / (nWith + without + 4)
       : qWithout;
-  const rawLift = nWith === 0 ? 0 : lift(qWith, baseline, liftType);
-  const score = nWith === 0 ? 0 : learningScore(rawLift, liftType);
+  // No episode without the signal: nothing to compare its rate with, so no lift and no interval
+  // (the smoothed baseline would be a made-up 0.5).
+  const noContrast = without === 0;
+  const rawLift = noContrast ? null : nWith === 0 ? 0 : lift(qWith, baseline, liftType);
+  const score = rawLift === null ? null : nWith === 0 ? 0 : learningScore(rawLift, liftType);
   const contrast = nWith + without === 0 ? 0 : (nWith * without) / (nWith + without);
   const [qLow, qHigh] = wilson(hits, nWith, Z90);
-  const rounded = Math.round(strength * score * 100) / 100;
+  const rounded = score === null ? 0 : Math.round(strength * score * 100) / 100;
   const share = tally.episodes === 0 ? 0 : nWith / tally.episodes;
   const ubiquitous = nWith > UBIQUITY_SHARE * tally.episodes;
   return {
@@ -268,8 +276,8 @@ function fitSignal(
     weight: nWith === 0 || ubiquitous || rounded === 0 ? null : rounded,
     share,
     ubiquitous,
-    low: strength * learningScore(lift(qLow, baseline, liftType), liftType),
-    high: strength * learningScore(lift(qHigh, baseline, liftType), liftType),
+    low: noContrast ? null : strength * learningScore(lift(qLow, baseline, liftType), liftType),
+    high: noContrast ? null : strength * learningScore(lift(qHigh, baseline, liftType), liftType),
     contrast,
     thin: contrast < priorEpisodes,
   };
@@ -389,17 +397,10 @@ export function tune(
   const grouped = groupByInstall(entries);
 
   // Scoring windows for the half-life grid, before any work: an empty window is a usage error.
-  const windows = new Map<string, number>();
+  const windows = new Map<string, { window: number; windowSource: WindowSource }>();
   for (const name of fitting) {
-    const window = options.window ?? cooldownOf(base, name);
-    if (!(window > 0)) {
-      throw new RangeError(
-        options.window === undefined
-          ? `intent ${JSON.stringify(name)} has a reveal cooldown of 0, so there is no scoring window for the half-life grid; pass --window (for example --window 7d)`
-          : 'the scoring window must be greater than 0',
-      );
-    }
-    windows.set(name, window);
+    const intent = normalized.intents[name] as IntentConfig;
+    windows.set(name, scoringWindow(options.window, cooldownOf(base, name), intent.halfLife));
   }
 
   // Candidates: every event name in the log that is not already a signal or the outcome of the intent.
@@ -517,7 +518,10 @@ export function tune(
     };
 
     // The half-life: replay the fitted intent at every grid point and keep the best Brier score.
-    const window = windows.get(name) as number;
+    const { window, windowSource } = windows.get(name) as {
+      window: number;
+      windowSource: WindowSource;
+    };
     const threshold = intent.reveal?.threshold ?? normalized.reveal?.threshold ?? DEFAULT_THRESHOLD;
     const grid = [...new Set([...(options.halfLives ?? DEFAULT_HALF_LIVES), intent.halfLife])].sort(
       (a, b) => a - b,
@@ -544,6 +548,7 @@ export function tune(
         source: 'kept',
         note: 'kept: no point in the log could be scored, so the grid says nothing',
         window,
+        windowSource,
         curve,
         brierBaseline,
       };
@@ -569,6 +574,7 @@ export function tune(
           source: 'kept',
           note: `kept: the grid is flat, the best point (${formatDuration(chosen.halfLife)}, ${best.toFixed(4)}) improves on the current value (${(atCurrent.brier as number).toFixed(4)}) by ${(gain * 100).toFixed(2)}%, less than ${FLAT_GRID_GAIN * 100}%${baseline}`,
           window,
+          windowSource,
           curve,
           brierBaseline,
         };
@@ -579,6 +585,7 @@ export function tune(
           source: 'grid',
           note: `lowest Brier score over the grid, ${best.toFixed(4)}${baseline}`,
           window,
+          windowSource,
           curve,
           brierBaseline,
         };

@@ -15,13 +15,13 @@ export function timedOutAt(
   return at - episode.lastEventAt > timeout ? episode.lastEventAt + timeout : null;
 }
 
-/** Opens the episode if needed and records activity at `at`. */
+/**
+ * Opens the episode if needed and records activity at `at`, even when `at` is earlier than the
+ * last activity: the idle gap is then measured from `at`, so one event stamped ahead of the clock
+ * cannot keep the episode open until the clock catches up.
+ */
 export function extendEpisode(episode: EpisodeState, at: number): EpisodeState {
-  return {
-    startedAt: episode.startedAt ?? at,
-    lastEventAt: episode.lastEventAt === null ? at : Math.max(episode.lastEventAt, at),
-    intents: episode.intents,
-  };
+  return { startedAt: episode.startedAt ?? at, lastEventAt: at, intents: episode.intents };
 }
 
 export function episodeRecord(episode: EpisodeState, intent: string): EpisodeIntentRecord {
