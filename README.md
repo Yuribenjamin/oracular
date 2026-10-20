@@ -186,7 +186,7 @@ Before any update or reading, the evidence decays by 2^(−Δt / halfLife), wher
 
 ### The user's history corrects your weights
 
-Events happen inside **episodes** (sessions). An episode ends when you call `endEpisode`, or on its own after `episodeTimeout` of inactivity. Signals seen in the episode are remembered per intent. When the intent's `outcome` event arrives, each remembered signal gets a **hit**; when the episode ends without it, each gets a **miss**, or, with `attribution` set on the intent, the episode waits and takes the share `2^(−age / halfLife)` of a hit if the outcome arrives inside the window. The engine also counts, per intent, how many episodes ended with and without the outcome: the intent's **base rate**.
+Events happen inside **episodes** (sessions). An episode ends when you call `endEpisode`, or on its own after `episodeTimeout` of inactivity. Signals seen in the episode are remembered per intent. When the intent's `outcome` event arrives, each remembered signal gets a **hit**; when the episode ends without it, each gets a **miss**, or, with `attribution` set on the intent, the episode waits and takes the share `2^(−age / halfLife)` of a hit if the outcome arrives inside the window. The engine also counts, per intent, how many episodes ended with and without the outcome: the intent's **base rate**. Signals seen after an outcome in the same episode count only if another outcome follows them; a repeated outcome with nothing seen since counts nothing.
 
 A signal's weight is then a blend of your prior and the learned estimate:
 
@@ -308,7 +308,7 @@ interface RevealOptions {
 }
 ```
 
-Reveal options resolve per call → intent → engine → defaults. Invalid config throws a `TypeError` or `RangeError` with the offending path in the message. `validateConfig(config)` runs those checks without building a state and returns the normalized copy `createState` stores, so a bad weight fails at startup or in a test rather than on first use. For a config kept as JSON, the package ships a [JSON Schema](./schema/config.schema.json) as `oracular/config.schema.json`, also served at <https://yuribenjamin.github.io/oracular/config.schema.json>, for editor completion; `oracular replay` ignores the `$schema` key such a file carries, the engine does not.
+Reveal options resolve per call → intent → engine → defaults. Invalid config throws a `TypeError` or `RangeError` with the offending path in the message, including a config that cannot work: a reveal `threshold` of 0 or 1, a `z` above 10, or an outcome that is also one of the intent's signals while `resetOnOutcome` is on (the reset would wipe what the signal just added; set it to `false` to keep such a signal). A stored state whose config predates these checks still loads. `validateConfig(config)` runs those checks without building a state and returns the normalized copy `createState` stores, so a bad weight fails at startup or in a test rather than on first use. For a config kept as JSON, the package ships a [JSON Schema](./schema/config.schema.json) as `oracular/config.schema.json`, also served at <https://yuribenjamin.github.io/oracular/config.schema.json>, for editor completion; `oracular replay` ignores the `$schema` key such a file carries, the engine does not.
 
 ### Results
 
@@ -339,7 +339,7 @@ interface SignalExplanation {
 
 ### Time
 
-`at` is a timestamp. Every duration (`halfLife`, `cooldown`, `episodeTimeout`, `learning.halfLife`) is in the same unit as `at`. Milliseconds from `Date.now()` are the obvious choice, but the library never calls `Date.now()` itself: you pass time in, which keeps every function deterministic and makes tests trivial. A clock that jumps backwards is tolerated (no decay, no error). When `at` is in milliseconds, `ms.days(7)`, `ms.hours(3)` and `ms.minutes(30)` spell the durations; they are plain multiplications.
+`at` is a timestamp. Every duration (`halfLife`, `cooldown`, `episodeTimeout`, `learning.halfLife`) is in the same unit as `at`. Milliseconds from `Date.now()` are the obvious choice, but the library never calls `Date.now()` itself: you pass time in, which keeps every function deterministic and makes tests trivial. A clock that jumps backwards is tolerated: the evidence is held (no decay, no error) and the anchor moves to the new time, so decay resumes from there. One event stamped ahead of the clock therefore cannot hold an intent until the clock catches up, and a reveal or outcome stamped ahead of it counts as having happened now: its cooldown runs from the current time until the next event pins it there. When `at` is in milliseconds, `ms.days(7)`, `ms.hours(3)` and `ms.minutes(30)` spell the durations; they are plain multiplications.
 
 ## Persistence
 

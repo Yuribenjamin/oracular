@@ -29,6 +29,8 @@ const state = createState({
 | `churn` | 0.08 | 20 | 14 days | `session.short` 1, `notifications.disabled` 3, `export.all` 4, `feature.new.used` -2 | `account.cancelled` | threshold 0.5, z 1.64 | hand-written |
 <!-- /generated:presets-table -->
 
+The four objects are frozen, through and through: spread one into your own config to change a value, as the examples do, rather than assigning into it.
+
 Durations are milliseconds. `presetSources` carries the same provenance as data:
 
 ```ts

@@ -49,7 +49,9 @@ Ask how long a signal should keep mattering:
 
 ## Clocks
 
-`at` is a timestamp and every duration is in the same unit. If a clock goes backwards (a device clock adjustment, events arriving out of order), the engine applies no decay and does not move its anchor back. Nothing throws and nothing becomes negative.
+`at` is a timestamp and every duration is in the same unit. If a clock goes backwards (a device clock adjustment, events arriving out of order), the engine applies no decay, moves its anchor to the new time, and decays from there on. Nothing throws and nothing becomes negative.
+
+The same rule repairs a clock that was *ahead*. An event stamped in the future adds its evidence and moves the anchor there; reads before that time see the evidence held; the next event at the right time brings the anchor back, so the intent is never frozen until the clock catches up. A reveal or an outcome stamped ahead of the clock counts as having happened now: its cooldown ends one `cooldown` after the current time, and the next event pins it to its own time. Learned counts under `learning.halfLife` follow the same anchor rule, so a log replayed with timestamps out of order decays them slightly more than a monotone clock would.
 
 ## Learned data decays separately
 
