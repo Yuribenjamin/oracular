@@ -80,6 +80,10 @@ Monday's pricing visit is recorded as a session that did *not* lead to an upgrad
 
 Monday's signals earn 0.906 of a hit, the fraction of their weight still standing on Tuesday with a one-week half-life, and 0.094 of a miss, so each session still counts once. [Episodes & learning](/guide/concepts/episodes-and-learning#credit-across-episodes) has the rules and a table over longer gaps. The window is off unless set, and the right one depends on the intent's horizon; `tune` on a shadow log can show whether one is justified.
 
+## The outcome of a "stuck" intent must mean the help worked
+
+For an intent that gates help (tips after repeated failures, a hint in onboarding), the engine learns from whether the outcome follows the signals. If the outcome is "the task got done", a user who fails three times and gives up teaches the engine that failing does not predict getting done, and the tips back off for exactly the user who needed them: a failure weight of 3 can fall to 1 within a month of such sessions, and the help stops. That is the learner doing what it was told; the fix is in the config. Make the outcome the thing the help is for, `help.article.read` or `tip.followed`, so that an episode where help was shown and taken is a hit, and one where the user left is a miss for the help, not for the failure. The `stuck` preset is built this way.
+
 ## What it never sees
 
 - **Other users.** Nothing is pooled across users or devices, by design. A population view (which weights work across your users) comes from your own shadow logs and `replay`, not from the engine.

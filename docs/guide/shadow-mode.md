@@ -227,7 +227,7 @@ Version 1, the `v` field of every record and the exported [`RECORD_VERSION`](/ap
 {"v":1,"kind":"event","installId":"a3f0c2e1-…","mode":"shadow","event":{"name":"pricing.viewed","at":1700000000000},"decisions":{"upgrade":{"p":0.269,"lower":0.117,"shouldReveal":false,"suppressedUntil":null,"top":[{"signal":"pricing.viewed","impact":0.219}],"weights":{"pricing.viewed":3,"limit.hit":2,"export.clicked":1}}}}
 ```
 
-Numbers are shortened here; records carry full precision.
+Numbers are shortened here; records carry full precision. A record is about a kilobyte with five intents, since `decisions` carries a prediction and the top signals for every declared intent: a heavy user at fifty events a day writes about 20 MB a year. Rotate the log (one file a day, uploaded and deleted) and lower `options.top` when the top signals are not needed.
 
 | field | meaning |
 | ----- | ------- |
