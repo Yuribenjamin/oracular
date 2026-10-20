@@ -13,7 +13,20 @@ import {
   serialize,
   shouldReveal,
 } from 'oracular';
+import { DEV } from './env';
 import type { PersistAdapter } from './persist';
+
+/** Which step of persistence failed: the read, the parse of what was read, a write, or a clear. */
+export type PersistPhase = 'load' | 'parse' | 'save' | 'clear';
+
+/**
+ * Where the store stands with its adapter. `memory`: no adapter. `idle`: nothing read yet.
+ * `loading`: a read is in flight. `loaded`: the read settled (or the key was empty, or `clear`
+ * ran) and the store writes. `failed`: the read or its parse failed; the store keeps working in
+ * memory and writes nothing until a later `load` succeeds or `clear` runs. `disposed`: no further
+ * reads or writes.
+ */
+export type StoreStatus = 'memory' | 'idle' | 'loading' | 'loaded' | 'failed' | 'disposed';
 
 export interface IntentStoreOptions {
   /** Where the state is loaded from and saved to. Without it the store lives in memory. */
@@ -22,8 +35,12 @@ export interface IntentStoreOptions {
   now?: () => number;
   /** How long after a change the save runs, so a burst of events writes once. Default 250 ms. */
   saveDelay?: number;
-  /** Called when a load or a save fails. The store keeps working from the state it has. */
-  onError?: (error: unknown, phase: 'load' | 'save') => void;
+  /**
+   * Called when a read, the parse of what was read, a write or a clear fails; the store keeps
+   * working from the state it has. Without it, a development build warns once per phase through
+   * `console.warn`; pass `() => {}` to silence that.
+   */
+  onError?: (error: unknown, phase: PersistPhase) => void;
   /** Passed to `deserialize` for state versions newer than the library reads. */
   migrate?: Migrate;
 }
@@ -32,12 +49,18 @@ export interface IntentStoreOptions {
  * One engine state with a clock, subscribers and persistence around it. Framework-free: the React
  * hook reads it through `useSyncExternalStore`, and a Vue composable or plain code can read it the
  * same way. Every read and write goes to the current state, never to a render-time copy.
+ *
+ * Persistence never writes before the first read has settled, so an early flush (React's
+ * StrictMode, a component unmounting at once, the app backgrounding at cold start) cannot write a
+ * fresh state over the stored history.
  */
 export interface IntentStore {
   /** The config the store was created with, as validated by the engine. */
   readonly config: EngineConfig;
   /** The current state. The same object until something changes, so it works as a snapshot. */
   getState(): EngineState;
+  /** Where the store stands with its adapter; see {@link StoreStatus}. */
+  getStatus(): StoreStatus;
   /** Calls `listener` after every change; returns the unsubscribe function. */
   subscribe(listener: () => void): () => void;
   /** The store's clock. */
@@ -52,20 +75,58 @@ export interface IntentStore {
   markRevealed(intent: string, at?: number): EngineState;
   /**
    * `shouldReveal` and `markRevealed` as one step against the current state, at the clock's now:
-   * true when the reveal happened, false when the gate or a cooldown said no.
+   * true when the reveal happened, false when the gate or a cooldown said no. Before the first
+   * read has settled it decides on the state in memory, not on the stored history.
    */
   reveal(intent: string, opts?: RevealOptions): boolean;
   /**
-   * Loads the saved state through the adapter, once. Operations made while the load is pending
-   * are applied to the state in memory at once and replayed onto the loaded state afterwards, so
-   * events from the first screens are never lost. A failed or empty load keeps the current state.
+   * Reads the saved state through the adapter. Every caller gets the same promise while the read
+   * is in flight, and a store that has loaded does not read again. Operations made before the
+   * read settles are applied to the state in memory at once and replayed onto the loaded state
+   * afterwards, so events from the first screens are never lost. A read that throws, or stored
+   * data that cannot be parsed, is reported through `onError` with its phase, leaves the store
+   * working in memory, blocks writes, and is retried by the next `load`, `flush` or save; `clear`
+   * is the explicit way to start over. Never rejects on its own; a subscriber that throws when
+   * the loaded state is announced rejects it.
    */
   load(): Promise<void>;
-  /** Cancels the pending debounced save and writes now, if anything changed since the last write. */
+  /**
+   * Cancels the pending debounced save and writes now, if anything changed since the last write.
+   * A flush before the first read has settled waits for the read, then writes only if the state
+   * differs from what was read.
+   */
   flush(): Promise<void>;
+  /**
+   * Starts over: a fresh state in memory, the stored one removed (an adapter without `remove` has
+   * the fresh state written over it instead), and writes allowed again. For "forget me", a
+   * sign-out or an account switch; also the way out after a failed read.
+   */
+  clear(): Promise<void>;
+  /**
+   * Stops persistence for good: cancels the pending save and ignores later reads and writes.
+   * Resolves once no write is in flight, so `await store.dispose()` before wiping the storage
+   * yourself is safe. It does not write first; call `flush` before it to keep the last state.
+   * In-memory operations and subscriptions keep working.
+   */
+  dispose(): Promise<void>;
 }
 
-const noop = (): void => {};
+type Op = (s: EngineState) => EngineState;
+
+/** Most operations kept for replay onto a state that is still loading; past it the oldest go. */
+const MAX_QUEUE = 1000;
+
+function warnOnce(): (error: unknown, phase: PersistPhase) => void {
+  const warned = new Set<PersistPhase>();
+  return (error, phase) => {
+    if (!DEV || warned.has(phase)) return;
+    warned.add(phase);
+    console.warn(
+      `@oracular/react: the ${phase} failed; the store keeps working from the state it has. Pass onError to handle it.`,
+      error,
+    );
+  };
+}
 
 export function createIntentStore(
   config: EngineConfig,
@@ -74,34 +135,86 @@ export function createIntentStore(
   const persist = opts.persist;
   const now = opts.now ?? Date.now;
   const saveDelay = opts.saveDelay ?? 250;
-  const onError = opts.onError ?? noop;
+  const onError = opts.onError ?? warnOnce();
   let state = createState(config);
   const listeners = new Set<() => void>();
-  /** Operations applied while the load is pending, replayed onto the loaded state in order. */
-  let replay: ((s: EngineState) => EngineState)[] | null = null;
-  let loadStarted = false;
+  let status: StoreStatus = persist === undefined ? 'memory' : 'idle';
+  /** The read in flight, shared by everyone who waits for it. */
+  let loading: Promise<void> | null = null;
+  /**
+   * Operations applied since creation, replayed in order onto the loaded state. Kept across a
+   * failed read, dropped once a read succeeds or `clear` runs.
+   */
+  let queue: Op[] | null = persist === undefined ? null : [];
+  let warnedQueue = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   /** The last string written, so a save after a load or a no-op change writes nothing. */
   let lastSaved: string | null = null;
+  /** The write in flight: one at a time, so writes land in order. */
+  let writing: Promise<void> | null = null;
+  /** Bumped by `clear` and `dispose`; a read or write from an earlier generation is discarded. */
+  let generation = 0;
 
   const notify = (): void => {
-    for (const listener of listeners) listener();
+    let failure: { error: unknown } | null = null;
+    for (const listener of [...listeners]) {
+      try {
+        listener();
+      } catch (error) {
+        if (failure === null) failure = { error };
+      }
+    }
+    if (failure !== null) throw failure.error;
   };
 
-  const save = async (): Promise<void> => {
-    if (persist === undefined) return;
+  const write = (): Promise<void> => {
+    if (persist === undefined || status !== 'loaded') return Promise.resolve();
     const json = serialize(state);
-    if (json === lastSaved) return;
+    if (json === lastSaved) return writing ?? Promise.resolve();
+    const gen = generation;
+    if (writing !== null) {
+      // One write at a time: after the current one lands, write whatever the state is by then.
+      return writing.then(() => (gen === generation ? write() : undefined));
+    }
+    let result: void | Promise<void>;
     try {
-      await persist.save(json);
-      lastSaved = json;
+      result = persist.save(json);
     } catch (error) {
       onError(error, 'save');
+      return Promise.resolve();
     }
+    if (result === undefined) {
+      // A synchronous adapter has written: nothing to wait for.
+      if (gen === generation) lastSaved = json;
+      return Promise.resolve();
+    }
+    const done: Promise<void> = Promise.resolve(result)
+      .then(
+        () => {
+          if (gen === generation) lastSaved = json;
+        },
+        (error) => {
+          onError(error, 'save');
+        },
+      )
+      .finally(() => {
+        if (writing === done) writing = null;
+      });
+    writing = done;
+    return done;
+  };
+
+  const save = (): Promise<void> => {
+    if (persist === undefined || status === 'disposed') return Promise.resolve();
+    if (status === 'loaded') return write();
+    // Never before the first read has settled: wait for it (starting it if nothing did), then
+    // write only if it succeeded.
+    const gen = generation;
+    return load().then(() => (gen === generation ? write() : undefined));
   };
 
   const schedule = (): void => {
-    if (persist === undefined) return;
+    if (persist === undefined || status === 'disposed') return;
     if (timer !== null) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
@@ -109,56 +222,149 @@ export function createIntentStore(
     }, saveDelay);
   };
 
-  const flush = async (): Promise<void> => {
+  const flush = (): Promise<void> => {
     if (timer !== null) {
       clearTimeout(timer);
       timer = null;
     }
-    await save();
+    return save();
   };
 
-  const apply = (op: (s: EngineState) => EngineState): EngineState => {
+  const apply = (op: Op): EngineState => {
     const prev = state;
     const next = op(prev);
     // Queued regardless of effect: an endEpisode that found nothing open here may close the
     // episode the saved state holds.
-    if (replay !== null) replay.push(op);
+    if (queue !== null) {
+      if (queue.length >= MAX_QUEUE) {
+        queue.shift();
+        if (DEV && !warnedQueue) {
+          warnedQueue = true;
+          console.warn(
+            `@oracular/react: more than ${MAX_QUEUE} operations before the stored state loaded; the oldest will not be replayed onto it`,
+          );
+        }
+      }
+      queue.push(op);
+    }
     if (next === prev) return next;
     state = next;
-    notify();
+    // Persistence first, so a subscriber that throws cannot skip the save.
     if (episodeClosed(prev, next)) void flush();
     else schedule();
+    notify();
     return next;
   };
 
-  const load = async (): Promise<void> => {
-    if (persist === undefined || loadStarted) return;
-    loadStarted = true;
-    replay = [];
-    try {
-      const json = await persist.load();
-      if (json !== null) {
-        let next = deserialize(
+  const load = (): Promise<void> => {
+    if (persist === undefined || status === 'loaded' || status === 'disposed') {
+      return Promise.resolve();
+    }
+    if (loading !== null) return loading;
+    const gen = generation;
+    status = 'loading';
+    const attempt = (async (): Promise<void> => {
+      let json: string | null;
+      try {
+        json = await persist.load();
+      } catch (error) {
+        if (gen === generation) status = 'failed';
+        onError(error, 'load');
+        return;
+      }
+      if (gen !== generation) return;
+      if (json === null) {
+        // Nothing stored: the state in memory is the truth, and the next change writes it.
+        status = 'loaded';
+        queue = null;
+        return;
+      }
+      let next: EngineState;
+      try {
+        next = deserialize(
           json,
           opts.migrate === undefined ? { config } : { config, migrate: opts.migrate },
         );
-        for (const op of replay) next = op(next);
-        state = next;
-        notify();
-        const again = serialize(next);
-        if (again === json) lastSaved = json;
-        else schedule();
+      } catch (error) {
+        status = 'failed';
+        onError(error, 'parse');
+        return;
       }
-    } catch (error) {
-      onError(error, 'load');
-    } finally {
-      replay = null;
+      for (const op of queue ?? []) next = op(next);
+      state = next;
+      status = 'loaded';
+      queue = null;
+      // Storage still holds `json`: nothing could write while the read was in flight.
+      if (serialize(next) === json) lastSaved = json;
+      else schedule();
+      notify();
+    })();
+    const done: Promise<void> = attempt.finally(() => {
+      if (loading === done) loading = null;
+    });
+    loading = done;
+    return done;
+  };
+
+  const clear = (): Promise<void> => {
+    if (status === 'disposed') return Promise.resolve();
+    generation++;
+    const gen = generation;
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
     }
+    const fresh = createState(config);
+    state = fresh;
+    queue = null;
+    lastSaved = null;
+    status = 'loaded';
+    let result: Promise<void> = Promise.resolve();
+    if (persist !== undefined) {
+      const adapter = persist;
+      // After the write in flight, so nothing lands on the key after it was removed.
+      const done: Promise<void> = (writing ?? Promise.resolve())
+        .then(async () => {
+          if (gen !== generation) return;
+          try {
+            if (adapter.remove !== undefined) {
+              await adapter.remove();
+            } else {
+              const json = serialize(fresh);
+              await adapter.save(json);
+              if (gen === generation) lastSaved = json;
+            }
+          } catch (error) {
+            onError(error, 'clear');
+          }
+        })
+        .finally(() => {
+          if (writing === done) writing = null;
+        });
+      writing = done;
+      result = done;
+    }
+    notify();
+    return result;
+  };
+
+  const dispose = (): Promise<void> => {
+    if (status !== 'disposed') {
+      generation++;
+      status = 'disposed';
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      queue = null;
+    }
+    return writing ?? Promise.resolve();
   };
 
   const store: IntentStore = {
     config: state.config,
     getState: () => state,
+    getStatus: () => status,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {
@@ -166,10 +372,12 @@ export function createIntentStore(
       };
     },
     now,
-    track: (name, props) =>
-      apply((s) =>
-        observe(s, props === undefined ? { name, at: now() } : { name, at: now(), props }),
-      ),
+    track: (name, props) => {
+      // Stamped now, not when replayed onto a loaded state.
+      const event: IntentEvent =
+        props === undefined ? { name, at: now() } : { name, at: now(), props };
+      return apply((s) => observe(s, event));
+    },
     observe: (event) => apply((s) => observe(s, event)),
     endEpisode: (at = now()) => apply((s) => endEpisodeAt(s, at)),
     markRevealed: (intent, at = now()) => apply((s) => markRevealedAt(s, intent, at)),
@@ -181,6 +389,8 @@ export function createIntentStore(
     },
     load,
     flush,
+    clear,
+    dispose,
   };
   return store;
 }

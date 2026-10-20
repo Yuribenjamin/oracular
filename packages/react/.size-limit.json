@@ -5,6 +5,13 @@
     "import": "{ useIntent, localStorageAdapter }",
     "ignore": ["react", "oracular"],
     "gzip": true,
-    "limit": "1.5 kB"
+    "limit": "2 kB"
+  },
+  {
+    "name": "everything (ESM, min+gzip; react and oracular external)",
+    "path": "dist/index.js",
+    "ignore": ["react", "oracular"],
+    "gzip": true,
+    "limit": "2.7 kB"
   }
 ]
