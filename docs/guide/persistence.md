@@ -34,6 +34,10 @@ let state = saved ? deserialize(saved, { config }) : createState(config);
 
 Everything learned about signals that still exist is kept. Loading **without** `config` restores the old snapshot and silently runs your old weights; it is the one mistake these docs most want you to avoid.
 
+::: tip In `@oracular/react`
+The store does this for you, with the rules a hand-written loop tends to get wrong: nothing is written before the stored state has been read, a flush during the read waits for it, events tracked meanwhile are replayed onto the loaded state, and a read that fails blocks writes until a later one succeeds. See [Using with frameworks](/guide/frameworks#react).
+:::
+
 ## Migrating the state shape
 
 The stored state carries [`STATE_VERSION`](/api/variables/STATE_VERSION). A release that changes the shape of the state ships the migration with it, and `deserialize` applies it on its own. Version 1 (0.1.0 to 0.2.x) became version 2 in 0.3.0, when the open episode started counting how often each signal occurred (each signal seen before the upgrade counts once); version 2 (0.3.0 to 0.5.x) becomes version 3 in 0.6.0, which adds the list of episodes waiting under `attribution` (empty for an upgraded state). Every estimate is exactly what it was before the upgrade. The test suite keeps a state saved by every published version and checks that each one loads and migrates.
@@ -61,11 +65,11 @@ try {
 | `RangeError`  | the stored `version` is one this library does not know and no `migrate` was given; `migrate` did not return the current version; a stored number is out of range (a negative count, a fractional `revealCount`, a config weight beyond ±1e6); stored numbers that are each finite but too large to compute with, which would make the estimates NaN |
 | `TypeError`   | the state is malformed: no numeric `version`, a missing or wrongly typed field, an invalid `config`, invalid options |
 
-The same three types are used everywhere in the library (`createState`, `observe`, the options of `predict`, `explain` and `evaluate`), with the offending path in the message. A fuzz test feeds `deserialize` truncated, corrupted and tampered versions of stored states and checks that it only ever throws one of these three or returns a state whose estimates stay finite. If you store state where users can edit it, catch and fall back to `createState(config)`. To run the config checks on their own, without a state, call [`validateConfig`](/api/functions/validateConfig).
+The same three types are used everywhere in the library (`createState`, `observe`, the options of `predict`, `explain` and `evaluate`), with the offending path in the message. A fuzz test feeds `deserialize` truncated, corrupted and tampered versions of stored states and checks that it only ever throws one of these three or returns a state whose estimates stay finite. If you store state where users can edit it, catch and fall back to `createState(config)`; the `@oracular/react` store reports such a state as `onError(error, 'parse')`, keeps working in memory without overwriting it, and starts fresh on `store.clear()`. To run the config checks on their own, without a state, call [`validateConfig`](/api/functions/validateConfig).
 
 ## One state per user
 
-Learning is per user. Give each account its own state and never share one across users or devices unless you want them to learn from each other. A signed-out visitor can have an anonymous state that you drop or merge on sign-in, as you see fit; the engine has no opinion.
+Learning is per user. Give each account its own state and never share one across users or devices unless you want them to learn from each other. A signed-out visitor can have an anonymous state that you drop or merge on sign-in, as you see fit; the engine has no opinion. With `@oracular/react`, `store.clear()` drops the stored state and starts fresh, and `await store.dispose()` stops a store's writes before you wipe its storage yourself.
 
 ## Reference
 
