@@ -210,7 +210,8 @@ with `npm publish --dry-run --json --access public --tag latest`. That runs `pre
 and prints its output. If `check` fails there, the job stops with the real error in the log and
 nothing is published; the Changesets step would only have reported "command failed". Runs whose
 version is already published skip the rehearsal, because npm refuses even a dry run of a
-republish. When you change `check` or anything it runs (tests that shell out, the smoke scripts),
+republish; a run that starts minutes after a publish, before the registry shows the new version
+everywhere, meets that refusal inside the rehearsal instead, and treats it as the same thing. When you change `check` or anything it runs (tests that shell out, the smoke scripts),
 rehearse locally with the same command, ideally with the runner's npm major
 (`npx npm@12 publish --dry-run ...`).
 

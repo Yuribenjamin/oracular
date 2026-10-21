@@ -68,11 +68,24 @@ jobs:
       # with npm's own flags inherited by every nested npm call exactly as they are during the
       # publish, and prints the full output. A failure stops the job here with its cause in the
       # log; inside `changeset publish` the same failure would only read "command failed".
+      # A merge minutes after a publish can run before the registry shows the new version everywhere:
+      # the check above then lists a package that is in fact published, and the dry run, after a
+      # full prepublishOnly, is refused with "cannot publish over". That is the state this step
+      # wants, not a failure; any other refusal still stops the job.
       - name: Rehearse publish
         if: steps.registry.outputs.dirs != ''
         run: |
           for dir in ${{ steps.registry.outputs.dirs }}; do
-            (cd "$dir" && npm publish --dry-run --json --access public --tag latest)
+            if out=$(cd "$dir" && npm publish --dry-run --json --access public --tag latest 2>&1); then
+              echo "$out"
+            else
+              echo "$out"
+              if echo "$out" | grep -q "cannot publish over the previously published versions"; then
+                echo "$dir: that version is on npm after all; rehearsal skipped"
+              else
+                exit 1
+              fi
+            fi
           done
         env:
           NPM_CONFIG_PROVENANCE: "true"
