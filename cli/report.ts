@@ -65,7 +65,7 @@ function formatIntent(intent: IntentReport): string {
       ['threshold', 'reveals', 'per user', 'precision', 'recall', 'median lead time'],
       intent.thresholds.map((t) => [
         `${t.threshold}${t.configured ? ' *' : ''}`,
-        String(t.reveals),
+        t.censored > 0 ? `${t.reveals} (+${t.censored} censored)` : String(t.reveals),
         num(t.revealsPerUser, 2),
         pct(t.precision),
         `${pct(t.recall)} of ${t.outcomes}`,
@@ -73,9 +73,9 @@ function formatIntent(intent: IntentReport): string {
       ]),
     ),
   );
-  const censored = intent.thresholds.reduce((acc, t) => Math.max(acc, t.censored), 0);
+  const censored = intent.thresholds.some((t) => t.censored > 0);
   out.push(
-    `* the threshold your config resolves for this intent.${censored > 0 ? ` Reveals whose window runs past the end of the log are not scored (up to ${censored} per threshold).` : ''}`,
+    `* the threshold your config resolves for this intent.${censored ? ' A reveal whose window runs past the end of the log (the +n) is not scored for precision, since its verdict is not in yet; an outcome it preceded still counts as caught for recall.' : ''}`,
   );
   out.push('');
   out.push(

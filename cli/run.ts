@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { type EngineConfig, validateConfig } from 'oracular';
 import { type LogEntry, parseLog } from './log';
 import { type ReplayOptions, type ReplayReport, replay } from './replay';
-import { formatJson, formatText } from './report';
+import { formatDuration, formatJson, formatText } from './report';
 import { MIN_INSTALLS_FOR_SPREAD, type TuneOptions, type TuneReport, tune } from './tune';
 import { formatTuneJson, formatTuneText } from './tune-report';
 
@@ -413,8 +413,26 @@ async function replayCommand(argv: readonly string[], io: Io): Promise<number> {
     if (error instanceof RangeError) throw new UsageError(error.message);
     throw error;
   }
+  warnShortLog(report, io);
   io.stdout(args.json ? formatJson(report) : formatText(report));
   return 0;
+}
+
+/**
+ * A log shorter than an intent's scoring window censors every reveal and every point: nothing can
+ * be scored for precision or reliability, while recall, counted over the window before each
+ * outcome, still is. Say so, since the table alone reads as "no reveals".
+ */
+function warnShortLog(report: ReplayReport, io: Io): void {
+  if (report.start === null || report.end === null) return;
+  const span = report.end - report.start;
+  for (const intent of report.intents) {
+    if (span < intent.window) {
+      io.stderr(
+        `oracular: warning: ${intent.intent}: the log spans ${formatDuration(span)}, less than its ${formatDuration(intent.window)} scoring window, so every reveal and point is censored and only recall can be counted. Pass --window with a duration shorter than the log, or record for longer than the window.\n`,
+      );
+    }
+  }
 }
 
 async function tuneCommand(argv: readonly string[], io: Io): Promise<number> {
