@@ -69,6 +69,17 @@ The cooldown fields:
 
 `shouldReveal` is exactly `suppressedUntil === null && p ≥ threshold && lower ≥ threshold`. If you want to schedule a re-check, `suppressedUntil` is the time to use.
 
+## Dismissals and backing off
+
+A reveal the user dismisses is not evidence on its own: the engine records the reveal, starts the cooldown, and nothing else moves, so a nudge that is always dismissed comes back after every cooldown. Two things the config and the call can do about it, both with what exists today:
+
+- **Make the dismissal a signal.** Declare the dismiss event with a negative weight (`'offer.dismissed': -3`). Each dismissal then lowers p at once, and learning measures it like any other signal: for a user who always dismisses, the weight grows more negative as sessions without the outcome pile up.
+- **Back off by `revealCount`.** The state counts reveals per intent in `intents[name].revealCount`, and the per-call `cooldown` option can grow with it: `reveal('offer', { cooldown: ms.days(14) * 2 ** revealCount })` doubles the quiet period after every reveal. Nothing resets the count, so this is a lifetime backoff; keep your own counter for a backoff per campaign.
+
+## One-time outcomes
+
+An outcome that can happen once per user (a permission granted, an account upgraded) reopens the gate after its cooldown, because the engine does not know it cannot happen again. Stop asking: once `intents[name].lastOutcomeAt` is set, or once the app's own state says the thing is done, do not call `reveal` for that intent. It costs nothing to keep the intent in the config for the users who have not reached the outcome, and the signals it sees keep teaching it.
+
 ## Reference
 
 - [`IntentConfig.resetOnOutcome`](/api/interfaces/IntentConfig), [`IntentState`](/api/interfaces/IntentState) (`lastOutcomeAt`, `lastRevealedAt`, `revealCount`), [`Prediction`](/api/interfaces/Prediction).

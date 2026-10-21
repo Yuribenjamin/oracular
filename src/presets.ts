@@ -11,7 +11,7 @@ export type { PresetName, PresetSource } from './types';
  * converts 1% or 20% of its sessions has a different prior and most likely a different weight.
  * Start here, run in shadow mode, and let `tune` replace these with your own numbers.
  *
- * - `prior` 0.048: the share of sessions that end with an order (fitted 0.0477).
+ * - `prior` 0.048: the share of sessions that end with an order (fitted 0.0475).
  * - `priorStrength` 4: visitors differ a lot in how often they buy, so one visitor's own history
  *   should outweigh the population after a handful of sessions.
  * - `halfLife` one hour: the best point of the grid; buying intent within a visit is a matter of
@@ -132,8 +132,8 @@ export const presets: Readonly<Record<PresetName, IntentConfig>> = freeze({
 export const presetSources: Readonly<Record<PresetName, PresetSource>> = freeze({
   willBuy: {
     kind: 'tuned',
-    note: 'oracular tune on a public e-commerce clickstream: one shop, May to September 2015, 2.7 million events, 4.8% of sessions ending with an order; fitted October 2026, the fitted 0.0477 and 2.32 rounded',
-    episodes: 181_080,
+    note: 'oracular tune on a public e-commerce clickstream: one shop, May to September 2015, 2.7 million events, 4.8% of sessions ending with an order; fitted October 2026, the fitted 0.0475 and 2.32 rounded',
+    episodes: 181_055,
     installs: 93_537,
   },
   upgrade: {

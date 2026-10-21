@@ -11,7 +11,7 @@ A user who checks out about once in two sessions, one a day for a month. `cart.a
 <!-- generated:repeating-outcome-table -->
 | sessions | `cart.added` hits / misses | effective | `product.viewed` hits / misses | effective |
 | -------- | -------------------------- | --------- | ------------------------------ | --------- |
-| 5 | 2 / 1 | 1.99 | 1 / 2 | 1.70 |
+| 5 | 2 / 1 | 1.98 | 1 / 2 | 1.70 |
 | 10 | 4 / 2 | 1.95 | 2 / 3 | 1.40 |
 | 20 | 8 / 4 | 1.99 | 4 / 6 | 0.95 |
 | 30 | 12 / 6 | 2.02 | 6 / 9 | 0.63 |
@@ -23,20 +23,20 @@ The weight you guessed right holds; the signal that predicts nothing for this us
 
 An upgrade or a cancellation happens once per user, if at all. Before it, every episode is a miss for every signal seen in it; after it, the intent resets, pauses for its cooldown, and has nothing left to predict. There is at most one hit to learn from, so per-user learning cannot confirm your weights. What fires the reveal is the evidence gate: your weights against your prior, with [decay](/guide/concepts/decay) pulling the evidence back down.
 
-What learning does do before the outcome is erode the weights a little, because sessions without the upgrade make every signal look weaker. How much depends on how often the signal appeared, through the smoothing of the rates. The quickstart `pricing.viewed` (weight 3) after ten sessions without an upgrade, the signal seen in some of them, and after one upgrade in an eleventh session together with the signal:
+What learning does do before the outcome is erode the weights a little, because sessions without the upgrade make every signal look weaker. How much depends on how evenly the sessions split between those with the signal and those without, which is how far the comparison is trusted. The quickstart `pricing.viewed` (weight 3) after ten sessions without an upgrade, the signal seen in some of them, and after one upgrade in an eleventh session together with the signal:
 
 <!-- generated:once-per-user-table -->
 | sessions with `pricing.viewed` | effective weight, no upgrade yet | after one upgrade |
 | ----------------------------- | -------------------------------- | ----------------- |
-| 1 of 10 | 2.88 | 2.96 |
-| 3 of 10 | 2.58 | 2.70 |
+| 1 of 10 | 2.75 | 2.82 |
+| 3 of 10 | 2.48 | 2.61 |
 | 5 of 10 | 2.40 | 2.52 |
-| 7 of 10 | 2.02 | 2.46 |
-| 9 of 10 | 2.39 | 2.50 |
+| 7 of 10 | 2.48 | 2.55 |
+| 9 of 10 | 2.75 | 2.77 |
 | 10 of 10 | 3.00 | 3.00 |
 <!-- /generated:once-per-user-table -->
 
-A signal seen in every session keeps exactly its weight (there is no session without it to compare against). Any other drops a little, by an amount that does not even rise steadily with how often the signal was seen (seven sessions out of ten end lowest here), and one upgrade restores only part of it. Read these intents as "the weights you wrote, slightly discounted", and choose the weights from data across users: run in [shadow mode](/guide/shadow-mode) and replay the log.
+A signal seen in every session keeps exactly its weight (there is no session without it to compare against). Any other drops a little, most when the signal was seen in about half the sessions, where the contrast between sessions with and without it is largest, and one upgrade restores only part of it. Read these intents as "the weights you wrote, slightly discounted", and choose the weights from data across users: run in [shadow mode](/guide/shadow-mode) and replay the log.
 
 ## Signals add: no order, no interactions
 
@@ -79,6 +79,10 @@ Monday's pricing visit is recorded as a session that did *not* lead to an upgrad
 <!-- /generated:attribution-on-table -->
 
 Monday's signals earn 0.906 of a hit, the fraction of their weight still standing on Tuesday with a one-week half-life, and 0.094 of a miss, so each session still counts once. [Episodes & learning](/guide/concepts/episodes-and-learning#credit-across-episodes) has the rules and a table over longer gaps. The window is off unless set, and the right one depends on the intent's horizon; `tune` on a shadow log can show whether one is justified.
+
+## The outcome of a "stuck" intent must mean the help worked
+
+For an intent that gates help (tips after repeated failures, a hint in onboarding), the engine learns from whether the outcome follows the signals. If the outcome is "the task got done", a user who fails three times and gives up teaches the engine that failing does not predict getting done, and the tips back off for exactly the user who needed them: a failure weight of 3 can fall to 1 within a month of such sessions, and the help stops. That is the learner doing what it was told; the fix is in the config. Make the outcome the thing the help is for, `help.article.read` or `tip.followed`, so that an episode where help was shown and taken is a hit, and one where the user left is a miss for the help, not for the failure. The `stuck` preset is built this way.
 
 ## What it never sees
 

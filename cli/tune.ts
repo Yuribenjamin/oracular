@@ -23,7 +23,7 @@ import {
   observe,
   predict,
 } from 'oracular';
-import { laplace, learningScore, lift } from '../src/math';
+import { laplace, learningScore, lift, smoothRate } from '../src/math';
 import { groupByInstall, type LogEntry } from './log';
 import { DEFAULT_THRESHOLD, replay, scoringWindow, type WindowSource } from './replay';
 import { formatDuration } from './report';
@@ -80,7 +80,7 @@ export interface SignalFit {
   /** Counted episodes of the intent in which the signal was not seen, and how many ended with the outcome. */
   without: number;
   outcomesWithout: number;
-  /** Laplace-smoothed outcome rates with and without the signal, as the engine computes them. */
+  /** Outcome rates with and without the signal, shrunk toward the base rate as the engine computes them. */
   qWith: number;
   qWithout: number;
   /**
@@ -245,15 +245,17 @@ function fitSignal(
   const nWith = hits + misses;
   const without = Math.max(0, tally.episodes - nWith);
   const outcomesWithout = Math.min(without, Math.max(0, tally.outcomes - hits));
-  const qWith = laplace(hits, nWith);
-  const qWithout = laplace(outcomesWithout, without);
+  // As the engine: both rates shrunk toward the intent's base rate by two pseudo-episodes.
+  const base = tally.episodes === 0 ? 0 : tally.outcomes / tally.episodes;
+  const qWith = smoothRate(hits, nWith, base);
+  const qWithout = smoothRate(outcomesWithout, without, base);
   // As the engine: nothing is known about a signal until it has been seen in a completed episode.
   const baseline =
     liftType === 'association-rule'
-      ? (hits + outcomesWithout + 2) / (nWith + without + 4)
+      ? smoothRate(hits + outcomesWithout, nWith + without, base)
       : qWithout;
   // No episode without the signal: nothing to compare its rate with, so no lift and no interval
-  // (the smoothed baseline would be a made-up 0.5).
+  // (the baseline would be the base rate alone, which is what the signal's own rate then is).
   const noContrast = without === 0;
   const rawLift = noContrast ? null : nWith === 0 ? 0 : lift(qWith, baseline, liftType);
   const score = rawLift === null ? null : nWith === 0 ? 0 : learningScore(rawLift, liftType);

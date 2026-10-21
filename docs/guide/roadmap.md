@@ -52,6 +52,15 @@ The theme is **promises we can keep**. 1.0 means the API and the state format ar
 - **Playground upgrade.** Paste a recorder log, scrub a timeline, drag sliders for weights, half-life and threshold, and watch p and the lower bound move.
 - **Project structure.** A GitHub organization and a second maintainer when a contributor shows up; GOVERNANCE.md says how.
 
+## Under consideration
+
+Asked for by a production user with a repro for each; none has an answer yet beyond the recipes in the guides.
+
+1. **A built-in backoff.** `revealCount` is stored and unused by the engine; a per-call `cooldown` keyed on it is the recipe today ([Outcomes & cooldowns](/guide/concepts/outcomes-and-cooldowns#dismissals-and-backing-off)). Whether the engine should back off on its own, and how a dismissal should count, is a modelling question.
+2. **One-time outcomes.** `once: true` on an intent, so that a permission granted or an upgrade completed closes the gate for good instead of reopening it after the cooldown. The recipe today is to stop calling `reveal` once `lastOutcomeAt` is set.
+3. **Per-intent episode scoping.** Every session is an episode for every intent, including sessions that never touch the intent: each counts toward that intent's base rate as an episode without its signals and without its outcome, so the contrast flatters every signal of an intent most sessions never reach (a failure weight of 3 fitted to 5 on sessions that never opened the camera). Counting only the sessions that touch an intent would move every learned number and needs a Modelling discussion first.
+4. **Typed event and intent names.** A `defineConfig` helper could turn the names in a config into unions, so that a typo in an event name fails to compile instead of being silently ignored, and a typo in an intent name fails to compile instead of throwing at runtime. Type-level only, no runtime cost.
+
 ## Considered and declined, for now
 
 - **A population benchmark against a logistic model on public clickstream data.** A model trained on data oracular refuses to collect will win on precision. The meaningful comparison is against the rules a team would otherwise hand-write, on their own shadow log, which `replay` provides.

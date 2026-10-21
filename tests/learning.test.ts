@@ -132,14 +132,17 @@ describe('learning', () => {
     const a = weights(s, 'A');
     expect(a).toMatchObject({ initial: 1, hits: 1, misses: 0 });
     expect(s.intents.buy!.episodes).toStrictEqual({ hits: 1, misses: 5 });
-    // qWith = 2/3, qWithout = 1/7, lift = (2/3 − 1/7) / (1 − 1/7), learned = 2 × lift,
-    // nEff = (1 × 5) / (1 + 5), effective = (10 + nEff × learned) / (10 + nEff) ≈ 1.017.
-    const lift = (2 / 3 - 1 / 7) / (1 - 1 / 7);
+    // Both rates are shrunk toward the base rate 1/6: qWith = (1 + 2/6) / 3 = 4/9, qWithout =
+    // (0 + 2/6) / 7 = 1/21, lift = (4/9 − 1/21) / (1 − 1/21), learned = 2 × lift ≈ 0.83,
+    // nEff = (1 × 5) / (1 + 5), effective = (10 + nEff × learned) / (10 + nEff) ≈ 0.987: one
+    // confirmation over a 1-in-6 base rate is worth a little less than the developer's weight of 1.
+    const base = 1 / 6;
+    const lift = ((1 + 2 * base) / 3 - (0 + 2 * base) / 7) / (1 - (0 + 2 * base) / 7);
     const nEff = (1 * 5) / 6;
     const expected = (10 * 1 + nEff * 2 * lift) / (10 + nEff);
     expect(a.effective).toBeCloseTo(expected, 12);
-    expect(a.effective).toBeGreaterThan(a.initial);
-    expect(a.effective).toBeLessThan(1.05);
+    expect(a.effective).toBeGreaterThan(0.95);
+    expect(a.effective).toBeLessThan(a.initial);
   });
 
   it('a signal followed by the outcome only half the time still learns positive when the base rate is low', () => {

@@ -91,14 +91,19 @@ describe('tune, on a log small enough to count by hand', () => {
   const report = tune(deepFreeze(handLog()), buyConfig, { halfLives: [1e15] });
   const [fit] = report.intents;
 
+  // x: 2 hits, 1 miss; 2 episodes without it, none with the outcome; base rate 2 of 5. Shrunk
+  // toward 0.4 by two pseudo-episodes: qWith = (2 + 0.8) / 5 = 0.56, qWithout = (0 + 0.8) / 4 = 0.2.
+  const qWith = (2 + 2 * 0.4) / 5;
+  const qWithout = (0 + 2 * 0.4) / 4;
+  const oddsRatio = qWith / (1 - qWith) / (qWithout / (1 - qWithout));
   it.each<[LiftType, number, number]>([
-    ['absolute-difference', 0.35, 0.35],
-    ['relative-lift', 1.4, 1.4 / 2.4],
-    ['risk-ratio', 2.4, 1.4 / 3.4],
-    ['log-lift', Math.log(2.4), Math.log(2.4) / (1 + Math.log(2.4))],
-    ['odds-ratio', 4.5, 3.5 / 5.5],
-    ['normalized-difference', 0.35 / 0.75, 0.35 / 0.75],
-    ['association-rule', 1.35, 0.35 / 2.35],
+    ['absolute-difference', qWith - qWithout, qWith - qWithout],
+    ['relative-lift', (qWith - qWithout) / qWithout, 1.8 / 2.8],
+    ['risk-ratio', qWith / qWithout, 1.8 / 3.8],
+    ['log-lift', Math.log(qWith / qWithout), Math.log(2.8) / (1 + Math.log(2.8))],
+    ['odds-ratio', oddsRatio, (oddsRatio - 1) / (oddsRatio + 1)],
+    ['normalized-difference', (qWith - qWithout) / (1 - qWithout), 0.36 / 0.8],
+    ['association-rule', qWith / 0.4, 0.4 / 2.4],
   ])('reports raw %s and fits its signed evidence score', (lift, expected, score) => {
     const config = { ...buyConfig, learning: { lift } };
     const selected = tune(handLog(), config, { halfLives: [1e15], allEvents: true });
@@ -120,9 +125,9 @@ describe('tune, on a log small enough to count by hand', () => {
     };
     const selected = tune(handLog(), config, { halfLives: [1e15] });
     const x = selected.intents[0]!.signals.find((s) => s.signal === 'x')!;
-    expect(x.lift).toBeCloseTo(4.5, 12);
-    expect(x.score).toBeCloseTo(3.5 / 5.5, 12);
-    expect(x.weight).toBe(636363.64);
+    expect(x.lift).toBeCloseTo(oddsRatio, 12);
+    expect(x.score).toBeCloseTo((oddsRatio - 1) / (oddsRatio + 1), 12);
+    expect(x.weight).toBe(671641.79);
     expect(x.low).toBeGreaterThanOrEqual(-1e6);
     expect(x.high).toBeLessThanOrEqual(1e6);
     expect(() => validateConfig(selected.config)).not.toThrow();
@@ -157,18 +162,19 @@ describe('tune, on a log small enough to count by hand', () => {
 
   it('weights each signal by priorStrength × the engine’s lift over episodes without it', () => {
     const [x, y] = fit?.signals ?? [];
-    // x: qWith (2+1)/(3+2) = 0.6, qWithout (0+1)/(2+2) = 0.25, lift 0.35/0.75.
-    expect(x?.qWith).toBeCloseTo(0.6, 12);
-    expect(x?.qWithout).toBeCloseTo(0.25, 12);
-    expect(x?.lift).toBeCloseTo(0.35 / 0.75, 12);
-    expect(x?.weight).toBe(0.93);
+    // Base rate 2 of 5; both rates shrunk toward it by two pseudo-episodes.
+    // x: qWith (2+0.8)/(3+2) = 0.56, qWithout (0+0.8)/(2+2) = 0.2, lift 0.36/0.8.
+    expect(x?.qWith).toBeCloseTo(0.56, 12);
+    expect(x?.qWithout).toBeCloseTo(0.2, 12);
+    expect(x?.lift).toBeCloseTo(0.36 / 0.8, 12);
+    expect(x?.weight).toBe(0.9);
     expect(x?.contrast).toBeCloseTo(1.2, 12);
     expect(x?.thin).toBe(true);
-    // y: qWith (1+1)/(2+2) = 0.5, qWithout (1+1)/(3+2) = 0.4, lift 0.1/0.6.
-    expect(y?.qWith).toBeCloseTo(0.5, 12);
-    expect(y?.qWithout).toBeCloseTo(0.4, 12);
-    expect(y?.lift).toBeCloseTo(0.1 / 0.6, 12);
-    expect(y?.weight).toBe(0.33);
+    // y: qWith (1+0.8)/(2+2) = 0.45, qWithout (1+0.8)/(3+2) = 0.36, lift 0.09/0.64.
+    expect(y?.qWith).toBeCloseTo(0.45, 12);
+    expect(y?.qWithout).toBeCloseTo(0.36, 12);
+    expect(y?.lift).toBeCloseTo(0.09 / 0.64, 12);
+    expect(y?.weight).toBe(0.28);
     for (const f of [x, y]) {
       expect(f?.low).toBeLessThanOrEqual(f?.weight as number);
       expect(f?.high).toBeGreaterThanOrEqual(f?.weight as number);
@@ -180,7 +186,7 @@ describe('tune, on a log small enough to count by hand', () => {
     expect(report.config).toStrictEqual(
       createState({
         intents: {
-          buy: { ...buyConfig.intents.buy, prior: 0.4286, signals: { x: 0.93, y: 0.33 } },
+          buy: { ...buyConfig.intents.buy, prior: 0.4286, signals: { x: 0.9, y: 0.28 } },
         },
       } as EngineConfig).config,
     );
@@ -529,8 +535,12 @@ describe('ubiquitous signals', () => {
     expect(UBIQUITY_SHARE).toBe(0.9);
     expect(u?.share).toBeCloseTo(19 / 21, 12);
     expect(u?.ubiquitous).toBe(true);
-    // The contrast would have called it negative: 10/21 with it against 3/4 without.
-    expect(u?.lift).toBeCloseTo((10 / 21 - 3 / 4) / (3 / 4), 12);
+    // The contrast would have called it negative: shrunk toward the base rate 11/21, its rate is
+    // (9 + 22/21) / 21 with it against (2 + 22/21) / 4 without.
+    const base = 11 / 21;
+    const uWith = (9 + 2 * base) / 21;
+    const uWithout = (2 + 2 * base) / 4;
+    expect(u?.lift).toBeCloseTo((uWith - uWithout) / uWithout, 12);
     expect(u?.weight).toBeNull();
     expect(report.config.intents.buy?.signals).not.toHaveProperty('u');
   });
@@ -538,7 +548,10 @@ describe('ubiquitous signals', () => {
   it('keeps fitting a signal at or below the share', () => {
     expect(v?.share).toBeCloseTo(18 / 21, 12);
     expect(v?.ubiquitous).toBe(false);
-    expect(v?.lift).toBeCloseTo((9 / 20 - 4 / 5) / (4 / 5), 12);
+    const base = 11 / 21;
+    const vWith = (8 + 2 * base) / 20;
+    const vWithout = (3 + 2 * base) / 5;
+    expect(v?.lift).toBeCloseTo((vWith - vWithout) / vWithout, 12);
     expect(v?.weight).toBe(
       Math.round((fit?.priorStrength.value as number) * (v?.lift as number) * 100) / 100,
     );
@@ -559,7 +572,7 @@ describe('ubiquitous signals', () => {
   it('says so in the report', () => {
     const text = formatTuneText(report);
     expect(text).toContain(
-      '| u      | –      | 1.00 | -1.20 to -0.26 | -0.37 | 9 / 10              | 2 / 2                        | in 90.5% of episodes, so it cannot tell them apart; left out of the config; thin: 1.8 of 10 contrast |',
+      '| u      | –      | 1.00 | -1.21 to -0.29 | -0.37 | 9 / 10              | 2 / 2                        | in 90.5% of episodes, so it cannot tell them apart; left out of the config; thin: 1.8 of 10 contrast |',
     );
     expect(text).not.toContain('no measurable lift');
   });
@@ -581,10 +594,10 @@ describe('a flat half-life grid', () => {
     expect(fit?.halfLife.source).toBe('kept');
     expect(fit?.halfLife.value).toBe(1e8);
     expect(fit?.halfLife.note).toBe(
-      'kept: the grid is flat, the best point (11d 13h, 0.1966) improves on the current value (0.1966) by 0.00%, less than 1% (always predicting the base rate: 0.2400)',
+      'kept: the grid is flat, the best point (11d 13h, 0.1981) improves on the current value (0.1981) by 0.00%, less than 1% (always predicting the base rate: 0.2400)',
     );
     const text = formatTuneText(tune(handLog(), config, { halfLives: [1e9] }));
-    expect(text).toContain('(lower is better): 1d 3h 0.1966 *, 11d 13h 0.1966\n');
+    expect(text).toContain('(lower is better): 1d 3h 0.1981 *, 11d 13h 0.1981\n');
   });
 
   it('still moves to the best point when the grid is not flat', () => {
@@ -599,7 +612,7 @@ describe('a flat half-life grid', () => {
     );
     expect(fit?.halfLife.source).toBe('grid');
     expect(fit?.halfLife.value).toBe(1e15);
-    expect(fit?.halfLife.note).toMatch(/^lowest Brier score over the grid, 0\.1966 \(always/);
+    expect(fit?.halfLife.note).toMatch(/^lowest Brier score over the grid, 0\.1981 \(always/);
   });
 });
 
@@ -683,10 +696,11 @@ describe('wilson', () => {
       };
       const fitted = tune(handLog(), config, { halfLives: [1e15] }).intents[0]!;
       const unseen = fitted.signals.find((signal) => signal.signal === 'unseen')!;
-      // No observations: Wilson supplies [0, 1], not the Laplace-smoothed point estimate.
-      // Without the endpoint clamp, log(0) and odds(1) become infinities, then scores are NaN.
+      // No observations: the point estimate is the base rate itself (2 of 5), and Wilson
+      // supplies [0, 1]. Without the endpoint clamp, log(0) and odds(1) become infinities, then
+      // scores are NaN.
       expect(unseen.hits + unseen.misses).toBe(0);
-      expect(unseen.qWith).toBe(0.5);
+      expect(unseen.qWith).toBe(0.4);
       expect(unseen.weight).toBeNull();
       expect(Number.isFinite(unseen.low)).toBe(true);
       expect(Number.isFinite(unseen.high)).toBe(true);

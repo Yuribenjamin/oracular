@@ -88,7 +88,7 @@ Reliability: p after every event except the outcome, against "the outcome follow
 | 0.3–0.4 | 2      | 0.344  | 50.0%    |
 | 0.4–0.5 | 10     | 0.476  | 80.0%    |
 | 0.5–0.6 | 5      | 0.565  | 40.0%    |
-| 0.6–0.7 | 6      | 0.640  | 100.0%   |
+| 0.6–0.7 | 6      | 0.639  | 100.0%   |
 Brier score 0.166 over 35 points (always predicting the base rate of 51.4%: 0.250). Lower is better. 15 points too close to the end of the log are not scored.
 ```
 <!-- /replay:example -->
@@ -148,16 +148,16 @@ stuck: outcome help.article.read, 3 installs, 14 counted episodes, 2 with the ou
 | ------------- | ------ | --- | ---------------------------------------------------------------------------------- |
 | prior         | 0.1875 | 0.1 | 2 of 14 episodes ended with the outcome, smoothed (2+1)/(14+2)                     |
 | priorStrength | 5.0    | 5.0 | kept: 3 installs with a counted episode, reading the spread needs 10               |
-| halfLife      | 10m    | 10m | lowest Brier score over the grid, 0.1633 (always predicting the base rate: 0.2001) |
+| halfLife      | 10m    | 10m | lowest Brier score over the grid, 0.1581 (always predicting the base rate: 0.2001) |
 
 | signal         | weight | was   | 90% interval  | lift  | with: hits / misses | without: outcomes / episodes | note                     |
 | -------------- | ------ | ----- | ------------- | ----- | ------------------- | ---------------------------- | ------------------------ |
-| editor.undo    | 2.27   | 1.00  | 0.54 to 4.01  | +0.45 | 2 / 2               | 0 / 10                       | thin: 2.9 of 10 contrast |
-| search.empty   | 2.83   | 2.00  | 0.96 to 4.58  | +0.57 | 2 / 1               | 0 / 11                       | thin: 2.4 of 10 contrast |
-| help.opened    | 3.65   | 3.00  | 1.90 to 5.00  | +0.73 | 2 / 0               | 0 / 12                       | thin: 1.7 of 10 contrast |
-| task.completed | 0.83   | -4.00 | -5.00 to 3.31 | +0.17 | 0 / 1               | 2 / 13                       | thin: 0.9 of 10 contrast |
+| editor.undo    | 1.83   | 1.00  | 0.81 to 4.07  | +0.37 | 2 / 2               | 0 / 10                       | thin: 2.9 of 10 contrast |
+| search.empty   | 2.22   | 2.00  | 1.18 to 4.60  | +0.44 | 2 / 1               | 0 / 11                       | thin: 2.4 of 10 contrast |
+| help.opened    | 2.81   | 3.00  | 2.07 to 5.00  | +0.56 | 2 / 0               | 0 / 12                       | thin: 1.7 of 10 contrast |
+| task.completed | -1.87  | -4.00 | -5.00 to 3.41 | -0.38 | 0 / 1               | 2 / 13                       | thin: 0.9 of 10 contrast |
 
-Half-life grid, Brier score against "the outcome follows within 1h" (lower is better): 10m 0.1633 *, 1h 0.1672, 6h 0.1679, 1d 0.1709, 3d 0.1800, 7d 0.1850, 14d 0.1872, 30d 0.1884
+Half-life grid, Brier score against "the outcome follows within 1h" (lower is better): 10m 0.1581 *, 1h 0.1613, 6h 0.1619, 1d 0.1636, 3d 0.1679, 7d 0.1701, 14d 0.1710, 30d 0.1715
 
 Config with every fitted value swapped in (paste it, or pass it to oracular replay --config):
 {
@@ -179,10 +179,10 @@ Config with every fitted value swapped in (paste it, or pass it to oracular repl
       "priorStrength": 5,
       "halfLife": 600000,
       "signals": {
-        "editor.undo": 2.27,
-        "search.empty": 2.83,
-        "help.opened": 3.65,
-        "task.completed": 0.83
+        "editor.undo": 1.83,
+        "search.empty": 2.22,
+        "help.opened": 2.81,
+        "task.completed": -1.87
       },
       "outcome": "help.article.read",
       "saturate": false,
@@ -227,7 +227,7 @@ Version 1, the `v` field of every record and the exported [`RECORD_VERSION`](/ap
 {"v":1,"kind":"event","installId":"a3f0c2e1-…","mode":"shadow","event":{"name":"pricing.viewed","at":1700000000000},"decisions":{"upgrade":{"p":0.269,"lower":0.117,"shouldReveal":false,"suppressedUntil":null,"top":[{"signal":"pricing.viewed","impact":0.219}],"weights":{"pricing.viewed":3,"limit.hit":2,"export.clicked":1}}}}
 ```
 
-Numbers are shortened here; records carry full precision.
+Numbers are shortened here; records carry full precision. A record is about a kilobyte with five intents, since `decisions` carries a prediction and the top signals for every declared intent: a heavy user at fifty events a day writes about 20 MB a year. Rotate the log (one file a day, uploaded and deleted) and lower `options.top` when the top signals are not needed.
 
 | field | meaning |
 | ----- | ------- |

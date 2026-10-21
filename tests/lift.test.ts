@@ -173,8 +173,9 @@ describe('constructor lift selection', () => {
     const signal = explain(state, 'upgrade', T + 4 * DAY).find(
       (s) => s.signal === 'pricing.viewed',
     )!;
-    // +1 per cell: P(A,B)=3/9, P(A)=4/9, P(B)=4/9; lift = 27/16.
-    expect(signal.learnedWeight).toBeCloseTo(6 * (11 / 43), 12);
+    // Shrunk toward the base rate 2/5: q = (2 + 0.8) / 4 = 0.7, P(B) = (2 + 0.8) / 7 = 0.4,
+    // lift 1.75, score (1.75 − 1) / (1.75 + 1) = 3/11.
+    expect(signal.learnedWeight).toBeCloseTo(6 * (3 / 11), 12);
   });
 
   it('rejects invalid selectors with the config path', () => {

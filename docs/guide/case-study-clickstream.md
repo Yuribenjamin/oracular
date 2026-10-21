@@ -1,6 +1,6 @@
 # Case study: a public clickstream
 
-What happens when 2.7 million real events go through `tune` and `replay`. This is a worked example on a public dataset, not a benchmark and not a production shadow log: no app ran oracular over these users and nothing was ever revealed to them. It is here because every number on this site was otherwise computed from scenarios we wrote ourselves, and a real log finds what a scenario cannot. Everything below is reproducible with the published package and the scripts in [`examples/retailrocket`](https://github.com/Yuribenjamin/oracular/tree/main/examples/retailrocket); the runs quoted were made on 2026-10-18 with oracular 0.6.0 and Node 22, except those in [The rule a skeptic would write](#the-rule-a-skeptic-would-write), made on 2026-10-19 with oracular 0.7.0 and Node 22. No engine computation changed between 0.6.0 and 0.7.0, so the numbers are comparable: the same configs replayed on both builds, and `tune` run again, give the same reports to the digit.
+What happens when 2.7 million real events go through `tune` and `replay`. This is a worked example on a public dataset, not a benchmark and not a production shadow log: no app ran oracular over these users and nothing was ever revealed to them. It is here because every number on this site was otherwise computed from scenarios we wrote ourselves, and a real log finds what a scenario cannot. Everything below is reproducible with the published package and the scripts in [`examples/retailrocket`](https://github.com/Yuribenjamin/oracular/tree/main/examples/retailrocket); the runs quoted were made on 2026-10-18 with oracular 0.6.0 and Node 22, except those in [The rule a skeptic would write](#the-rule-a-skeptic-would-write), made on 2026-10-19 with oracular 0.7.0 and Node 22. No engine computation changed between 0.6.0 and 0.7.0, so the numbers are comparable: the same configs replayed on both builds, and `tune` run again, give the same reports to the digit. Every number from the engine on this page was produced by oracular 0.11 with the scripts in `examples/retailrocket`; the hand-written rules use no engine and are unchanged since they were first measured.
 
 ## The data
 
@@ -55,48 +55,48 @@ Replayed on the holdout, `purchase` scores a Brier of 0.0553 where always predic
 
 ## What tune said
 
-`npx oracular tune fit.ndjson --config start.config.json` on 1,370,219 records, 27 seconds with Node's default heap:
+`npx oracular tune fit.ndjson --config start.config.json` on 1,370,219 records, 25 seconds with Node's default heap:
 
 ```text
-purchase: outcome order.placed, 93537 installs, 181080 counted episodes, 8628 with the outcome
+purchase: outcome order.placed, 93537 installs, 181055 counted episodes, 8603 with the outcome
 
 | knob          | fitted | was  | from                                                                               |
 | ------------- | ------ | ---- | ---------------------------------------------------------------------------------- |
-| prior         | 0.0477 | 0.01 | 8628 of 181080 episodes ended with the outcome, smoothed (8628+1)/(181080+2)       |
+| prior         | 0.0475 | 0.01 | 8603 of 181055 episodes ended with the outcome, smoothed (8603+1)/(181055+2)       |
 | priorStrength | 4.0    | 10.0 | spread of base rates across 93537 installs (sd 0.10 around 0.05)                   |
-| halfLife      | 1h     | 1d   | lowest Brier score over the grid, 0.0420 (always predicting the base rate: 0.0455) |
+| halfLife      | 1h     | 1d   | lowest Brier score over the grid, 0.0419 (always predicting the base rate: 0.0455) |
 
 | signal      | weight | was  | 90% interval   | lift  | with: hits / misses | without: outcomes / episodes | note                                                                       |
 | ----------- | ------ | ---- | -------------- | ----- | ------------------- | ---------------------------- | -------------------------------------------------------------------------- |
-| item.viewed | –      | 1.00 | -3.76 to -3.75 | -0.94 | 7621 / 171991       | 1007 / 1468                  | in 99.2% of episodes, so it cannot tell them apart; left out of the config |
-| cart.added  | 2.32   | 3.00 | 2.29 to 2.35   | +0.58 | 7321 / 5249         | 1307 / 168510                |                                                                            |
+| item.viewed | –      | 1.00 | -3.75 to -3.75 | -0.94 | 7621 / 171991       | 982 / 1443                   | in 99.2% of episodes, so it cannot tell them apart; left out of the config |
+| cart.added  | 2.32   | 3.00 | 2.29 to 2.35   | +0.58 | 7321 / 5249         | 1282 / 168485                |                                                                            |
 
-Half-life grid, Brier score against "the outcome follows within 1d" (lower is better): 1h 0.0420 *, 6h 0.0422, 1d 0.0426, 3d 0.0432, 7d 0.0439, 14d 0.0445, 30d 0.0451
+Half-life grid, Brier score against "the outcome follows within 1d" (lower is better): 1h 0.0419 *, 6h 0.0421, 1d 0.0425, 3d 0.0432, 7d 0.0439, 14d 0.0445, 30d 0.0450
 ```
 
 Four things to read in it:
 
 - **The prior** is 4.8%, not 1%: that is how many sessions end with an order. **The strength** is 4, not 10: visitors differ a lot in how often they buy, so the population's prior should give way quickly to each visitor's own history.
-- **`item.viewed` is left out.** It appears in 99.2% of sessions. The 1,468 sessions without it are not ordinary sessions but checkout stubs, a cart and an order with no browsing, and 69% of them end with an order. Measured against them, the contrast would make a view a strong signal *against* buying (the interval, −3.76 to −3.75, is confident and wrong). This log is where that rule came from: on the holdout, the contrast weight scores 0.0429, keeping the hand-written weight of 1 scores 0.1032, and leaving the signal out scores 0.0416.
+- **`item.viewed` is left out.** It appears in 99.2% of sessions. The 1,443 sessions without it are not ordinary sessions but checkout stubs, a cart and an order with no browsing, and 68% of them end with an order. Measured against them, the contrast would make a view a strong signal *against* buying (the interval, −3.75 to −3.75, is confident and wrong). This log is where that rule came from: on the holdout, the contrast weight scores 0.0429, keeping the hand-written weight of 1 scores 0.1032, and leaving the signal out scores 0.0416.
 - **`cart.added` is worth 2.32**, with a tight interval: 58% of the sessions with a cart end with an order against 0.8% of those without.
 - **The half-life** moved from a day to an hour, by 1.4% of the Brier score. The gain is real but small, and the grid shows the shape: the score rises steadily from 1h to 30d.
 
 The straw man got the sentence it deserved:
 
 ```text
-This intent does not beat its base rate: the fitted config scores 0.0629 where always predicting the base rate scores 0.0487 (lower is better). No signal is left in the config, so p never leaves the prior, and the prior (the share of episodes that end with cart.added) is not the share of events that cart.added follows within 1h. Drop the intent, or find signals that tell its episodes apart (--all-events measures every other event in the log).
+This intent does not beat its base rate: the fitted config scores 0.0576 where always predicting the base rate scores 0.0487 (lower is better). No signal is left in the config, so p never leaves the prior, and the prior (the share of episodes that end with cart.added) is not the share of events that cart.added follows within 1h. Drop the intent, or find signals that tell its episodes apart (--all-events measures every other event in the log).
 ```
 
 ## Scored on visitors tune never saw
 
-`npx oracular replay holdout.ndjson --config <config>` on 1,381,097 records, 7 seconds each. The `purchase` intent, window one day, base-rate Brier 0.0462:
+`npx oracular replay holdout.ndjson --config <config>` on 1,381,097 records, about ten seconds each. The `purchase` intent, window one day, base-rate Brier 0.0462:
 
 | config | Brier | reveals at 0.3 | precision | recall | reveals at 0.5 | precision |
 | --- | --- | --- | --- | --- | --- | --- |
-| hand-written | 0.0553 | 4157 | 23.4% | 19.3% | 431 | 28.3% |
-| tuned, `item.viewed` at its contrast weight −3.75 | 0.0429 | 292 | 15.1% | 0.7% | 15 | 6.7% |
-| tuned, `item.viewed` kept at the hand-written 1 | 0.1032 | 10871 | 25.9% | 46.1% | 668 | 31.9% |
-| **tuned, as printed** | **0.0416** | **1688** | **29.0%** | **8.9%** | **74** | **25.7%** |
+| hand-written | 0.0553 | 4167 | 23.3% | 19.2% | 433 | 28.4% |
+| tuned, `item.viewed` at its contrast weight −3.75 | 0.0429 | 293 | 15.0% | 0.7% | 15 | 6.7% |
+| tuned, `item.viewed` kept at the hand-written 1 | 0.1032 | 10824 | 25.8% | 45.8% | 663 | 32.4% |
+| **tuned, as printed** | **0.0416** | **1680** | **28.9%** | **8.9%** | **76** | **25.0%** |
 | tuned, per-user learning off | 0.0421 | 1690 | 27.3% | 6.7% | 74 | 21.6% |
 
 The tuned config is 10% better than the base rate, and a reveal at threshold 0.3 is followed by an order within a day 29% of the time, six times the base rate, with a median lead of 11 minutes. The recall is low, and the tuning guide says why: with a prior of 4.8% and strength 4, the gate at 0.3 with the default `z` needs 3.85 pseudo-counts of evidence. One `cart.added` adds 2.32 and puts p at 0.40, but the lower bound at 0.17; the third cart add in a session opens the gate. Most sessions that end with an order have fewer. A shop that wants to act on the first cart add would lower `z`, at a cost in precision; see [Tuning](/guide/tuning#threshold-and-z).
@@ -110,16 +110,16 @@ Every reviewer asks the same question: would a hand-written rule do as well? The
 | policy | reveals | precision | recall | median lead |
 | --- | --- | --- | --- | --- |
 | rule: `cart.added` ≥ 1 in a session | 20329 | 27.6% | 79.2% | 5 min |
-| oracular, threshold 0.3, `z` 0 | 20307 | 27.6% | 79.1% | 5 min |
+| oracular, threshold 0.3, `z` 0 | 20301 | 27.6% | 79.1% | 5 min |
 | rule: `cart.added` ≥ 2 | 4025 | 27.9% | 16.7% | 10 min |
-| oracular, threshold 0.5, `z` 0 | 3063 | 26.2% | 14.3% | 9 min |
+| oracular, threshold 0.5, `z` 0 | 3043 | 26.1% | 14.2% | 9 min |
 | rule: `cart.added` ≥ 3 | 1702 | 27.8% | 7.1% | 12 min |
 | oracular, threshold 0.3, default `z`, learning off | 1690 | 27.3% | 6.7% | 11 min |
-| **oracular, threshold 0.3, default `z`** | **1688** | **29.0%** | **8.9%** | **11 min** |
+| **oracular, threshold 0.3, default `z`** | **1680** | **28.9%** | **8.9%** | **11 min** |
 
 Read the ties first. For a visitor the engine has never seen, the tuned gate *is* the rule: with one signal left in the config, "p and its lower bound clear 0.3" means "the third cart add of the session", and with the confidence gate off it means "the first". The rows pair up, and oracular with learning switched off lands within half a point of the rule on both measures. Nothing else would be honest: a Bayesian gate over one signal and a counter over one signal are the same policy until there is something to learn.
 
-Then read where they part. At the same 1,690 reveals, learning lifts precision from 27.3% to 29.0% and recall from 6.7% to 8.9%, against a rule that cannot move. The gain is small because 87% of these visitors have one session. Where visitors come back, the gap is the point: among the 29,391 holdout visitors with three or more sessions, 4,844 orders:
+Then read where they part. At nearly the same number of reveals, 1,680 against 1,690, learning lifts precision from 27.3% to 28.9% and recall from 6.7% to 8.9%, against a rule that cannot move. The gain is small because 87% of these visitors have one session. Where visitors come back, the gap is the point: among the 29,391 holdout visitors with three or more sessions, 4,844 orders:
 
 | policy, returning visitors only | reveals | precision | recall | median lead |
 | --- | --- | --- | --- | --- |
@@ -128,15 +128,15 @@ Then read where they part. At the same 1,690 reveals, learning lifts precision f
 | stateful rule: ≥ 3, unless 2+ fruitless cart sessions | 621 | 37.7% | 7.9% | 19 min |
 | stateful rule: ≥ 3, unless 1+ fruitless cart session | 508 | 39.2% | 6.4% | 20 min |
 | oracular, threshold 0.3, learning off | 720 | 34.0% | 7.9% | 19 min |
-| **oracular, threshold 0.3, tuned config as printed** | **718** | **38.0%** | **12.0%** | **16 min** |
-| oracular, threshold 0.4 | 240 | 37.9% | 4.5% | 28 min |
-| oracular, threshold 0.5 | 36 | 41.7% | 1.0% | 14 min |
-| **oracular, threshold 0.3, `learning.priorEpisodes` 0.5, `gain` 4** | **945** | **48.9%** | **27.9%** | **5 min** |
-| oracular, threshold 0.4, `priorEpisodes` 0.5, `gain` 4 | 442 | 61.3% | 22.6% | 4 min |
+| **oracular, threshold 0.3, tuned config as printed** | **710** | **37.7%** | **12.0%** | **16 min** |
+| oracular, threshold 0.4 | 236 | 37.3% | 4.5% | 27 min |
+| oracular, threshold 0.5 | 38 | 39.5% | 1.0% | 14 min |
+| **oracular, threshold 0.3, `learning.priorEpisodes` 0.5, `gain` 4** | **801** | **49.9%** | **26.2%** | **6 min** |
+| oracular, threshold 0.4, `priorEpisodes` 0.5, `gain` 4 | 398 | 62.1% | 21.8% | 4 min |
 
-At the same number of reveals as the plain rule, the printed config has 3.3 points more precision and catches 43% more orders, because the engine has learned which of these visitors fill carts and never buy and which buy whenever they do. The visitor from the next section with 39 cart sessions and about nine orders needs more than three cart adds before the engine speaks; the one with 93 hits and one miss needs fewer. A rule treats them alike.
+At nearly the same number of reveals as the plain rule, the printed config has 3 points more precision and catches 43% more orders, because the engine has learned which of these visitors fill carts and never buy and which buy whenever they do. The visitor from the next section with 39 cart sessions and about nine orders needs more than three cart adds before the engine speaks; the one with 93 hits and one miss needs fewer. A rule treats them alike.
 
-The next skeptic asks whether that is Bayesian learning or just having memory, so the table has a stateful rule too: the third cart add, unless this visitor has already had N cart sessions without an order since their last order. Memory does buy precision, and at N = 1 the rule is a point the printed config does not beat: 39.2% against 38.0%, at half the recall. Nor does raising oracular's threshold reach it. With one signal in the config, a higher threshold only demands a fourth or fifth cart add in the session, so the threshold rows trade recall away for nothing: 0.4 is less precise than 0.3 and catches a third of the orders. The threshold is the wrong knob for this question; it moves the gate, not the memory.
+The next skeptic asks whether that is Bayesian learning or just having memory, so the table has a stateful rule too: the third cart add, unless this visitor has already had N cart sessions without an order since their last order. Memory does buy precision, and at N = 1 the rule is a point the printed config does not beat: 39.2% against 37.7%, at half the recall. Nor does raising oracular's threshold reach it. With one signal in the config, a higher threshold only demands a fourth or fifth cart add in the session, so the threshold rows trade recall away for nothing: 0.4 is less precise than 0.3 and catches a third of the orders. The threshold is the wrong knob for this question; it moves the gate, not the memory.
 
 The knob that matches the rule's memory is the learner's own: `learning.priorEpisodes`, how many episodes of a visitor's history it takes to weigh as much as the population's weight, and `learning.gain`, how far that history may move the weight. `tune` does not fit either, so they are searched here, with the grid and the criterion fixed before any run. The first version of this section scored a grid on the holdout's returning visitors; it was redone this way, and the earlier version is in this file's git history.
 
@@ -144,28 +144,28 @@ The grid is `priorEpisodes` 1, 2, 3, 5 and 10 against `gain` 2 and 3, on the tun
 
 | `priorEpisodes` | `gain` | Brier | reveals at 0.3 | precision | recall |
 | --- | --- | --- | --- | --- | --- |
-| **0.5** | **4** | **0.11887** | **871** | **48.2%** | **27.1%** |
-| 1 | 4 | 0.11895 | 831 | 47.1% | 26.4% |
-| 2 | 4 | 0.11903 | 829 | 46.1% | 26.0% |
-| 3 | 4 | 0.11925 | 829 | 45.4% | 25.2% |
-| 1 | 3 | 0.11957 | 760 | 46.6% | 25.1% |
-| 0.5 | 3 | 0.11958 | 753 | 47.3% | 25.2% |
-| 5 | 4 | 0.11964 | 831 | 44.0% | 23.9% |
-| 2 | 3 | 0.11976 | 781 | 45.3% | 24.0% |
-| 3 | 3 | 0.12000 | 791 | 44.0% | 22.8% |
-| 10 | 4 | 0.12030 | 827 | 42.7% | 22.0% |
-| 5 | 3 | 0.12038 | 794 | 42.8% | 21.5% |
-| 1 | 2 | 0.12087 | 663 | 42.7% | 19.6% |
-| 0.5 | 2 | 0.12096 | 658 | 43.8% | 20.3% |
-| 10 | 3 | 0.12099 | 791 | 41.0% | 19.6% |
-| 2 | 2 | 0.12106 | 690 | 41.3% | 18.2% |
-| 3 | 2 | 0.12124 | 703 | 40.1% | 17.9% |
-| 5 | 2 | 0.12155 | 717 | 38.6% | 15.9% |
-| 10 (the printed config) | 2 | 0.12200 | 724 | 36.9% | 13.0% |
+| **0.5** | **4** | **0.11822** | **739** | **47.1%** | **24.6%** |
+| 1 | 4 | 0.11846 | 760 | 46.7% | 24.7% |
+| 2 | 4 | 0.11884 | 774 | 45.6% | 24.7% |
+| 0.5 | 3 | 0.11908 | 704 | 47.3% | 24.1% |
+| 3 | 4 | 0.11916 | 787 | 45.5% | 24.4% |
+| 1 | 3 | 0.11929 | 725 | 46.6% | 24.2% |
+| 5 | 4 | 0.11957 | 804 | 43.7% | 22.8% |
+| 2 | 3 | 0.11965 | 739 | 44.7% | 22.8% |
+| 3 | 3 | 0.11992 | 744 | 43.7% | 22.0% |
+| 10 | 4 | 0.12030 | 805 | 42.0% | 21.4% |
+| 5 | 3 | 0.12032 | 768 | 42.3% | 21.1% |
+| 0.5 | 2 | 0.12060 | 614 | 42.8% | 19.6% |
+| 1 | 2 | 0.12069 | 631 | 41.8% | 19.3% |
+| 2 | 2 | 0.12095 | 656 | 40.5% | 18.0% |
+| 10 | 3 | 0.12100 | 773 | 40.5% | 19.6% |
+| 3 | 2 | 0.12115 | 677 | 40.3% | 17.6% |
+| 5 | 2 | 0.12150 | 704 | 38.6% | 15.7% |
+| 10 (the printed config) | 2 | 0.12200 | 715 | 36.4% | 12.6% |
 
-Brier falls with every step up in `gain`. It falls with every step down in `priorEpisodes` to 1, is no better below that at `gain` 2 and 3, and keeps falling at `gain` 4. The best point, (0.5, 4), is the corner of the extended grid in both directions, so the optimum is not bracketed; the grid was extended once and not again.
+Brier falls with every step up in `gain`, and with every step down in `priorEpisodes` at every `gain`. The best point, (0.5, 4), is the corner of the extended grid in both directions, so the optimum is not bracketed; the grid was extended once and not again.
 
-The winner was scored once on the holdout's returning visitors and once on the whole holdout, and those are the only holdout runs of the learning rows. With `priorEpisodes` 0.5 and `gain` 4 the engine trusts a visitor's history after half an episode of contrast and lets it quadruple a weight. At threshold 0.3 it makes 945 reveals at 48.9% precision and catches 27.9% of the orders, against the best rule's 39.2% and 6.4%, and its Brier score is 0.1119 against 0.1165 for the printed config. Both of its points, at 0.3 and 0.4, beat every rule point in the table on both measures at once. The lead is shorter: 5 minutes at the median, against 17 to 20 for the rule points. On the whole holdout the same setting scores 0.0405 against 0.0416, with 35.5% precision and 17.4% recall at 0.3 against 29.0% and 8.9%. The comparison is tilted toward the rule: its best point, N = 1, was picked by reading the holdout table itself, while oracular's constants were picked on the fit half.
+The winner was scored once on the holdout's returning visitors and once on the whole holdout, and those are the only holdout runs of the learning rows. With `priorEpisodes` 0.5 and `gain` 4 the engine trusts a visitor's history after half an episode of contrast and lets it quadruple a weight. At threshold 0.3 it makes 801 reveals at 49.9% precision and catches 26.2% of the orders, against the best rule's 39.2% and 6.4%, and its Brier score is 0.1120 against 0.1165 for the printed config. Both of its points, at 0.3 and 0.4, beat every rule point in the table on both measures at once. The lead is shorter: 6 minutes at the median, against 17 to 20 for the rule points. On the whole holdout the same setting scores 0.0405 against 0.0416, with 34.8% precision and 16.5% recall at 0.3 against 28.9% and 8.9%. The comparison is tilted toward the rule: its best point, N = 1, was picked by reading the holdout table itself, while oracular's constants were picked on the fit half.
 
 That is also the answer to the clause the next skeptic will add. Skip after N fruitless sessions, fire earlier for past buyers, forgive after an order, weigh recent sessions more: each is a hand-coded piece of the learner, with its own constant to pick and its own bug to find. The table is what you get for writing it down once as math, with two constants, and letting the data set them.
 
@@ -177,9 +177,9 @@ Three other things the rule does not have, none of which shows in this table: a 
 
 | `attribution` | Brier | reveals at 0.3 | precision | recall |
 | --- | --- | --- | --- | --- |
-| off | 0.04164 | 1688 | 29.0% | 8.9% |
-| 1 hour (the half-life) | 0.04164 | 1696 | 29.1% | 9.0% |
-| 1 day | 0.04166 | 1700 | 29.1% | 9.0% |
+| off | 0.04164 | 1680 | 28.9% | 8.9% |
+| 1 hour (the half-life) | 0.04164 | 1686 | 28.9% | 8.9% |
+| 1 day | 0.04165 | 1693 | 28.9% | 8.9% |
 
 Neutral, and for the same reason learning itself is small here: attribution changes what the engine learns about a user across sessions, and most users have one. Among the visitors who came back it does what it says (next section). The feature is for days-scale intents with returning users, and this population is not one. It cost nothing in time.
 
@@ -188,9 +188,9 @@ Neutral, and for the same reason learning itself is small here: attribution chan
 `returning-buyers.mjs` is an app's view of the engine: every holdout visitor with three or more sessions and at least one order, 1,887 of them with 4,844 orders, run through `observe`, `endEpisode`, `predict`, `shouldReveal` and `explain` with the tuned config, with and without attribution, persisting the state through `serialize` and `deserialize` at every episode close. 1.9 seconds for both runs.
 
 - The state round-tripped 15,349 times without a byte of difference.
-- The mean p just before an order is 0.40, against a 4.9% base rate. 12.2% of orders had a reveal at threshold 0.3 within the previous day; 12.3% with attribution.
+- The mean p just before an order is 0.40, against a 4.9% base rate. 12.3% of orders had a reveal at threshold 0.3 within the previous day; 12.2% with attribution.
 - With attribution set to the half-life, 194 visitors end with fractional credit on `cart.added`, and the pooled count moves from 4127 hits and 1363 misses to 4302 and 1111: the cart sessions that preceded an order by less than an hour got their share. No visitor ever had more than two sessions waiting.
-- Per-user learning shows up where it should. One visitor with 1,591 events added to the cart in 39 sessions, about nine of which ended with an order; `cart.added` ends at an effective weight of 1.28 for them, down from 2.32. Another, with 93 hits against one miss, ends at 3.76.
+- Per-user learning shows up where it should. One visitor with 1,591 events added to the cart in 39 sessions, about nine of which ended with an order; `cart.added` ends at an effective weight of 1.21 for them, down from 2.32. Another, with 93 hits against one miss, ends at 3.78.
 
 ## What the data changed in oracular
 
