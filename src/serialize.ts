@@ -38,11 +38,14 @@ export function serialize(state: EngineState): string {
 /**
  * Restores a state saved with {@link serialize}.
  *
- * Always pass the app's current `config`: it is validated and replaces the stored snapshot (the
- * stored one is read without the checks that refuse a config that cannot work, so a state saved
- * before those checks existed still loads),
- * intents and signals no longer declared are dropped (α and β are recomputed from the kept
- * contributions), and newly declared intents start at their prior. States saved by oracular
+ * Always pass the app's current `config`: it is validated and replaces the stored snapshot,
+ * which is then not read at all, so a state written by a newer release, with a config key or
+ * value this one does not know, still loads after a rollback. Intents and signals no longer
+ * declared are dropped (α and β are recomputed from the kept contributions), and newly declared
+ * intents start at their prior. Without a config the stored snapshot runs the engine: it is read
+ * without the checks that refuse a config that cannot work, so a state saved before those checks
+ * existed still loads, but a key the library does not know is an error, since the engine would
+ * otherwise run without an option the state was built under. States saved by oracular
  * 0.1.0 to 0.11.x are upgraded to the current shape on their own, and a state one version newer
  * than {@link STATE_VERSION} (written by the next release, read after a rollback) is read as the
  * current one, ignoring the fields it adds; `migrate` is only for a version this library does
@@ -109,9 +112,9 @@ export function deserialize(json: string, opts: DeserializeOptions = {}): Engine
     }
   }
 
-  const raw = parseState(stored);
-  const config = opts.config === undefined ? raw.config : normalizeConfig(opts.config);
-  return requireComputable(reconcile(raw, config));
+  const config = opts.config === undefined ? undefined : normalizeConfig(opts.config);
+  const raw = parseState(stored, config);
+  return requireComputable(reconcile(raw, raw.config));
 }
 
 // ---- parsing: field types only; keys are reconciled against the config afterwards ----
@@ -241,16 +244,22 @@ function clockState(value: unknown, path: string): ClockState {
   };
 }
 
-function parseState(value: unknown): EngineState {
+/**
+ * The stored state's fields, typed. With `config` given it replaces the stored snapshot, which is
+ * then only required to be an object and not read: a key or value a newer release wrote into it
+ * is no obstacle to a rollback (rule 6 of the stability policy). Without one the snapshot runs the
+ * engine, read without the strict checks, so a config this release would refuse at `createState`
+ * still loads when it is only stored; a key the library does not know stays an error there.
+ */
+function parseState(value: unknown, config: EngineConfig | undefined): EngineState {
   const r = record(value, 'state');
   if (r.version !== STATE_VERSION) {
     throw new RangeError(`oracular: state.version must be ${STATE_VERSION} after migration`);
   }
+  const snapshot = record(r.config, 'state.config');
   return {
     version: STATE_VERSION,
-    // Without the strict checks: a config this release would refuse at createState still loads
-    // when it is only stored, and the config passed in replaces it anyway.
-    config: normalizeConfig(r.config, false),
+    config: config ?? normalizeConfig(snapshot, false),
     intents: mapOwn(r.intents, 'state.intents', intentState),
     episode: episodeState(r.episode, 'state.episode'),
     clock: clockState(r.clock, 'state.clock'),

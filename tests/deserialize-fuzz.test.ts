@@ -298,13 +298,27 @@ describe('deserialize under corrupt, truncated and tampered input', () => {
     }, 30_000);
 
     it(`${file}: the same tampers, loaded with a different current config`, () => {
-      // The stored config is still parsed, then replaced: tamper with the state, not the snapshot.
-      const { failures, tally } = run(
-        replacements(text, (path) => path[0] !== 'config'),
-        { config: changedConfig },
-      );
+      // With a config passed the stored snapshot is replaced and not read, so every tamper with
+      // it loads (only a snapshot that is no longer an object throws); the state is parsed as before.
+      const { failures, tally } = run(replacements(text), { config: changedConfig });
       expect(failures).toStrictEqual([]);
+      expect(tally.threw).toBeGreaterThan(0);
       expect(tally.loaded).toBeGreaterThan(0);
+      // Every tamper under the snapshot that is still JSON loads: the snapshot is not read.
+      const parses = [
+        ...replacements(text, (path) => path[0] === 'config' && path.length > 1),
+      ].filter(([label, t]) => {
+        if (label.startsWith('version ')) return false; // the generator's version cases are not config tampers
+        try {
+          JSON.parse(t);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      const snapshot = run(parses, { config: changedConfig });
+      expect(snapshot.failures).toStrictEqual([]);
+      expect(snapshot.tally).toStrictEqual({ threw: 0, loaded: parses.length });
     }, 30_000);
 
     it(`${file}: random combinations and byte flips`, () => {
