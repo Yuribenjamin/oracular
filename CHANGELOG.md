@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.12.0
+
+### Minor Changes
+
+- [#62](https://github.com/Yuribenjamin/oracular/pull/62) [`0502b78`](https://github.com/Yuribenjamin/oracular/commit/0502b789049cb8ef8643af587ec94b78ce0c39b1) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - **The clock rule: one glitch cannot move the engine.** 0.10.0 made every write trust the latest event's time, so that one event stamped in the future could no longer hold an intent until the clock caught up. A production re-test found the cost: a clock that steps *backwards* (a phone that wakes up in 1970 before it syncs, a seconds-for-milliseconds bug) pulled every anchor back with it, and the next event decayed the whole gap again and closed the session, recording a miss nobody earned. The two cases are one ambiguity: after one backward step the engine cannot tell whether the new stamp or the old anchor is the wrong clock. It now waits one event. The engine keeps a clock, the latest event time it trusts; an event stamped behind it counts now, at the clock's time, and its stamp is held. If the next event is also behind the clock, the clock was corrected: every anchor ahead of the held stamp (evidence, learned counts, reveals, outcomes, the open episode, the episodes waiting under `attribution`) moves back to it, and decay and cooldowns resume from there. If the next event is at or after the clock, the held stamp was a glitch, and nothing moved. Monotone clocks see no difference at all, and every number in the docs is unchanged. What changes: a clock that was ahead heals two events after it is corrected rather than one, and heals every intent at once rather than only the ones later events touch; a reveal stamped ahead of the clock is pinned by the next event on any intent; a single backward stamp wipes nothing and closes nothing.
+  
+  Two costs, stated. The first event after a correction is processed at the uncorrected time, so the intents it touches are decayed to that time and their episodes waiting under `attribution` can settle as misses before the second event moves everything back. And two bad stamps in a row read as a correction, which costs exactly what 0.10 paid on every backward step: the anchors move to the bad time and the next good event decays the gap again. One case no rule covers: a device that boots in 1970 and syncs forward later makes one monotone jump of decades, indistinguishable from a long absence, so hold `observe` until the device clock is trusted.
+  
+  **State version 4.** The clock is stored, so `STATE_VERSION` is 4 and version 3 states (0.6.0 to 0.11.x) migrate on load: the clock is set to the latest time the stored anchors were written at, nothing is held, and no estimate changes. Under rule 5 of the stability policy, 0.11 reads a version 4 state as its own; what it loses is the clock: a backward stamp awaiting confirmation is forgotten, and the next event is trusted the way 0.11 trusted every event.
+
+### Patch Changes
+
+- [#62](https://github.com/Yuribenjamin/oracular/pull/62) [`0502b78`](https://github.com/Yuribenjamin/oracular/commit/0502b789049cb8ef8643af587ec94b78ce0c39b1) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - **Size.** The whole `oracular` entry goes from 7.72 kB to 8.09 kB minified and gzipped with the clock rule and its state version, the quickstart import (`createState`, `observe`, `shouldReveal`, `markRevealed`) from 4.63 kB to 4.85 kB. That crosses the 7.9 kB ceiling the stability page set in 0.8, so the ceiling moves as it did then, to the shipped size plus about 10%: 8.9 kB, with the quickstart budget at 5 kB.
+
+- [#62](https://github.com/Yuribenjamin/oracular/pull/62) [`0502b78`](https://github.com/Yuribenjamin/oracular/commit/0502b789049cb8ef8643af587ec94b78ce0c39b1) Thanks [@Yuribenjamin](https://github.com/Yuribenjamin)! - **Presets are read-only in the types too.** `presets` and `presetSources` are `DeepReadonly<...>`, matching the frozen objects: assigning into a preset is a type error, spreading one is unchanged.
+
 ## 0.11.0
 
 ### Minor Changes
