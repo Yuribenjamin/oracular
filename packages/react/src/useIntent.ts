@@ -27,7 +27,9 @@ import { createIntentStore, type IntentStore, type IntentStoreOptions } from './
 /**
  * What `useIntent` returns. Reads go to the store's current state, not to the rendered snapshot.
  * The functions keep their identity across renders, so a memo that should follow the state must
- * depend on `state`, not on them.
+ * depend on `state`, not on them. In a server-rendered tree, render from `state` (or
+ * `usePrediction`), which hydrates with what the server rendered; the functions read the state as
+ * it is now, which may already be the loaded one.
  */
 export interface UseIntent {
   /** The rendered snapshot: the state as of the last change, for display. */
@@ -88,7 +90,10 @@ function useStoreLifecycle(store: IntentStore): void {
  *
  * On mount the hook loads the persisted state (operations made before the load resolves are
  * replayed onto it) and flushes the pending save on `pagehide`, when the page becomes hidden,
- * and on unmount. It never ends an episode on those events: a short switch away is not a session
+ * and on unmount. Under server rendering, `state` hydrates with the fresh state the server
+ * rendered and then shows the loaded one, so a store loaded before hydration is safe; the
+ * function reads below go to the current state and belong in handlers, not in server-rendered
+ * markup. It never ends an episode on those events: a short switch away is not a session
  * boundary. Set `episodeTimeout` in the config and idle gaps close episodes on their own. On
  * React Native neither page event exists; add `flushOnBackground(store, AppState)`.
  *
@@ -113,7 +118,9 @@ export function useIntent(
   if (!isStore(source) && own.current === null) own.current = createIntentStore(source, opts);
   const store = isStore(source) ? source : (own.current as IntentStore);
 
-  const state = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+  // The server snapshot is the fresh state: what the server rendered, and what a client store
+  // loaded before hydration must hydrate with before it shows the loaded state.
+  const state = useSyncExternalStore(store.subscribe, store.getState, store.getInitialState);
   useStoreLifecycle(store);
 
   const api = useMemo(
