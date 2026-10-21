@@ -1,5 +1,0 @@
----
-"oracular": minor
----
-
-**The outcome record keeps the estimate the reset wipes.** `createRecord` takes the state after `observe`, so on the record of an intent's own outcome event `p` is what the engine decides right after it, with `resetOnOutcome` the prior (0.150 where it had been 0.506 one event earlier). Replay recomputes everything from the events and never reads it, but people read the log, and the number that matters most on an outcome line was gone. `createRecord(state, event, options, previous)` takes the state from before the event as an optional fourth argument; the decision of each intent whose outcome the event is then gains `before`, its `p` and `lower` at `event.at` on that state. Every other record is byte for byte what it was. `RECORD_VERSION` stays 1: a new optional field does not change it, readers ignore fields they do not know, and `replay` and `tune` never read decisions, so a log with `before` replays on every release that reads version 1. Found by the second production integration.
