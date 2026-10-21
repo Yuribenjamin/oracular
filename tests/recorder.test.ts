@@ -156,6 +156,42 @@ describe('createRecord', () => {
     expect(fresh.decisions.upgrade!.top).toStrictEqual([]);
   });
 
+  it('keeps the estimate the reset wipes on the outcome record, given the state before the event', () => {
+    let s = createState(config);
+    for (const name of ['pricing.viewed', 'limit.hit', 'pricing.viewed']) {
+      s = observe(s, { name, at: T });
+    }
+    const event = { name: 'upgrade.completed', at: T + MINUTE };
+    const previous = s;
+    s = observe(s, event);
+    const was = evaluate(previous, 'upgrade', event.at).prediction;
+    expect(was.p).toBeGreaterThan(0.3);
+    const record = createRecord(s, event, recording, previous);
+    assertPlainJson(record, 'record');
+    // After the outcome, p is the prior; before is what the outcome confirmed.
+    expect(record.decisions.upgrade!.p).toBeCloseTo(0.05, 12);
+    expect(record.decisions.upgrade!.before).toStrictEqual({ p: was.p, lower: was.lower });
+    // Only the intent whose outcome this is; only on the outcome's record; only when asked.
+    expect(record.decisions.churn!.before).toBeUndefined();
+    expect(createRecord(s, event, recording).decisions.upgrade!.before).toBeUndefined();
+    const signal = { name: 'export.clicked', at: T + 2 * MINUTE };
+    const next = observe(s, signal);
+    for (const d of Object.values(createRecord(next, signal, recording, s).decisions)) {
+      expect(d.before).toBeUndefined();
+    }
+    // An intent the previous state did not declare gets no before; a previous that is not a
+    // state is refused.
+    const narrow = { ...config, intents: { churn: config.intents.churn! } };
+    const previousWithoutUpgrade = createState(narrow);
+    expect(
+      createRecord(s, event, recording, previousWithoutUpgrade).decisions.upgrade!.before,
+    ).toBeUndefined();
+    expect(() => createRecord(s, event, recording, {} as EngineState)).toThrow(TypeError);
+    expect(() => createRecord(s, event, recording, null as unknown as EngineState)).toThrow(
+      TypeError,
+    );
+  });
+
   it('records live mode as given', () => {
     const live = createRecord(
       createState(config),
