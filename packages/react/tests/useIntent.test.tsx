@@ -319,6 +319,35 @@ describe('useIntent', () => {
     expect(stores).toHaveLength(1); // the same store across renders and configs
   });
 
+  it('releases a component-owned store on unmount while surviving StrictMode reconnection', async () => {
+    const { adapter, writes } = fakeAdapter();
+    let owned!: IntentStore;
+    function Own() {
+      const { store } = useIntent(thin, { persist: adapter, now: () => T });
+      owned = store;
+      return null;
+    }
+    const view = mount(
+      <StrictMode>
+        <Own />
+      </StrictMode>,
+    );
+    await view.settle();
+    expect(owned.getStatus()).toBe('loaded');
+    act(() => {
+      owned.track('s');
+    });
+    view.unmount();
+    await microtasks(30);
+    expect(owned.getStatus()).toBe('disposed');
+    expect(writes.at(-1)).toBe(serialize(owned.getState()));
+    const next = createIntentStore(thin, { persist: adapter, now: () => T });
+    await next.load();
+    expect(next.getStatus()).toBe('loaded');
+    expect(next.getState()).toStrictEqual(owned.getState());
+    await next.dispose();
+  });
+
   it('the functions it returns keep their identity across renders', () => {
     const store = createIntentStore(thin, { now: () => T });
     const tracks: unknown[] = [];

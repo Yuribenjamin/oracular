@@ -14,7 +14,8 @@ import {
   shouldReveal,
 } from 'oracular';
 import { DEV } from './env';
-import type { PersistAdapter } from './persist';
+import { acquirePersistence } from './ownership';
+import type { PersistAdapter, PersistRelease } from './persist';
 
 /** Which step of persistence failed: the read, the parse of what was read, a write, or a clear. */
 export type PersistPhase = 'load' | 'parse' | 'save' | 'clear';
@@ -30,7 +31,7 @@ export type PersistPhase = 'load' | 'parse' | 'save' | 'clear';
 export type StoreStatus = 'memory' | 'idle' | 'loading' | 'loaded' | 'failed' | 'disposed';
 
 export interface IntentStoreOptions {
-  /** Where the state is loaded from and saved to. Without it the store lives in memory. */
+  /** Where state lives. Ownership is acquired before I/O and released by dispose. Without it the store lives in memory. */
   persist?: PersistAdapter;
   /** The clock that stamps events and reads. Default `Date.now`; inject one in tests. */
   now?: () => number;
@@ -75,7 +76,7 @@ export interface IntentStore {
   now(): number;
   /** `observe` with the event stamped by the store's clock. */
   track(name: string, props?: Record<string, unknown>): EngineState;
-  /** `observe` with an event you stamped yourself. */
+  /** `observe` with an event you stamped yourself; its values are captured for delayed replay. */
   observe(event: IntentEvent): EngineState;
   /** `endEpisode` at `at`, default now. Call it on sign-out, never on a background switch. */
   endEpisode(at?: number): EngineState;
@@ -116,6 +117,7 @@ export interface IntentStore {
    * Stops persistence for good: cancels the pending save and ignores later reads and writes.
    * Resolves once no write is in flight, so `await store.dispose()` before wiping the storage
    * yourself is safe. It does not write first; call `flush` before it to keep the last state.
+   * Releases persistence ownership after writes finish, so another store may load the key.
    * In-memory operations and subscriptions keep working.
    */
   dispose(): Promise<void>;
@@ -169,6 +171,27 @@ export function createIntentStore(
   let writing: Promise<void> | null = null;
   /** Bumped by `clear` and `dispose`; a read or write from an earlier generation is discarded. */
   let generation = 0;
+  let release: PersistRelease | null = null;
+  let acquiring: Promise<void> | null = null;
+  let disposing: Promise<void> | null = null;
+  const acquire = (): void | Promise<void> => {
+    if (persist === undefined || release !== null) return;
+    if (acquiring !== null) return acquiring;
+    const claim = acquirePersistence(persist);
+    if (typeof claim === 'function') {
+      release = claim;
+      return;
+    }
+    const done = claim
+      .then((unlock) => {
+        release = unlock;
+      })
+      .finally(() => {
+        if (acquiring === done) acquiring = null;
+      });
+    acquiring = done;
+    return done;
+  };
 
   const notify = (): void => {
     let failure: { error: unknown } | null = null;
@@ -284,6 +307,9 @@ export function createIntentStore(
     const attempt = (async (): Promise<void> => {
       let json: string | null | undefined;
       try {
+        const ownership = acquire();
+        if (ownership !== undefined) await ownership;
+        if (gen !== generation) return;
         json = await persist.load();
       } catch (error) {
         if (gen === generation) status = 'failed';
@@ -345,7 +371,7 @@ export function createIntentStore(
     }
     const fresh = createState(config);
     state = fresh;
-    queue = null;
+    queue = persist === undefined ? null : [];
     lastSaved = null;
     badJson = null;
     status = 'loaded';
@@ -357,6 +383,9 @@ export function createIntentStore(
         .then(async () => {
           if (gen !== generation) return;
           try {
+            await acquire();
+            if (gen !== generation) return;
+            queue = null;
             if (adapter.remove !== undefined) {
               await adapter.remove();
               // The key is empty, which holds what the fresh state holds.
@@ -367,6 +396,7 @@ export function createIntentStore(
               if (gen === generation) lastSaved = json;
             }
           } catch (error) {
+            if (gen === generation && release === null) status = 'failed';
             onError(error, 'clear');
           }
         })
@@ -390,7 +420,12 @@ export function createIntentStore(
       }
       queue = null;
     }
-    return writing ?? Promise.resolve();
+    disposing ??= Promise.all([writing, acquiring?.catch(() => {})]).then(async () => {
+      const unlock = release;
+      release = null;
+      await unlock?.();
+    });
+    return disposing;
   };
 
   const store: IntentStore = {
@@ -411,7 +446,18 @@ export function createIntentStore(
         props === undefined ? { name, at: now() } : { name, at: now(), props };
       return apply((s) => observe(s, event));
     },
-    observe: (event) => apply((s) => observe(s, event)),
+    observe: (event) => {
+      // Capture the accepted values before loading can replay the operation.
+      const snapshot: IntentEvent =
+        event !== null && typeof event === 'object' && !Array.isArray(event)
+          ? {
+              name: event.name,
+              at: event.at,
+              ...(event.props === undefined ? {} : { props: event.props }),
+            }
+          : event;
+      return apply((s) => observe(s, snapshot));
+    },
     endEpisode: (at = now()) => apply((s) => endEpisodeAt(s, at)),
     markRevealed: (intent, at = now()) => apply((s) => markRevealedAt(s, intent, at)),
     reveal: (intent, revealOpts) => {

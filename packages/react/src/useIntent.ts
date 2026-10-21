@@ -58,13 +58,22 @@ function isStore(source: IntentStore | EngineConfig): source is IntentStore {
  * safe to run more than once on one store: a load is shared, and a flush with nothing new writes
  * nothing.
  */
-function useStoreLifecycle(store: IntentStore): void {
+function useStoreLifecycle(store: IntentStore, owned = false): void {
+  const active = useRef<IntentStore | null>(null);
   useEffect(() => {
+    active.current = store;
+    const cleanup = (): void => {
+      active.current = null;
+      const saved = store.flush();
+      if (owned)
+        void saved.finally(() => {
+          // StrictMode reconnects the same store before the flush settles.
+          if (active.current !== store) return store.dispose();
+        });
+    };
     void store.load();
     if (typeof window === 'undefined' || typeof document === 'undefined') {
-      return () => {
-        void store.flush();
-      };
+      return cleanup;
     }
     const flush = (): void => {
       void store.flush();
@@ -77,9 +86,9 @@ function useStoreLifecycle(store: IntentStore): void {
     return () => {
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', hidden);
-      flush();
+      cleanup();
     };
-  }, [store]);
+  }, [store, owned]);
 }
 
 /**
@@ -121,7 +130,7 @@ export function useIntent(
   // The server snapshot is the fresh state: what the server rendered, and what a client store
   // loaded before hydration must hydrate with before it shows the loaded state.
   const state = useSyncExternalStore(store.subscribe, store.getState, store.getInitialState);
-  useStoreLifecycle(store);
+  useStoreLifecycle(store, store === own.current);
 
   const api = useMemo(
     () => ({

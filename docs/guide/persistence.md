@@ -75,3 +75,9 @@ Learning is per user. Give each account its own state and never share one across
 ## Reference
 
 - [`serialize`](/api/functions/serialize), [`deserialize`](/api/functions/deserialize), [`DeserializeOptions`](/api/interfaces/DeserializeOptions), [`Migrate`](/api/type-aliases/Migrate), [`EngineState`](/api/interfaces/EngineState).
+
+## Concurrent stores
+
+Persisted states are whole snapshots. Share one store for one history instead of writing snapshots from independent stores into the same key. The `@oracular/react` store acquires exclusive ownership before storage I/O and releases it after `dispose()` finishes in-flight writes. A competing store reports a load/clear error and keeps working in memory; retry its `load()` after ownership is released.
+
+AsyncStorage and MMKV adapters coordinate by storage instance and key within one JavaScript runtime. Cross-runtime native storage requires a custom adapter's `acquire()` backed by a platform lock. Custom adapters without that hook coordinate only when stores share the adapter object. The browser localStorage adapter uses Web Locks across tabs and performs no I/O if Web Locks are unavailable. See the [frameworks guide](./frameworks) for lifecycle handling.
