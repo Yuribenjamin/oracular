@@ -112,6 +112,57 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
 }
 
 /**
+ * Brings restored state up to `at` without recording an event or extending a session. Closes an
+ * idle episode at its timeout, settles expired attribution windows, and decays every intent's
+ * evidence and learned counts to `at`. Episodes and attribution windows still in progress stay
+ * open. Advances the engine clock without confirming a backwards clock correction; an earlier
+ * `at` holds at the current clock. Without `episodeTimeout`, the open episode still needs an
+ * explicit `endEpisode`.
+ *
+ * Call after loading state and before making startup decisions. The input is not mutated and
+ * time is supplied by the app, so this operation is deterministic. Returns the same state when
+ * nothing changes; repeated calls at the same time never count an episode twice.
+ *
+ * @param state - The current state from `createState` or `deserialize`.
+ * @param at - The time to settle at, in the same unit as the configured durations.
+ * @throws `TypeError` when `state` is not an engine state or `at` is not finite.
+ * @example
+ * ```ts
+ * const state = settleState(deserialize(saved, { config }), Date.now());
+ * ```
+ */
+export function settleState(state: EngineState, at: number): EngineState {
+  let currentState = requireState(state);
+  const requestedAt = expectTimestamp(at, 'at');
+  // Settlement advances time without supplying an event that could confirm a clock correction.
+  const settledAt = Math.max(requestedAt, currentState.clock.at ?? requestedAt);
+  if (currentState.clock.at !== settledAt) {
+    currentState = { ...currentState, clock: { ...currentState.clock, at: settledAt } };
+  }
+  const episodeExpiredAt = timedOutAt(
+    currentState.episode,
+    currentState.config.episodeTimeout,
+    settledAt,
+  );
+  if (episodeExpiredAt !== null) {
+    currentState = closeEpisode(currentState, episodeExpiredAt);
+  }
+
+  const learning = resolveLearning(currentState.config);
+  const intents: Record<string, IntentState> = { ...currentState.intents };
+  let changed = false;
+  for (const [intentName, intent] of Object.entries(currentState.config.intents)) {
+    const previousIntent = getIntentState(currentState, intentName, intent);
+    const decayedIntent = decayIntent(previousIntent, intent, settledAt);
+    const settledIntent = settlePending(decayedIntent, intent, learning, settledAt);
+    intents[intentName] = settledIntent;
+    if (settledIntent !== previousIntent) changed = true;
+  }
+
+  return changed ? { ...currentState, intents } : currentState;
+}
+
+/**
  * Resolves an event's stamp against the clock and says when the event counts. At or after the
  * clock (or the first event): the clock moves to the stamp and every anchor ahead of it is pinned
  * to it. Behind the clock with nothing held: the event counts now, at the clock's time, and the

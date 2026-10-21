@@ -17,11 +17,25 @@ Persist after every `observe` if writes are cheap (localStorage, an in-memory st
 ## Load: pass your current config
 
 ```ts
-import { createState, deserialize } from 'oracular';
+import { createState, deserialize, settleState } from 'oracular';
 
 const saved = localStorage.getItem('oracular');
-let state = saved ? deserialize(saved, { config }) : createState(config);
+let state = saved
+  ? settleState(deserialize(saved, { config }), Date.now())
+  : createState(config);
 ```
+
+`settleState(state, at)` brings restored state up to startup time before the first prediction. It
+closes an expired session at its original timeout, records its unresolved outcomes as misses (or
+holds them for attribution), settles attribution windows that have expired, and decays evidence
+and learned counts to `at`. Sessions and attribution windows still within their time limits stay
+open. It records no event and does not extend the session. Without `episodeTimeout`, sessions
+still need an explicit `endEpisode`.
+
+Save the settled state so the next startup resumes from it. Repeated settlement never counts the
+same session twice. `deserialize` alone remains a lossless restore; time advances only when the
+app supplies it. The `@oracular/react` store settles automatically after replaying events queued
+during loading, then saves any changes before `load()` finishes.
 
 `createState` stores a snapshot of the config inside the state, so a saved state remembers the weights it was built with. **That snapshot is for migrations, not for running.** When you ship a new version with different weights, a new signal or a removed intent, the saved state must follow your code, so pass the config your app ships *now* to [`deserialize`](/api/functions/deserialize). It then:
 

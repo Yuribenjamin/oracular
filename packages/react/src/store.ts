@@ -11,6 +11,7 @@ import {
   observe,
   type RevealOptions,
   serialize,
+  settleState,
   shouldReveal,
 } from 'oracular';
 import { DEV } from './env';
@@ -88,6 +89,8 @@ export interface IntentStore {
    */
   reveal(intent: string, opts?: RevealOptions): boolean;
   /**
+   * Restored state is settled to now after queued operations are replayed, before notifying
+   * subscribers. Any changes are saved before loading finishes.
    * Reads the saved state through the adapter. Every caller gets the same promise while the read
    * is in flight, and a store that has loaded does not read again. Operations made before the
    * read settles are applied to the state in memory at once and replayed onto the loaded state
@@ -320,13 +323,19 @@ export function createIntentStore(
       }
       badJson = null;
       for (const op of queue ?? []) next = op(next);
+      next = settleState(next, now());
       state = next;
       status = 'loaded';
       queue = null;
       // Storage still holds `json`: nothing could write while the read was in flight.
-      if (serialize(next) === json) lastSaved = json;
-      else schedule();
-      notify();
+      const unchanged = serialize(next) === json;
+      if (unchanged) lastSaved = json;
+      const saved = unchanged ? Promise.resolve() : flush();
+      try {
+        notify();
+      } finally {
+        await saved;
+      }
     })();
     const done: Promise<void> = attempt.finally(() => {
       if (loading === done) loading = null;

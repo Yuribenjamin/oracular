@@ -13,6 +13,7 @@ import {
   observe,
   predict,
   serialize,
+  settleState,
   shouldReveal,
   validateConfig,
 } from 'oracular';
@@ -50,6 +51,14 @@ describe('purity', () => {
     const s1 = pure(observe, s0, { name: 'pricing.viewed', at: T });
     pure(endEpisode, s1, T + MINUTE);
     pure(endEpisode, s0, T);
+  });
+
+  it('settleState', () => {
+    const config = upgradeConfig({ episodeTimeout: MINUTE, learning: { halfLife: MINUTE } });
+    const initial = pure(createState, config);
+    const active = pure(observe, initial, { name: 'pricing.viewed', at: T });
+    pure(settleState, active, T + 3 * MINUTE);
+    pure(settleState, active, T);
   });
 
   it('predict, shouldReveal and markRevealed', () => {

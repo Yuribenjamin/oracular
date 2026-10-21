@@ -21,6 +21,7 @@ it('exports exactly the public surface', () => {
       'observe',
       'predict',
       'serialize',
+      'settleState',
       'shouldReveal',
       'validateConfig',
     ].sort(),
