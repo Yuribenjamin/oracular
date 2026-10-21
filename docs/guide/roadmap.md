@@ -65,6 +65,7 @@ Asked for by a production user with a repro for each; none has an answer yet bey
 
 - **A population benchmark against a logistic model on public clickstream data.** A model trained on data oracular refuses to collect will win on precision. The meaningful comparison is against the rules a team would otherwise hand-write, on their own shadow log, which `replay` provides.
 - **Performance benchmarks.** `observe()` runs in microseconds. Bundle size is the number that matters, and `size-limit` guards it.
+- **Six association measures for learning.** 0.9 shipped seven values of `learning.lift`; a sweep of all of them on the clickstream case study found none that beats the default on either split. The six are deprecated and go in 1.0; the option stays so that one can come back as a minor when an integration shows it should.
 - **Anything that phones home**, including opt-in telemetry about the engine itself.
 
 ## How this changes
