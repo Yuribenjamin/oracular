@@ -30,7 +30,7 @@ Whatever you choose. `at` is a timestamp and every duration (`halfLife`, `cooldo
 
 ## What if the clock goes backwards?
 
-Nothing breaks. Events with an `at` earlier than the last update are applied without decay, and the anchor moves to the new time so decay resumes from there; no value becomes negative or NaN, and the test suite replays thousands of random sequences with backwards jumps to make sure. The same rule covers a clock that was ahead: one event stamped in the future cannot hold an intent, because the next event at the right time re-anchors it, and a reveal or outcome stamped ahead of the clock counts as having happened now. See [Decay → Clocks](/guide/concepts/decay#clocks).
+Nothing breaks. An event stamped before the latest one is applied without decay, counting now at the engine's clock, and its stamp is held: a second event behind the clock confirms a correction and moves every anchor back to the first held stamp, while an event at or after the clock makes the held one a glitch that changed nothing. So a clock that was ahead heals two events after it is corrected, and a phone that woke up in 1970 before syncing loses no evidence and closes no session. No value becomes negative or NaN, and the test suite replays thousands of random sequences with backwards jumps to make sure. A reveal or outcome stamped ahead of the clock counts as having happened now. What no rule covers is a device that boots in 1970 and syncs forward later: one monotone jump of decades, indistinguishable from a long absence, so hold `observe` until the device clock is trusted. See [Decay → Clocks](/guide/concepts/decay#clocks).
 
 ## Can I change the config after shipping?
 

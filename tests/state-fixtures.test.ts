@@ -72,16 +72,42 @@ function expectSameJson(actual: unknown, expected: unknown, path: string): void 
  * Set while a deliberate behaviour change is unreleased: what moved since the newest fixture, in
  * one line, matching its changeset. Back to null once the release that ships it has its fixture.
  */
-const UNRELEASED_CHANGE: string | null = null;
+const UNRELEASED_CHANGE: string | null =
+  'state version 4 adds the engine clock (changeset engine-clock)';
+
+/** The latest time an anchor `observe` writes was written at: what an upgraded state's clock is set to. Reveals are left out. */
+function latestAnchor(raw: Stored): number | null {
+  let latest: number | null = null;
+  const see = (value: unknown): void => {
+    if (typeof value === 'number' && (latest === null || value > latest)) latest = value;
+  };
+  see(raw.episode.startedAt);
+  see(raw.episode.lastEventAt);
+  for (const is of Object.values(raw.intents)) {
+    see(is.updatedAt);
+    see(is.lastOutcomeAt);
+  }
+  return latest;
+}
 
 describe('states saved by every published version', () => {
   it('are what the current build writes for the same scenario, at this state version, unless a change is on its way', () => {
     // No estimate, timestamp or key has moved since the newest release that wrote this version,
     // unless a deliberate change is waiting for its release and fixture.
-    const newest = [...VERSIONS].reverse().find((v) => WRITTEN_VERSION[v] === STATE_VERSION)!;
+    const newest = [...VERSIONS].reverse().find((v) => WRITTEN_VERSION[v] === STATE_VERSION);
     const current = JSON.parse(
       runScenario({ createState, observe, endEpisode, markRevealed, serialize }),
     );
+    if (newest === undefined) {
+      // No published release writes this state version yet: the bump is unreleased, and its
+      // fixture comes with the release that ships it.
+      expect(
+        UNRELEASED_CHANGE,
+        'a state version no release has written must name its change',
+      ).not.toBeNull();
+      assertInvariants(deserialize(JSON.stringify(current)));
+      return;
+    }
     const stored = JSON.parse(read(newest));
     if (UNRELEASED_CHANGE === null) {
       expectSameJson(current, stored, newest);
@@ -112,12 +138,16 @@ describe('states saved by every published version', () => {
         const s = deserialize(text, { migrate });
         assertInvariants(s);
         expect(s.version).toBe(STATE_VERSION);
-        expect(STATE_VERSION).toBe(3);
+        expect(STATE_VERSION).toBe(4);
         // The library knows every version it ever wrote; the app's migrate is for versions it
         // does not know.
         expect(migrate).not.toHaveBeenCalled();
         // Version 3 holds the episodes waiting under `attribution`; no earlier release had any.
         for (const is of Object.values(s.intents)) expect(is.pending).toStrictEqual([]);
+        // Version 4 holds the clock: an upgraded state trusts the latest time its anchors were
+        // written at, and holds nothing.
+        expect(s.clock).toStrictEqual({ at: latestAnchor(raw), behindAt: null });
+        expect(s.clock.at).not.toBeNull();
         for (const [name, record] of Object.entries(raw.episode.intents)) {
           // Version 2 counts occurrences per episode. Version 1 only knew which signals were
           // seen, so each counts once; a version 2 state keeps the counts it stored.

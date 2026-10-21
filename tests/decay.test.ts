@@ -84,34 +84,37 @@ describe('decay', () => {
     expect(pOf(later)).toBeLessThan(prior);
   });
 
-  it('a clock that runs backwards neither throws nor decays: the evidence is held and the anchor moves to the new time', () => {
+  it('an event stamped behind the clock neither throws nor decays: the evidence is held, the anchor stays, and the event counts now', () => {
     let state = withEvidence();
     state = observe(state, { name: 'export.clicked', at: T - HOUR });
     assertInvariants(state);
     const is = state.intents.upgrade!;
-    expect(is.updatedAt).toBe(T - HOUR);
+    expect(is.updatedAt).toBe(T);
+    expect(state.clock).toStrictEqual({ at: T, behindAt: T - HOUR });
     expect(is.contributions['pricing.viewed']).toStrictEqual({ alpha: 3, beta: 0 });
     expect(is.contributions['export.clicked']).toStrictEqual({ alpha: 1, beta: 0 });
-    // Decay resumes from the new anchor: an hour on, the evidence has decayed by one hour.
-    const later = decayIntent(is, intent, T);
+    // Decay resumes from the anchor: an hour on, the evidence has decayed by one hour.
+    const later = decayIntent(is, intent, T + HOUR);
     expect(later.contributions['pricing.viewed']!.alpha).toBeCloseTo(
       3 * 2 ** (-HOUR / intent.halfLife),
       12,
     );
     // A read before the anchor shows the held evidence, undecayed.
-    expect(predict(state, 'upgrade', T - 2 * HOUR).p).toBe(predict(state, 'upgrade', T - HOUR).p);
+    expect(predict(state, 'upgrade', T - 2 * HOUR).p).toBe(predict(state, 'upgrade', T).p);
   });
 
-  it('one event stamped in the future cannot hold the intent: the next event re-anchors it and decay resumes', () => {
+  it('one event stamped in the future cannot hold the intent: the two events that follow it re-anchor it and decay resumes', () => {
     let s = withEvidence();
     s = observe(s, { name: 'export.clicked', at: T + 4 * 365 * DAY }); // a clock years ahead
-    // Held until the next write: a read at the right time sees what the anchor sees, undecayed.
+    // Held until the correction is confirmed: a read at the right time sees what the anchor sees.
     expect(predict(s, 'upgrade', T + MINUTE).p).toBe(predict(s, 'upgrade', T + 4 * 365 * DAY).p);
-    s = observe(s, { name: 'export.clicked', at: T + MINUTE }); // the clock corrected
+    s = observe(s, { name: 'export.clicked', at: T + MINUTE }); // the clock corrected: held
+    expect(s.intents.upgrade!.updatedAt).toBe(T + 4 * 365 * DAY);
+    s = observe(s, { name: 'export.clicked', at: T + 2 * MINUTE }); // a second event confirms it
     assertInvariants(s);
-    expect(s.intents.upgrade!.updatedAt).toBe(T + MINUTE);
-    const soon = predict(s, 'upgrade', T + MINUTE).p;
-    const later = predict(s, 'upgrade', T + MINUTE + 60 * DAY).p;
+    expect(s.intents.upgrade!.updatedAt).toBe(T + 2 * MINUTE);
+    const soon = predict(s, 'upgrade', T + 2 * MINUTE).p;
+    const later = predict(s, 'upgrade', T + 2 * MINUTE + 60 * DAY).p;
     expect(later).toBeLessThan(soon);
     expect(Math.abs(later - prior)).toBeLessThan(0.01); // eight half-lives on: back at the prior
   });

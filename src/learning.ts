@@ -6,8 +6,8 @@ import { getOwn, mapRecord } from './util';
 const NONE: SignalRecord = { hits: 0, misses: 0 };
 
 /**
- * Decays learned counts toward 0 by 2^(−Δt / learning.halfLife) and moves the anchor to `at`,
- * even when `at` is earlier (as `decayIntent` does for the evidence).
+ * Decays learned counts toward 0 by 2^(−Δt / learning.halfLife) and moves the anchor to `at`; an
+ * `at` before the anchor holds the counts and leaves the anchor, as `decayIntent` does.
  */
 export function decayLearned(
   state: IntentState,
@@ -15,8 +15,9 @@ export function decayLearned(
   at: number,
 ): IntentState {
   if (state.learnedAt === null) return { ...state, learnedAt: at };
+  if (!(at > state.learnedAt)) return state;
   const d = learning.halfLife === null ? 1 : decayFactor(at - state.learnedAt, learning.halfLife);
-  if (d === 1) return at === state.learnedAt ? state : { ...state, learnedAt: at };
+  if (d === 1) return { ...state, learnedAt: at };
   return {
     ...state,
     learnedAt: at,

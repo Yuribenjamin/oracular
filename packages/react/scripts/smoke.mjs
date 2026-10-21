@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createIntentStore, useIntent } from '@oracular/react';
+import { STATE_VERSION } from 'oracular';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 
@@ -30,7 +31,7 @@ function App() {
   return createElement('p', null, `${predict('upgrade').p.toFixed(3)} ${state.version}`);
 }
 const html = renderToString(createElement(App));
-assert.match(html, /0\.\d{3} 3/);
+assert.match(html, new RegExp(`0\\.\\d{3} ${STATE_VERSION}`));
 
 const dts = readFileSync(new URL('../dist/index.d.ts', import.meta.url), 'utf8');
 assert.match(dts, /from 'oracular'/);

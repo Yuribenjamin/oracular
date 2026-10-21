@@ -173,14 +173,18 @@ describe('observe', () => {
     expect(s.intents.upgrade!.episodes).toStrictEqual({ hits: 1, misses: 0 });
   });
 
-  it('an event stamped before the last one moves the episode clock back, and the idle gap is measured from there', () => {
+  it('an event stamped before the last one counts now; a second one behind the clock moves the episode clock back, and the idle gap is measured from there', () => {
     let s = observe(createState(sessions), { name: 'pricing.viewed', at: T });
     s = observe(s, { name: 'limit.hit', at: T + 20 * MINUTE }); // a clock that was ahead
-    s = observe(s, { name: 'export.clicked', at: T + MINUTE }); // corrected: no gap to time out
-    expect(s.episode).toMatchObject({ startedAt: T, lastEventAt: T + MINUTE });
-    s = observe(s, { name: 'pricing.viewed', at: T + 32 * MINUTE }); // 31 idle minutes: a new episode
+    s = observe(s, { name: 'export.clicked', at: T + MINUTE }); // behind the clock: counts now, held
+    expect(s.episode).toMatchObject({ startedAt: T, lastEventAt: T + 20 * MINUTE });
+    expect(s.clock).toStrictEqual({ at: T + 20 * MINUTE, behindAt: T + MINUTE });
+    s = observe(s, { name: 'export.clicked', at: T + 2 * MINUTE }); // a second confirms the correction
+    expect(s.episode).toMatchObject({ startedAt: T, lastEventAt: T + 2 * MINUTE });
+    expect(s.clock).toStrictEqual({ at: T + 2 * MINUTE, behindAt: null });
+    s = observe(s, { name: 'pricing.viewed', at: T + 33 * MINUTE }); // 31 idle minutes: a new episode
     assertInvariants(s);
-    expect(s.episode.startedAt).toBe(T + 32 * MINUTE);
+    expect(s.episode.startedAt).toBe(T + 33 * MINUTE);
     expect(s.intents.upgrade!.episodes).toStrictEqual({ hits: 0, misses: 1 });
   });
 

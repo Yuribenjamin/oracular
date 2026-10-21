@@ -11,6 +11,7 @@ type Stored = Record<string, unknown>;
 const MIGRATIONS: Record<number, (stored: Stored) => Stored> = {
   1: fromV1,
   2: fromV2,
+  3: fromV3,
 };
 
 /** Whether `version` is one this library can bring up to date on its own. */
@@ -68,4 +69,15 @@ function fromV2(stored: Stored): Stored {
     intents[key] = isRecord(intent) ? { ...intent, pending: [] } : intent;
   }
   return { ...stored, version: 3, intents };
+}
+
+/**
+ * Version 3 (oracular 0.6.0 to 0.11.x) → 4. Version 4 adds the engine's clock: the latest event
+ * time it trusts, and one event stamped behind it awaiting confirmation. The migration adds an
+ * empty clock; `deserialize` then sets it to the latest time the stored anchors were written at,
+ * as it does for any state whose anchors are ahead of its clock. Nothing else changes, so every
+ * estimate is exactly what it was.
+ */
+function fromV3(stored: Stored): Stored {
+  return { ...stored, version: 4, clock: { at: null, behindAt: null } };
 }
