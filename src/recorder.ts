@@ -16,7 +16,7 @@ import type {
   RecordMode,
   RecordOptions,
 } from './types';
-import { isRecord } from './util';
+import { getOwn, isRecord } from './util';
 import { RECORD_VERSION } from './version';
 
 const RECORD_KEYS = ['installId', 'mode', 'top'];
@@ -62,32 +62,42 @@ function normalizeRecordOptions(value: unknown): Required<RecordOptions> {
  * and the effective weight of every signal. Pure: the install id comes from the app, never from
  * here. See the Shadow mode guide for the whole workflow.
  *
+ * On the record of an intent's own outcome event, `p` is what the engine decides right after it,
+ * which with `resetOnOutcome` is the prior: the estimate the outcome confirmed is gone. Pass the
+ * state from before the event as `previous` and that intent's decision gains `before`, its `p`
+ * and `lower` at `event.at` on that state. Replay never reads it; people reading the log do.
+ *
  * @param state - The state after `observe(state, event)`. Not mutated.
  * @param event - The event just observed. Only `name` and `at` are recorded.
  * @param opts - `installId` (generated and stored by the app), `mode` (`'shadow'` while
  *   reveals are computed but not shown, `'live'` once they are), and `top` (default 3).
+ * @param previous - The state before `observe(state, event)`, optional. Only read for the
+ *   intents whose outcome the event is.
  * @returns A plain, JSON-serializable {@link EventRecord}.
- * @throws `TypeError` when `state` is not an engine state, the event is malformed, `opts` is
- *   not an object, has an unknown key, an empty `installId` or a `mode` other than
- *   `'shadow'` or `'live'`.
+ * @throws `TypeError` when `state` or `previous` is not an engine state, the event is
+ *   malformed, `opts` is not an object, has an unknown key, an empty `installId` or a `mode`
+ *   other than `'shadow'` or `'live'`.
  * @throws `RangeError` when `opts.top` is negative or fractional.
  * @example
  * ```ts
  * const recording = { installId: localStorage.getItem('oracular.install')!, mode: 'shadow' } as const;
  *
  * const event = { name: 'pricing.viewed', at: Date.now() };
+ * const previous = state;
  * state = observe(state, event);
- * appendLine(JSON.stringify(createRecord(state, event, recording)));
+ * appendLine(JSON.stringify(createRecord(state, event, recording, previous)));
  * ```
  */
 export function createRecord(
   state: EngineState,
   event: IntentEvent,
   opts: RecordOptions,
+  previous?: EngineState,
 ): EventRecord {
   const s = requireState(state);
   const { name, at } = validateEvent(event);
   const { installId, mode, top } = normalizeRecordOptions(opts);
+  const prev = previous === undefined ? undefined : requireState(previous);
   const learning = resolveLearning(s.config);
   const decisions: Record<string, RecordedDecision> = {};
   for (const [intentName, intent] of Object.entries(s.config.intents)) {
@@ -101,7 +111,7 @@ export function createRecord(
         rows.find((row) => row.signal === signal) as { effectiveWeight: number }
       ).effectiveWeight;
     }
-    decisions[intentName] = {
+    const decision: RecordedDecision = {
       p: prediction.p,
       lower: prediction.lower,
       shouldReveal: decideReveal(prediction, reveal),
@@ -112,6 +122,19 @@ export function createRecord(
         .map((row) => ({ signal: row.signal, impact: row.impact })),
       weights,
     };
+    // The outcome's record: the estimate just before it, which the reset wipes, when the state
+    // before the event was given and still declared the intent.
+    const prevIntent = prev === undefined ? undefined : getOwn(prev.config.intents, intentName);
+    if (prev !== undefined && prevIntent !== undefined && intent.outcome === name) {
+      const was = buildPrediction(
+        assessIntent(prev, intentName, prevIntent, resolveLearning(prev.config), at),
+        intentName,
+        resolveReveal(prev.config, prevIntent, undefined),
+        at,
+      );
+      decision.before = { p: was.p, lower: was.lower };
+    }
+    decisions[intentName] = decision;
   }
   return { v: RECORD_VERSION, kind: 'event', installId, mode, event: { name, at }, decisions };
 }

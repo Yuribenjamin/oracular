@@ -462,6 +462,12 @@ export interface RecordedDecision {
   top: { signal: string; impact: number }[];
   /** Effective weight of every declared signal, in config order. */
   weights: Record<string, number>;
+  /**
+   * The prediction just before the event, on the record of this intent's own outcome event, when
+   * {@link createRecord} was given the state before it: the number `resetOnOutcome` wipes, which
+   * `p` above no longer shows. Absent on every other record.
+   */
+  before?: { p: number; lower: number };
 }
 
 /**

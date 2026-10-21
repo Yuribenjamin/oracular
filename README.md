@@ -264,7 +264,7 @@ evaluate(state, intent: string, at: number, opts?): { prediction, reveal, explan
 inspect(state, at: number, opts?): { at, intents: [{ intent, prediction, reveal, explanation }] }  // evaluate for every intent
 evidenceToReveal(intentConfig, opts?): number   // pseudo-counts at which shouldReveal first becomes true
 episodeClosed(prev, next): boolean               // did an episode close between two states?
-createRecord(state, event, { installId, mode }): EventRecord   // one recorder line: the event and what was decided
+createRecord(state, event, { installId, mode }, previous?): EventRecord   // one recorder line: the event and what was decided; with the state before the event, the outcome's record keeps the estimate the reset wipes
 createEndRecord(at, { installId, mode }): EndRecord           // one recorder line: the episode ended
 serialize(state): string
 deserialize(json: string, opts?: { config?: EngineConfig; migrate?: Migrate }): EngineState

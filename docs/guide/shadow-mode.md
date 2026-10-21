@@ -26,8 +26,9 @@ Both production integrations so far built this themselves. From 0.3 the recorder
 
    function track(name: string) {
      const event = { name, at: Date.now() };
+     const previous = state;
      state = observe(state, event);
-     log.append(JSON.stringify(createRecord(state, event, recording)));
+     log.append(JSON.stringify(createRecord(state, event, recording, previous)));
 
      if (shouldReveal(state, 'upgrade', event.at)) {
        // Shadow: show nothing, but start the cooldown as if you had, so the
@@ -242,6 +243,7 @@ Numbers are shortened here; records carry full precision. A record is about a ki
 | `decisions[i].suppressedUntil` | when the running cooldown ends, or null |
 | `decisions[i].top` | the signals holding evidence, largest impact first, at most `options.top` (default 3) |
 | `decisions[i].weights` | the effective weight of every declared signal |
+| `decisions[i].before` | on the record of the intent's own outcome event, when the app passed the state from before it: `p` and `lower` just before the outcome, the estimate `resetOnOutcome` wipes and `p` no longer shows. Absent on every other record |
 
 **`end`**, written by [`createEndRecord(at, options)`](/api/functions/createEndRecord) whenever the app calls `endEpisode`:
 
