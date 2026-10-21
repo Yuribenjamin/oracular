@@ -356,7 +356,7 @@ localStorage.setItem('oracular', serialize(state));
 const state = deserialize(saved, { config });
 ```
 
-The new config is validated and swapped in. Intents and signals you no longer declare are dropped (α and β are recomputed from what remains), newly declared intents start at their prior, and everything learned about signals that still exist is kept.
+The new config is validated and swapped in. Intents and signals you no longer declare are dropped (α and β are recomputed from what remains), newly declared intents start at their prior, and everything learned about signals that still exist is kept. The stored snapshot is then not read at all, so a state written by a newer release, with a config key or value this one does not know, still loads after a rollback; loading without a config runs the stored snapshot instead, and a key the library does not know is then an error.
 
 States saved by an older version of this library are upgraded on load: `deserialize` migrates the state shapes written by oracular 0.1.0 to 0.11.x (`STATE_VERSION` 1 to 3) to the current one on its own. A `migrate` function is consulted only for a version the library does not know, such as a state written by a newer oracular before a rollback; without one, that throws a `RangeError`:
 
