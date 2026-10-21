@@ -12,9 +12,10 @@ import type { EngineState, Prediction, RevealOptions } from './types';
  * @param state - The current state. Not mutated.
  * @param intent - Name of an intent declared in the config.
  * @param at - The time to evaluate at, in the same unit as your durations.
- * @param opts - Overrides for `threshold`, `z`, `cooldown` and `bound`, resolved as call →
- *   intent → engine → defaults. `z` and `bound` set `lower`; `cooldown` sets `revealed` and
- *   `suppressedUntil`; `threshold` only matters to {@link shouldReveal}.
+ * @param opts - Overrides for `threshold`, `z`, `cooldown`, `outcomeCooldown` and `bound`,
+ *   resolved as call → intent → engine → defaults. `z` and `bound` set `lower`; `cooldown` sets
+ *   `revealed` and, with `outcomeCooldown` (default: `cooldown`), `suppressedUntil`;
+ *   `threshold` only matters to {@link shouldReveal}.
  * @returns The prediction. `p`, `sd`, `lower` and `confidence` are in [0, 1]; `evidence` is
  *   α + β.
  * @throws `RangeError` when `intent` is not declared in the config.
@@ -51,7 +52,8 @@ export function predict(
  * @param intent - Name of an intent declared in the config.
  * @param at - The time to evaluate at.
  * @param opts - Overrides for `threshold` (default 0.5), `z` (default 1.28, a one-sided 90%
- *   bound) and `cooldown` (default: the intent's `halfLife`).
+ *   bound), `cooldown` (default: the intent's `halfLife`) and `outcomeCooldown` (default:
+ *   `cooldown`; 0 lets the outcome pause nothing).
  * @returns True when the app should show, offer or reveal whatever this intent gates.
  * @throws `RangeError` when `intent` is not declared in the config.
  * @throws `TypeError` when `state` is not an engine state, `at` is not finite, or `opts` is

@@ -17,6 +17,13 @@ export interface RevealOptions {
   /** How long after `markRevealed` the intent stays revealed and `shouldReveal` is false. Default: the intent's `halfLife`. */
   cooldown?: number;
   /**
+   * How long after the intent's outcome event `shouldReveal` stays false. Default: `cooldown`.
+   * 0 is allowed: the outcome then pauses nothing, while a reveal still starts its cooldown, for
+   * an intent whose outcome recurs within minutes, or a "stuck" intent whose help should be back
+   * at the next attempt.
+   */
+  outcomeCooldown?: number;
+  /**
    * How `lower` is computed. `'normal'` (default): p − z·sd, clamped to [0, 1]. `'exact'`: the
    * Beta distribution's own quantile at the same one-sided level, Φ(−z), so `z` keeps its
    * meaning. The two differ on thin evidence near the threshold, where the approximation is
@@ -290,8 +297,8 @@ export interface Prediction {
   revealedAt: number | null;
   /**
    * When the current suppression ends: the later of the reveal cooldown (after `markRevealed`)
-   * and the outcome cooldown (after the outcome event) still running at `at`, or null when
-   * neither is. `shouldReveal` is false while this is non-null.
+   * and the outcome cooldown (`outcomeCooldown` after the outcome event) still running at `at`,
+   * or null when neither is. `shouldReveal` is false while this is non-null.
    */
   suppressedUntil: number | null;
 }

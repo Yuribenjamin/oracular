@@ -109,7 +109,7 @@ One diagnostic: if raising the threshold costs recall and buys no precision, the
 
 ## `cooldown`
 
-How long to stay quiet after a reveal and after the outcome. Defaults to `halfLife`. For a tip that may be shown again next week, a week; for an upgrade offer after a purchase, consider longer than the half-life; for a feature hint that should appear once, something very long with `markRevealed` as your "seen it" flag.
+How long to stay quiet after a reveal, and, unless `outcomeCooldown` is set, after the outcome. Defaults to `halfLife`. For a tip that may be shown again next week, a week; for an upgrade offer after a purchase, consider longer than the half-life; for a feature hint that should appear once, something very long with `markRevealed` as your "seen it" flag. Set `outcomeCooldown` on its own, 0 included, where the outcome should not pause the next reveal: a cart whose outcome is another item, a "stuck" intent whose help should be back at the next attempt.
 
 ## `episodeTimeout`
 

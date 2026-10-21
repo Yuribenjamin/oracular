@@ -35,7 +35,7 @@ export const INTENT_KEYS = [
   'attribution',
   'reveal',
 ] as const;
-export const REVEAL_KEYS = ['threshold', 'z', 'cooldown', 'bound'] as const;
+export const REVEAL_KEYS = ['threshold', 'z', 'cooldown', 'outcomeCooldown', 'bound'] as const;
 export const LEARNING_KEYS = ['halfLife', 'gain', 'priorEpisodes', 'lift'] as const;
 export const LIFT_TYPES: readonly LiftType[] = [
   'absolute-difference',
@@ -146,6 +146,9 @@ export function normalizeRevealOptions(value: unknown, path: string, strict = tr
   }
   if (record.cooldown !== undefined) {
     out.cooldown = expectNonNegative(record.cooldown, `${path}.cooldown`);
+  }
+  if (record.outcomeCooldown !== undefined) {
+    out.outcomeCooldown = expectNonNegative(record.outcomeCooldown, `${path}.outcomeCooldown`);
   }
   if (record.bound !== undefined) {
     if (record.bound !== 'normal' && record.bound !== 'exact') {
@@ -313,6 +316,8 @@ export interface ResolvedReveal {
   threshold: number;
   z: number;
   cooldown: number;
+  /** The pause after the outcome event; the resolved `cooldown` unless set. */
+  outcomeCooldown: number;
   bound: 'normal' | 'exact';
 }
 
@@ -326,11 +331,18 @@ export function resolveReveal(
   // legitimate question (evidenceToReveal asks it); a config that commits to one is not.
   const o =
     opts === undefined ? {} : normalized ? opts : normalizeRevealOptions(opts, 'options', false);
+  const cooldown =
+    o.cooldown ?? intent.reveal?.cooldown ?? config?.reveal?.cooldown ?? intent.halfLife;
   return {
     threshold:
       o.threshold ?? intent.reveal?.threshold ?? config?.reveal?.threshold ?? DEFAULT_THRESHOLD,
     z: o.z ?? intent.reveal?.z ?? config?.reveal?.z ?? DEFAULT_Z,
-    cooldown: o.cooldown ?? intent.reveal?.cooldown ?? config?.reveal?.cooldown ?? intent.halfLife,
+    cooldown,
+    outcomeCooldown:
+      o.outcomeCooldown ??
+      intent.reveal?.outcomeCooldown ??
+      config?.reveal?.outcomeCooldown ??
+      cooldown,
     bound: o.bound ?? intent.reveal?.bound ?? config?.reveal?.bound ?? 'normal',
   };
 }

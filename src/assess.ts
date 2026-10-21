@@ -50,7 +50,7 @@ export function buildPrediction(
   const p = betaMean(is.alpha, is.beta);
   const sd = betaSd(is.alpha, is.beta);
   const revealEnd = cooldownEnd(is.lastRevealedAt, reveal.cooldown, at);
-  const outcomeEnd = cooldownEnd(is.lastOutcomeAt, reveal.cooldown, at);
+  const outcomeEnd = cooldownEnd(is.lastOutcomeAt, reveal.outcomeCooldown, at);
   const suppressedUntil =
     revealEnd === null
       ? outcomeEnd
