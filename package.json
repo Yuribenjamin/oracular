@@ -93,7 +93,13 @@
     "examples/react-vite"
   ],
   "overrides": {
-    "@types/react": "^19.3.0"
+    "@types/react": "^19.3.0",
+    "vitepress": {
+      "vite": "^6.4.5"
+    },
+    "tsup": {
+      "esbuild": "^0.28.2"
+    }
   },
   "scripts": {
     "build": "tsup && tsup --config tsup.presets.config.ts && tsup --config tsup.inspect.config.ts",

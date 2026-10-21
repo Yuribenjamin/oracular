@@ -35,6 +35,13 @@ range pins React below 19, so npm hoists React 18 to the root and nests the Reac
 exists for the same reason, so that one set of React types serves the whole tree. Neither should
 be "fixed" here; both disappear on their own once that peer range admits React 19.
 
+Two more `overrides` entries close the Dependabot advisories on development dependencies: `vitepress`
+is pointed at Vite 6.4.5, because VitePress 1.6 pins Vite 5, which has no patched release, and its
+Vue plugin accepts Vite 6 (the docs build and the dev server were checked on it); and `tsup` is
+pointed at esbuild 0.28, because tsup 8.5 pins 0.27 and tsup 9 drops Node below 22.18, which the
+`22` in `.nvmrc` does not guarantee. `dist/` is byte-identical with and without both. The first
+goes when VitePress 2 is stable, the second when tsup 9 fits the Node floor.
+
 ## Repository layout
 
 ```
