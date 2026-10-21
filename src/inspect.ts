@@ -93,14 +93,21 @@ export interface MountedInspector {
  * anything with an `innerHTML` property, so a DOM element; the library itself touches no DOM API
  * and sets no timer. Your app decides when to refresh: after each `observe`, or on an interval.
  *
- * @param container - The element to render into. Only its `innerHTML` is written.
+ * @param container - The element to render into. Only its `innerHTML` is written. Where it sits
+ *   is yours: the fragment styles itself and nothing outside it, so a container at the end of a
+ *   long page renders there. For a panel that floats over the page during development, give the
+ *   container a fixed position and a height, as the example shows.
  * @param read - Returns the snapshot to show, typically `() => inspect(state, Date.now())`.
  * @param opts - Passed to {@link renderInspector}.
  * @returns `update` to re-render and `unmount` to clear the container. The first render happens
  *   at once.
  * @example
  * ```ts
- * const panel = mountInspector(document.querySelector('#oracular')!, () => inspect(state, Date.now()));
+ * const host = document.createElement('aside');
+ * host.style.cssText =
+ *   'position:fixed;right:16px;bottom:16px;max-width:min(720px,calc(100vw - 32px));max-height:50vh;overflow:auto;z-index:2147483000';
+ * document.body.appendChild(host);
+ * const panel = mountInspector(host, () => inspect(state, Date.now()));
  * state = observe(state, event);
  * panel.update();
  * ```

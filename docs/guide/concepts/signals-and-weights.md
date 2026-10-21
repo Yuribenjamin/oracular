@@ -93,6 +93,8 @@ Any event name is accepted by `observe`. Names that no intent lists as a signal 
 
 The engine learns per event name. If the same action means different things in different places, you can put the context in the name (`'pricing.viewed'` and `'pricing.viewed.mobile'`, or `'search.empty'` and `'search.empty.onboarding'`) and give each its own weight and its own learning record.
 
+Names are free-form strings with no meaning to the engine, dots included. If a secret scanner flags a dotted name (three segments can look like a token to a loose rule), any separator works and nothing in the engine changes.
+
 The trade-off is sparsity: every extra name splits the user's history, so each one needs its own `priorEpisodes` worth of completed episodes before learning outweighs your guess. A signal seen in fifty sessions learns quickly; the same signal split ten ways learns ten times more slowly, and some buckets never fill. Recommendation: at most two or three buckets per action, chosen along the one distinction that changes what the action means (surface, or funnel stage, not both). Everything else belongs in `props`, which the engine ignores and never stores, and in your own analytics.
 
 ## Reference

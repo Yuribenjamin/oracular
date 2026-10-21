@@ -2,7 +2,7 @@
 
 **oracular** is a tiny, zero-dependency, pure-functional intent engine that runs entirely on the device. Your app feeds it the events it already emits. The engine keeps, for each *intent* you declare (upgrade, churn, get stuck, buy…), a probabilistic estimate of how likely the user is to do that thing, and tells you when the estimate crosses a threshold **with enough confidence** to act on: show a tip, make an offer, reveal a feature, place an ad.
 
-It is about 7 kB gzipped, has no dependencies, and contains no I/O of any kind.
+It is about 8 kB minified and gzipped, has no dependencies, and contains no I/O of any kind.
 
 ## What it is
 

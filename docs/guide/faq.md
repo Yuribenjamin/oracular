@@ -58,7 +58,7 @@ Learning needs contrast: a signal is judged by comparing the sessions it appeare
 
 ## How big is it?
 
-About 21 kB minified and 7.2 kB gzipped, zero dependencies. A state with a handful of intents serializes to a few kilobytes.
+About 24 kB minified and 8 kB gzipped, zero dependencies, under a 9 kB gzipped ceiling that [Stability and 1.0](/guide/stability) holds for the whole of 1.x. A state with a handful of intents serializes to a few kilobytes.
 
 ## Why a Beta distribution?
 

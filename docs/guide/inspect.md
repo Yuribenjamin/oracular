@@ -32,7 +32,15 @@ function onEvent(event) {
 }
 ```
 
-`mountInspector` writes an HTML fragment into the container's `innerHTML` and gives you `update` and `unmount`. The fragment is one block per intent: `p`, the lower bound, the standard deviation, the evidence, and the gate's state (reveal, suppressed until when, or neither), then a table with one row per declared signal: the contribution it holds right now, its impact on `p`, the initial, learned and effective weights, and its hit/miss record. Signals holding nothing are greyed. Styles are inline, there is no script, and every string that came from your app is escaped.
+`mountInspector` writes an HTML fragment into the container's `innerHTML` and gives you `update` and `unmount`. The fragment styles itself and nothing outside it: where the panel sits is the host's decision, and a container at the end of a long page renders there, off screen. For a panel that floats over the page while you develop, give the container a fixed position and a height:
+
+```ts
+const host = document.createElement('aside');
+host.style.cssText =
+  'position:fixed;right:16px;bottom:16px;max-width:min(720px,calc(100vw - 32px));max-height:50vh;overflow:auto;z-index:2147483000';
+document.body.appendChild(host);
+const panel = mountInspector(host, () => inspect(state, Date.now()));
+``` The fragment is one block per intent: `p`, the lower bound, the standard deviation, the evidence, and the gate's state (reveal, suppressed until when, or neither), then a table with one row per declared signal: the contribution it holds right now, its impact on `p`, the initial, learned and effective weights, and its hit/miss record. Signals holding nothing are greyed. Styles are inline, there is no script, and every string that came from your app is escaped.
 
 `renderInspector(snapshot, { title, digits })` is the same fragment as a string, for a devtools pane of your own, a test, or a file:
 

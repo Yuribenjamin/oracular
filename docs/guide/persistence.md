@@ -29,7 +29,8 @@ let state = saved ? deserialize(saved, { config }) : createState(config);
 - replaces the stored snapshot, which is then not read at all: a key or value that a newer release wrote into it, an option this release does not have, is no obstacle to a rollback. Without a config passed in, the stored snapshot runs the engine: it is read without the checks that refuse a config that cannot work, so a state saved by an older release with, say, a reveal `threshold` of 0 still loads, but a key the library does not know is an error, since the engine would otherwise run without an option the state was built under,
 - drops intents you no longer declare, together with their episode records,
 - starts newly declared intents at their prior,
-- drops contributions, learned counts and episode `seen` entries for signals an intent no longer declares,
+- drops contributions, learned counts and episode `seen` entries for signals an intent no longer declares, and prunes the `seen` lists of the episodes an intent holds under `attribution` the same way,
+- settles, on the next touch, every episode an intent held under `attribution` when the new config no longer sets it (each a miss at once), and drops an intent's waiting episodes with the intent when it is no longer declared: their verdicts are never recorded, which is what dropping the intent means,
 - recomputes α and β as the (possibly new) prior plus the kept contributions, so a changed `prior` or `priorStrength` applies immediately while the evidence stays.
 
 Everything learned about signals that still exist is kept. Loading **without** `config` restores the old snapshot and silently runs your old weights; it is the one mistake these docs most want you to avoid.
