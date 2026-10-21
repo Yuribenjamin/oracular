@@ -93,6 +93,19 @@ describe('createIntentStore', () => {
     expect(writes).toHaveLength(2);
   });
 
+  it('an empty key counts as saved: a flush with nothing tracked writes nothing, the first event writes', async () => {
+    const { adapter, writes } = fakeAdapter();
+    const store = createIntentStore(config, { persist: adapter, now: () => T });
+    await store.load();
+    expect(store.getStatus()).toBe('loaded');
+    await store.flush();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(writes).toHaveLength(0);
+    store.track('pricing.viewed');
+    await store.flush();
+    expect(writes).toStrictEqual([serialize(store.getState())]);
+  });
+
   it('writes at once when an episode closes, explicitly or by timeout', async () => {
     const { adapter, writes } = fakeAdapter();
     const c = clock();
@@ -304,7 +317,55 @@ describe('createIntentStore', () => {
       expect(r.phases).toStrictEqual(['load', 'load', 'load']);
     });
 
-    it('stored data that cannot be parsed is reported as parse with the engine error, blocks writes, and clear starts over', async () => {
+    it('stored data that cannot be parsed is reported as parse once, blocks writes, and is not read again by saves', async () => {
+      let stored: string | null = '{"version":';
+      let reads = 0;
+      const writes: string[] = [];
+      const adapter: PersistAdapter = {
+        load: () => {
+          reads++;
+          return stored;
+        },
+        save: (json) => {
+          writes.push(json);
+        },
+      };
+      const r = recorder();
+      const store = createIntentStore(config, {
+        persist: adapter,
+        now: () => T,
+        onError: r.onError,
+      });
+      await store.load();
+      expect(store.getStatus()).toBe('failed');
+      expect(r.phases).toStrictEqual(['parse']);
+      expect(r.errors[0]).toBeInstanceOf(SyntaxError);
+      // The same bytes would fail the same way: saves neither read nor write.
+      store.track('pricing.viewed');
+      await store.flush();
+      await vi.advanceTimersByTimeAsync(250);
+      store.endEpisode();
+      await microtasks();
+      expect(reads).toBe(1);
+      expect(writes).toHaveLength(0);
+      expect(r.phases).toStrictEqual(['parse']);
+      // An explicit load reads again, and reports nothing new while the data is unchanged.
+      await store.load();
+      expect(reads).toBe(2);
+      expect(r.phases).toStrictEqual(['parse']);
+      expect(store.getStatus()).toBe('failed');
+      // Once the stored data changes, the load parses it and replays everything tracked meanwhile.
+      stored = saved;
+      await store.load();
+      expect(reads).toBe(3);
+      expect(store.getStatus()).toBe('loaded');
+      expect(store.getState().intents.upgrade?.contributions).toHaveProperty('pricing.viewed');
+      expect(store.getState().episode.startedAt).toBeNull(); // the replayed endEpisode closed it
+      await vi.advanceTimersByTimeAsync(250);
+      expect(writes).toStrictEqual([serialize(store.getState())]);
+    });
+
+    it('clear is the way out of a parse failure', async () => {
       const f = fakeAdapter('{"version":');
       const r = recorder();
       const store = createIntentStore(config, {
@@ -314,12 +375,10 @@ describe('createIntentStore', () => {
       });
       await store.load();
       expect(store.getStatus()).toBe('failed');
-      expect(r.phases).toStrictEqual(['parse']);
-      expect(r.errors[0]).toBeInstanceOf(SyntaxError);
       store.track('pricing.viewed');
-      await store.flush(); // reads again, fails again, writes nothing
+      await store.flush();
       expect(f.writes).toHaveLength(0);
-      expect(r.phases).toStrictEqual(['parse', 'parse']);
+      expect(r.phases).toStrictEqual(['parse']);
 
       await store.clear();
       expect(store.getStatus()).toBe('loaded');
@@ -469,6 +528,8 @@ describe('createIntentStore', () => {
       expect(store.getState()).toStrictEqual(createState(config));
       expect(notified).toBe(1);
       expect(store.getStatus()).toBe('loaded');
+      await store.flush(); // the empty key already holds what the fresh state holds
+      expect(f.writes).toHaveLength(0);
       store.track('pricing.viewed');
       await vi.advanceTimersByTimeAsync(250);
       expect(f.writes).toStrictEqual([serialize(store.getState())]);
