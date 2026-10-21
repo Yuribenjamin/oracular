@@ -383,7 +383,11 @@ export type Migrate = (stored: unknown, version: number) => EngineState;
  * ```
  */
 export interface DeserializeOptions {
-  /** The app's current config. Validated, swapped in, and used to prune signals and intents no longer declared. */
+  /**
+   * The app's current config. Validated, swapped in, and used to prune signals and intents no
+   * longer declared; the stored snapshot is then not read, so a key or value a newer release wrote
+   * into it does not stop the load.
+   */
   config?: EngineConfig;
   /**
    * Called when the stored version is neither `STATE_VERSION`, nor one this library migrates

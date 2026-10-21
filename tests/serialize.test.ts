@@ -264,6 +264,37 @@ describe('deserialize with the current config', () => {
     expect(load(serialize(s), { config })).toStrictEqual(s);
   });
 
+  it('does not read the stored snapshot: what a newer release wrote into it loads, every number kept', () => {
+    const s = busyState();
+    const stored = JSON.parse(serialize(s));
+    // A key at every level, an enum value and a number this release would refuse: what a later
+    // minor might store, read after a rollback with the config the app ships now.
+    stored.config.future = true;
+    stored.config.learning = { ...stored.config.learning, lift: 'not-yet-a-measure', future: 1 };
+    stored.config.reveal = { ...stored.config.reveal, bound: 'future', outcomeCooldown: 0 };
+    stored.config.intents.upgrade.episodePerOutcome = true;
+    stored.config.intents.upgrade.prior = 5;
+    expect(load(JSON.stringify(stored), { config })).toStrictEqual(s);
+    // Without a config the snapshot runs the engine, and a key it does not know is still an error.
+    expect(() => load(JSON.stringify(stored))).toThrow(TypeError);
+    expect(() => load(JSON.stringify(stored))).toThrow(/config\.future is not a recognised option/);
+    // The snapshot must still be an object: the state's shape is checked whatever runs it.
+    stored.config = 'nope';
+    expect(() => load(JSON.stringify(stored), { config })).toThrow(TypeError);
+    expect(() => load(JSON.stringify(stored), { config })).toThrow(
+      /state\.config must be a plain object/,
+    );
+  });
+
+  it('reads the stored snapshot without the strict checks when no config is passed', () => {
+    const s = busyState();
+    const stored = JSON.parse(serialize(s));
+    stored.config.reveal = { ...stored.config.reveal, threshold: 0 }; // refused by createState since 0.10
+    const back = load(JSON.stringify(stored));
+    expect(back.config.reveal?.threshold).toBe(0);
+    expect(back.intents).toStrictEqual(s.intents);
+  });
+
   it('replaces the stored snapshot and keeps everything learned when only weights change', () => {
     const s = busyState();
     const next: EngineConfig = {
