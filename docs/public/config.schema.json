@@ -120,7 +120,12 @@
         "cooldown": {
           "type": "number",
           "minimum": 0,
-          "description": "How long after a reveal or the outcome the intent stays quiet. Default: the intent's halfLife."
+          "description": "How long after a reveal the intent stays quiet. Default: the intent's halfLife. Also the pause after the outcome unless outcomeCooldown is set."
+        },
+        "outcomeCooldown": {
+          "type": "number",
+          "minimum": 0,
+          "description": "How long after the outcome event the intent stays quiet. Default: cooldown. 0 lets the outcome pause nothing while a reveal still starts its cooldown."
         },
         "bound": {
           "type": "string",

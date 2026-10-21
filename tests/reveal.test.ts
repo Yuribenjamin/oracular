@@ -230,6 +230,78 @@ describe('outcome cooldown', () => {
   });
 });
 
+describe('outcomeCooldown', () => {
+  it('is the pause after the outcome; the reveal cooldown is untouched', () => {
+    // A "stuck" intent: outcome at +2m, two more failures at +3m and +4m, and the help should be
+    // back. With the default (the hour-long reveal cooldown) it is not.
+    const cfg = thinConfig({ reveal: { cooldown: HOUR } });
+    let s = hits(createState(cfg), 4);
+    s = observe(s, { name: 'tip.used', at: T + 2 * MINUTE });
+    s = hits(s, 6, T + 4 * MINUTE);
+    expect(predict(s, 'tip', T + 4 * MINUTE).suppressedUntil).toBe(T + 2 * MINUTE + HOUR);
+    expect(shouldReveal(s, 'tip', T + 4 * MINUTE)).toBe(false);
+
+    // With outcomeCooldown 0 the outcome pauses nothing, and a reveal still starts its hour.
+    const zero = thinConfig({ reveal: { cooldown: HOUR, outcomeCooldown: 0 } });
+    let z = hits(createState(zero), 4);
+    z = observe(z, { name: 'tip.used', at: T + 2 * MINUTE });
+    z = hits(z, 6, T + 4 * MINUTE);
+    assertInvariants(z);
+    expect(predict(z, 'tip', T + 4 * MINUTE).suppressedUntil).toBeNull();
+    expect(shouldReveal(z, 'tip', T + 4 * MINUTE)).toBe(true);
+    z = markRevealed(z, 'tip', T + 4 * MINUTE);
+    expect(predict(z, 'tip', T + 5 * MINUTE)).toMatchObject({
+      revealed: true,
+      suppressedUntil: T + 4 * MINUTE + HOUR,
+    });
+    // And a longer pause after the outcome than after a reveal, when that is what is wanted.
+    const longer = thinConfig({ reveal: { cooldown: HOUR, outcomeCooldown: DAY } });
+    const l = observe(createState(longer), { name: 'tip.used', at: T });
+    expect(predict(l, 'tip', T).suppressedUntil).toBe(T + DAY);
+    expect(predict(markRevealed(l, 'tip', T), 'tip', T).suppressedUntil).toBe(T + DAY);
+  });
+
+  it('resolves per call → intent → engine, and defaults to the resolved cooldown', () => {
+    const base = thinConfig({ reveal: { cooldown: HOUR } });
+    const s = observe(createState(base), { name: 'tip.used', at: T });
+    const until = (state: EngineState, opts?: Parameters<typeof predict>[3]) =>
+      predict(state, 'tip', T, opts).suppressedUntil;
+    expect(until(s)).toBe(T + HOUR); // the resolved cooldown
+    expect(until(s, { cooldown: 2 * HOUR })).toBe(T + 2 * HOUR); // follows a per-call cooldown
+    expect(until(s, { outcomeCooldown: MINUTE })).toBe(T + MINUTE); // the call wins
+    expect(until(s, { outcomeCooldown: 0 })).toBeNull();
+
+    const engine: EngineConfig = { ...base, reveal: { outcomeCooldown: 2 * HOUR } };
+    const e = observe(createState(engine), { name: 'tip.used', at: T });
+    expect(until(e)).toBe(T + 2 * HOUR); // the engine's, over the intent's cooldown
+    const intentLevel: EngineConfig = {
+      ...engine,
+      intents: {
+        tip: { ...engine.intents.tip!, reveal: { cooldown: HOUR, outcomeCooldown: 3 * HOUR } },
+      },
+    };
+    const i = observe(createState(intentLevel), { name: 'tip.used', at: T });
+    expect(until(i)).toBe(T + 3 * HOUR); // the intent's, over the engine's
+    expect(until(i, { outcomeCooldown: MINUTE })).toBe(T + MINUTE); // the call's, over both
+  });
+
+  it('is validated like cooldown: a negative value or a non-number is refused, 0 is not', () => {
+    expect(() => createState(thinConfig({ reveal: { outcomeCooldown: -1 } }))).toThrow(RangeError);
+    expect(() => createState(thinConfig({ reveal: { outcomeCooldown: -1 } }))).toThrow(
+      /reveal\.outcomeCooldown must be 0 or greater/,
+    );
+    expect(() =>
+      createState(thinConfig({ reveal: { outcomeCooldown: '1h' as unknown as number } })),
+    ).toThrow(TypeError);
+    expect(
+      createState(thinConfig({ reveal: { outcomeCooldown: 0 } })).config.intents.tip!.reveal,
+    ).toStrictEqual({ outcomeCooldown: 0 });
+    expect(() => predict(createState(thinConfig()), 'tip', T, { outcomeCooldown: -1 })).toThrow(
+      RangeError,
+    );
+  });
+});
+
 describe('markRevealed', () => {
   it('blocks a second reveal for the cooldown and shows in predict', () => {
     const cfg = thinConfig({ reveal: { cooldown: HOUR } });
