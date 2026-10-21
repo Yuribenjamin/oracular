@@ -27,7 +27,8 @@ import { hasOwn } from './util';
  * it either way; otherwise every occurrence adds all of `w`. For every intent the event is the
  * outcome of: give the signals remembered since the episode started or the outcome last arrived a
  * hit and count the episode toward the base rate (a repeated outcome with nothing seen since
- * counts nothing), credit
+ * counts nothing, unless `IntentConfig.episodePerOutcome` makes every outcome an episode of its
+ * own for the intent), credit
  * the closed episodes still waiting under `IntentConfig.attribution` by `2^(−age / halfLife)`
  * each, record `lastOutcomeAt`, and (by default) reset the evidence to the prior. Any event opens
  * or extends the current episode; an idle gap longer than `config.episodeTimeout` closes the
@@ -92,9 +93,12 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
     if (isOutcome) {
       // The signals seen since the episode started, or since the intent's outcome last arrived,
       // get the hit. A repeated outcome with no signal seen since is a duplicate, not another
-      // episode, so it does not count toward the base rate.
+      // episode, so it does not count toward the base rate; with episodePerOutcome every outcome
+      // is an episode of its own, and it counts.
       const record = episodeRecord(episode, intentName);
-      if (!record.resolved || record.seen.length > 0) is = recordEpisode(is, record.seen, 1);
+      if (!record.resolved || record.seen.length > 0 || intent.episodePerOutcome === true) {
+        is = recordEpisode(is, record.seen, 1);
+      }
       is = creditPending(is, intent, at);
       episode = markResolved(episode, intentName);
       is = { ...is, lastOutcomeAt: at };
@@ -186,8 +190,10 @@ function closeEpisode(state: EngineState, at: number): EngineState {
   for (const [intentName, intent] of Object.entries(state.config.intents)) {
     const record = episodeRecord(state.episode, intentName);
     // Resolved: the outcome arrived. Signals seen after it stay neutral at the close; they are
-    // judged only if another outcome follows them in the same episode.
-    if (record.resolved) continue;
+    // judged only if another outcome follows them in the same episode. With episodePerOutcome
+    // they are a new attempt, judged at the close like a first one; nothing seen is nothing.
+    if (record.resolved && (intent.episodePerOutcome !== true || record.seen.length === 0))
+      continue;
     let is = getIntentState(state, intentName, intent);
     is = settlePending(is, intent, learning, at);
     is =
