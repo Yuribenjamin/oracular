@@ -74,6 +74,10 @@ Both rates are shrunk toward the intent's own base rate by two pseudo-episodes, 
 
 ## Choosing a lift formula
 
+::: warning Deprecated
+Every value of `learning.lift` but the default, `'normalized-difference'`, is deprecated and is removed in 1.0. A sweep of all seven measures on the [clickstream case study](/guide/case-study-clickstream) found none that beats the default on either split, so there is no evidence to commit seven formulas to for 1.x. They keep working, unchanged, until 1.0; a config that sets one keeps loading, and the type checker marks the value. The option itself stays, so a measure can come back as a minor when a real integration shows it should.
+:::
+
 `learning.lift` chooses an association measure. Each measure is converted to a signed evidence
 score in [−1, 1], where zero means no association. Leave it unset to keep the existing normalized
 difference exactly. Different choices change sensitivity to differences in outcome rates, while
