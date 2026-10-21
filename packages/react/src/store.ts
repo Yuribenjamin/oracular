@@ -23,7 +23,8 @@ export type PersistPhase = 'load' | 'parse' | 'save' | 'clear';
  * Where the store stands with its adapter. `memory`: no adapter. `idle`: nothing read yet.
  * `loading`: a read is in flight. `loaded`: the read settled (or the key was empty, or `clear`
  * ran) and the store writes. `failed`: the read or its parse failed; the store keeps working in
- * memory and writes nothing until a later `load` succeeds or `clear` runs. `disposed`: no further
+ * memory and writes nothing until a later `load` succeeds or `clear` runs (a failed read is
+ * retried by the next save, data that failed to parse only by `load`). `disposed`: no further
  * reads or writes.
  */
 export type StoreStatus = 'memory' | 'idle' | 'loading' | 'loaded' | 'failed' | 'disposed';
@@ -83,11 +84,13 @@ export interface IntentStore {
    * Reads the saved state through the adapter. Every caller gets the same promise while the read
    * is in flight, and a store that has loaded does not read again. Operations made before the
    * read settles are applied to the state in memory at once and replayed onto the loaded state
-   * afterwards, so events from the first screens are never lost. A read that throws, or stored
-   * data that cannot be parsed, is reported through `onError` with its phase, leaves the store
-   * working in memory, blocks writes, and is retried by the next `load`, `flush` or save; `clear`
-   * is the explicit way to start over. Never rejects on its own; a subscriber that throws when
-   * the loaded state is announced rejects it.
+   * afterwards, so events from the first screens are never lost. A read that throws is reported
+   * as `onError(error, 'load')`, leaves the store working in memory, blocks writes, and is retried
+   * by the next `load`, `flush` or save. Stored data that cannot be parsed is reported once as
+   * `'parse'` and blocks writes the same way, but saves do not read it again, since the same
+   * bytes would fail the same way: only `load` reads again, and reports only if the stored data
+   * changed; `clear` is the explicit way to start over. Never rejects on its own; a subscriber
+   * that throws when the loaded state is announced rejects it.
    */
   load(): Promise<void>;
   /**
@@ -137,6 +140,8 @@ export function createIntentStore(
   const saveDelay = opts.saveDelay ?? 250;
   const onError = opts.onError ?? warnOnce();
   let state = createState(config);
+  /** What a fresh state serializes to. An empty key holds the same, so it counts as saved. */
+  const freshJson = serialize(state);
   const listeners = new Set<() => void>();
   let status: StoreStatus = persist === undefined ? 'memory' : 'idle';
   /** The read in flight, shared by everyone who waits for it. */
@@ -150,6 +155,8 @@ export function createIntentStore(
   let timer: ReturnType<typeof setTimeout> | null = null;
   /** The last string written, so a save after a load or a no-op change writes nothing. */
   let lastSaved: string | null = null;
+  /** Stored data that failed to parse: saves do not read it again, and a `load` that finds it unchanged reports nothing new. */
+  let badJson: string | null = null;
   /** The write in flight: one at a time, so writes land in order. */
   let writing: Promise<void> | null = null;
   /** Bumped by `clear` and `dispose`; a read or write from an earlier generation is discarded. */
@@ -207,6 +214,9 @@ export function createIntentStore(
   const save = (): Promise<void> => {
     if (persist === undefined || status === 'disposed') return Promise.resolve();
     if (status === 'loaded') return write();
+    // Data that failed to parse fails the same way on every read: nothing is written until a
+    // `load` finds it changed or `clear` runs.
+    if (status === 'failed' && badJson !== null) return Promise.resolve();
     // Never before the first read has settled: wait for it (starting it if nothing did), then
     // write only if it succeeded.
     const gen = generation;
@@ -274,9 +284,17 @@ export function createIntentStore(
       }
       if (gen !== generation) return;
       if (json === null) {
-        // Nothing stored: the state in memory is the truth, and the next change writes it.
+        // Nothing stored: the state in memory is the truth. An empty key holds what a fresh state
+        // holds, so a flush with nothing tracked writes nothing; the first change writes.
         status = 'loaded';
         queue = null;
+        badJson = null;
+        lastSaved = freshJson;
+        return;
+      }
+      if (json === badJson) {
+        // The same bytes that failed to parse before: nothing new to report.
+        status = 'failed';
         return;
       }
       let next: EngineState;
@@ -287,9 +305,11 @@ export function createIntentStore(
         );
       } catch (error) {
         status = 'failed';
+        badJson = json;
         onError(error, 'parse');
         return;
       }
+      badJson = null;
       for (const op of queue ?? []) next = op(next);
       state = next;
       status = 'loaded';
@@ -318,6 +338,7 @@ export function createIntentStore(
     state = fresh;
     queue = null;
     lastSaved = null;
+    badJson = null;
     status = 'loaded';
     let result: Promise<void> = Promise.resolve();
     if (persist !== undefined) {
@@ -329,6 +350,8 @@ export function createIntentStore(
           try {
             if (adapter.remove !== undefined) {
               await adapter.remove();
+              // The key is empty, which holds what the fresh state holds.
+              if (gen === generation) lastSaved = freshJson;
             } else {
               const json = serialize(fresh);
               await adapter.save(json);
