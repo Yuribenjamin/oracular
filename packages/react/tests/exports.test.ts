@@ -34,7 +34,7 @@ describe('@oracular/react packaging', () => {
       default: './dist/index.cjs',
     });
     expect(pkg.dependencies).toBeUndefined();
-    expect(pkg.peerDependencies).toStrictEqual({ oracular: '>=0.8.0 <2', react: '>=18' });
+    expect(pkg.peerDependencies).toStrictEqual({ oracular: '>=0.18.0 <2', react: '>=18' });
     expect(pkg.files).toStrictEqual(['dist', 'README.md', 'CHANGELOG.md', 'LICENSE']);
     expect(pkg.sideEffects).toBe(false);
     expect(pkg.publishConfig).toStrictEqual({ access: 'public' });

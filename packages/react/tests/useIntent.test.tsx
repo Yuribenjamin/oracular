@@ -182,22 +182,22 @@ describe('useIntent', () => {
     const view = mount(<Pricing store={store} />);
     await view.settle();
     expect(store.getState().intents.tip?.contributions.s).toBeDefined();
-    expect(writes).toHaveLength(1); // startup decay is saved before load finishes
+    expect(writes).toHaveLength(0); // the loaded state round-trips byte for byte: nothing to write
 
     view.click('view');
     const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     document.dispatchEvent(new Event('visibilitychange'));
-    expect(writes).toHaveLength(2);
+    expect(writes).toHaveLength(1);
     hidden.mockRestore();
 
     view.click('view');
     window.dispatchEvent(new Event('pagehide'));
-    expect(writes).toHaveLength(3);
+    expect(writes).toHaveLength(2);
 
     view.click('view');
     view.unmount();
-    expect(writes).toHaveLength(4);
-    expect(writes[3]).toBe(serialize(store.getState()));
+    expect(writes).toHaveLength(3);
+    expect(writes[2]).toBe(serialize(store.getState()));
   });
 
   it('never ends an episode on those events', () => {
@@ -226,12 +226,12 @@ describe('useIntent', () => {
     d.resolveLoad();
     await view.settle();
     expect(store.getState().intents.tip?.contributions.s).toBeDefined();
-    expect(d.writes).toStrictEqual([serialize(store.getState())]);
-    expect(d.stored()).toBe(serialize(store.getState()));
+    expect(d.writes).toHaveLength(0);
+    expect(d.stored()).toBe(saved);
     view.click('view');
     view.unmount();
-    expect(d.writes).toHaveLength(2);
-    expect(JSON.parse(d.writes[1] as string).intents.tip.revealCount).toBe(1);
+    expect(d.writes).toHaveLength(1);
+    expect(JSON.parse(d.writes[0] as string).intents.tip.revealCount).toBe(1);
   });
 
   it('unmounting before the read resolves writes nothing over the stored state', async () => {
@@ -244,8 +244,8 @@ describe('useIntent', () => {
     expect(d.writes).toHaveLength(0);
     d.resolveLoad();
     await microtasks();
-    expect(d.writes).toStrictEqual([serialize(store.getState())]);
-    expect(d.stored()).toBe(serialize(store.getState()));
+    expect(d.writes).toHaveLength(0);
+    expect(d.stored()).toBe(saved);
     expect(store.getState().intents.tip?.contributions.s).toBeDefined();
   });
 
@@ -268,7 +268,11 @@ describe('useIntent', () => {
     }
     const stored = observe(createState(thin), { name: 's', at: T - 2 * DAY });
     const saved = serialize(stored);
-    /** Startup settles the stored evidence, so the snapshot and prediction both reflect now. */
+    /** What the loaded state shows: the stored α/β as they are, and the prediction decayed to now. */
+    const mean = (
+      stored.intents.tip!.alpha /
+      (stored.intents.tip!.alpha + stored.intents.tip!.beta)
+    ).toFixed(2);
     const loaded = predict(stored, 'tip', T).p.toFixed(2);
 
     it('renders the fresh state on the server', () => {
@@ -290,10 +294,10 @@ describe('useIntent', () => {
           view.errors,
           loadFirst ? 'loaded before hydration' : 'loaded on mount',
         ).toStrictEqual([]);
-        expect(view.text('#s')).toBe(loaded);
+        expect(view.text('#s')).toBe(mean);
         expect(view.text('#p')).toBe(loaded);
         expect(view.text('#n')).toBe('1');
-        expect([loaded]).not.toContain('0.50');
+        expect([mean, loaded]).not.toContain('0.50');
         view.unmount();
       }
     });

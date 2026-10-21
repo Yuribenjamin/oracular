@@ -29,12 +29,12 @@ function recorder() {
 }
 
 describe('createIntentStore', () => {
-  it('settles an expired session on startup, notifies with settled state, and saves immediately', async () => {
+  it('settles an expired session on startup, notifies with settled state, and saves through the debounce', async () => {
     const config = upgradeConfig({ episodeTimeout: 30 * MINUTE });
     const active = observe(createState(config), { name: 'pricing.viewed', at: T - HOUR });
     assertInvariants(active);
     const { adapter, writes } = fakeAdapter(serialize(active));
-    const store = createIntentStore(config, { persist: adapter, now: () => T });
+    const store = createIntentStore(config, { persist: adapter, settleOnLoad: true, now: () => T });
     const seen: number[] = [];
     store.subscribe(() => {
       seen.push(store.getState().intents.upgrade!.episodes.misses);
@@ -45,31 +45,37 @@ describe('createIntentStore', () => {
     expect(settled.episode.startedAt).toBeNull();
     expect(settled.intents.upgrade!.learned['pricing.viewed']!.misses).toBe(1);
     expect(seen).toStrictEqual([1]);
+    expect(writes).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(250);
     expect(writes).toStrictEqual([serialize(settled)]);
 
-    const restarted = createIntentStore(config, { persist: adapter, now: () => T });
+    const restarted = createIntentStore(config, {
+      persist: adapter,
+      settleOnLoad: true,
+      now: () => T,
+    });
     await restarted.load();
     assertInvariants(restarted.getState());
     expect(restarted.getState().intents.upgrade!.episodes.misses).toBe(1);
     expect(writes).toHaveLength(1);
   });
 
-  it('waits for the settled startup state to finish saving before load resolves', async () => {
+  it('finishes loading before the debounced startup save begins or completes', async () => {
     const config = upgradeConfig({ episodeTimeout: 30 * MINUTE });
     const active = observe(createState(config), { name: 'pricing.viewed', at: T - HOUR });
     const saves = slowSaveAdapter(serialize(active));
-    const store = createIntentStore(config, { persist: saves.adapter, now: () => T });
-    let loaded = false;
-    const loading = store.load().then(() => {
-      loaded = true;
+    const store = createIntentStore(config, {
+      persist: saves.adapter,
+      settleOnLoad: true,
+      now: () => T,
     });
-    await microtasks();
-    expect(loaded).toBe(false);
-    expect(saves.pending).toHaveLength(1);
+    await store.load();
+    expect(saves.pending).toHaveLength(0);
     expect(store.getState().intents.upgrade!.episodes.misses).toBe(1);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(saves.pending).toHaveLength(1);
     saves.settle();
-    await loading;
-    expect(loaded).toBe(true);
+    await store.flush();
     expect(saves.stored()).toBe(serialize(store.getState()));
   });
 
@@ -78,7 +84,7 @@ describe('createIntentStore', () => {
     const active = observe(createState(config), { name: 'pricing.viewed', at: T - MINUTE });
     assertInvariants(active);
     const { adapter } = fakeAdapter(serialize(active));
-    const store = createIntentStore(config, { persist: adapter, now: () => T });
+    const store = createIntentStore(config, { persist: adapter, settleOnLoad: true, now: () => T });
     await store.load();
     const settled = store.getState();
     assertInvariants(settled);
@@ -98,13 +104,19 @@ describe('createIntentStore', () => {
     const active = observe(createState(config), { name: 'pricing.viewed', at: T });
     assertInvariants(active);
     const { adapter, writes } = fakeAdapter(serialize(active));
-    const store = createIntentStore(config, { persist: adapter, now: () => T + 150 * MINUTE });
+    const store = createIntentStore(config, {
+      persist: adapter,
+      settleOnLoad: true,
+      now: () => T + 150 * MINUTE,
+    });
     await store.load();
     const settled = store.getState();
     assertInvariants(settled);
     expect(settled.episode.startedAt).toBeNull();
     expect(settled.intents.upgrade!.pending).toStrictEqual([]);
     expect(settled.intents.upgrade!.learned['pricing.viewed']!.misses).toBeCloseTo(0.5, 12);
+    expect(writes).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(250);
     expect(writes).toStrictEqual([serialize(settled)]);
   });
 
@@ -120,6 +132,7 @@ describe('createIntentStore', () => {
     const c = clock(T + HOUR);
     const store = createIntentStore(config, {
       now: c.now,
+      settleOnLoad: true,
       persist: {
         load: () => new Promise((resolve) => setTimeout(() => resolve(saved), 10)),
         save: () => {},
@@ -298,7 +311,7 @@ describe('createIntentStore', () => {
 
   it('after a load with nothing tracked meanwhile, writes nothing: the round trip is byte for byte', async () => {
     const { adapter, writes } = fakeAdapter(saved);
-    const store = createIntentStore(config, { persist: adapter, now: () => T - DAY });
+    const store = createIntentStore(config, { persist: adapter, now: () => T });
     await store.load();
     expect(serialize(store.getState())).toBe(saved);
     await vi.advanceTimersByTimeAsync(1000);
@@ -359,7 +372,7 @@ describe('createIntentStore', () => {
 
     it('with a synchronous adapter, a load then an immediate flush writes nothing and leaves the stored string alone', async () => {
       const f = fakeAdapter(saved);
-      const store = createIntentStore(config, { persist: f.adapter, now: () => T - DAY });
+      const store = createIntentStore(config, { persist: f.adapter, now: () => T });
       const loading = store.load();
       const flushed = store.flush();
       await Promise.all([loading, flushed]);
@@ -659,7 +672,7 @@ describe('createIntentStore', () => {
 
     it('clear removes the stored key, resets the state, notifies, allows writes again, and a later change writes a fresh history', async () => {
       const f = fakeAdapter(saved, true);
-      const store = createIntentStore(config, { persist: f.adapter, now: () => T - DAY });
+      const store = createIntentStore(config, { persist: f.adapter, now: () => T });
       await store.load();
       let notified = 0;
       store.subscribe(() => {
