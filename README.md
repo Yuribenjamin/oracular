@@ -224,7 +224,7 @@ Learned counts never decay unless you set `learning.halfLife`.
 
 When the outcome event arrives, the intent's evidence returns to the prior (α, β and contributions), while everything learned is kept. The user already upgraded; stop predicting that they will. Set `resetOnOutcome: false` for intents where the outcome can repeat inside one episode.
 
-The outcome also starts the intent's `cooldown`: `shouldReveal` stays false until it ends, however strong the fresh evidence, so a user who just bought is not immediately pitched again. The time of the last outcome is kept on the state as `lastOutcomeAt`.
+The outcome also starts a cooldown, `outcomeCooldown`, by default the same `cooldown` a reveal starts: `shouldReveal` stays false until it ends, however strong the fresh evidence, so a user who just bought is not immediately pitched again. Set it on its own, 0 included, for an intent whose outcome recurs within minutes, or a "stuck" intent whose help should be back at the next attempt: the outcome then pauses nothing while a reveal still starts its cooldown. The time of the last outcome is kept on the state as `lastOutcomeAt`.
 
 ### Every answer comes with its reasons
 
@@ -302,9 +302,10 @@ interface IntentConfig {
 }
 
 interface RevealOptions {
-  threshold?: number;  // default 0.5
-  z?: number;          // default 1.28
-  cooldown?: number;   // default: the intent's halfLife
+  threshold?: number;        // default 0.5
+  z?: number;                // default 1.28
+  cooldown?: number;         // after markRevealed; default: the intent's halfLife
+  outcomeCooldown?: number;  // after the outcome event; default: cooldown. 0 lets the outcome pause nothing
   bound?: 'normal' | 'exact';  // default 'normal': p − z·sd; 'exact': the Beta quantile at Φ(−z)
 }
 ```

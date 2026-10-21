@@ -16,17 +16,17 @@ Set `resetOnOutcome: false` for intents whose outcome can repeat within one epis
 
 ## 3. It pauses reveals
 
-The outcome starts the intent's **cooldown**: for `cooldown` after `lastOutcomeAt`, `shouldReveal` is false however strong the fresh evidence. A user who just bought is not immediately pitched again.
+The outcome starts a **cooldown** of its own, `outcomeCooldown`: for that long after `lastOutcomeAt`, `shouldReveal` is false however strong the fresh evidence. A user who just bought is not immediately pitched again.
 
-The same cooldown runs after [`markRevealed`](/api/functions/markRevealed), so you don't fire on every event once you've shown something.
+The reveal cooldown, `cooldown`, runs after [`markRevealed`](/api/functions/markRevealed), so you don't fire on every event once you've shown something, and it is what `outcomeCooldown` defaults to.
 
 ```
 revealed        = now < lastRevealedAt + cooldown
-suppressed      = revealed  or  now < lastOutcomeAt + cooldown
+suppressed      = revealed  or  now < lastOutcomeAt + outcomeCooldown
 suppressedUntil = the later of the two running cooldown ends, or null
 ```
 
-`cooldown` defaults to the intent's `halfLife`; set it per intent or per call through [`RevealOptions`](/api/interfaces/RevealOptions). A cooldown of 0 disables both.
+`cooldown` defaults to the intent's `halfLife` and `outcomeCooldown` to `cooldown`; set either per intent or per call through [`RevealOptions`](/api/interfaces/RevealOptions). A `cooldown` of 0 disables both unless `outcomeCooldown` is set. An `outcomeCooldown` of 0 lets the outcome pause nothing while a reveal still starts its cooldown: for an intent whose outcome recurs within minutes (another item added to the cart), or a "stuck" intent whose outcome is "the help worked", where the next attempt that goes wrong is exactly when the help should be back.
 
 ## Timeline
 
