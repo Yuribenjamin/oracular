@@ -32,6 +32,18 @@ const WRITTEN_VERSION: Record<string, number> = {
   '0.5.2': 2,
   '0.6.0': 3,
   '0.7.0': 3,
+  '0.8.0': 3,
+  '0.8.1': 3,
+  '0.9.0': 3,
+  '0.10.0': 3,
+  '0.11.0': 3,
+  '0.12.0': 4,
+  '0.12.1': 4,
+  '0.13.0': 4,
+  '0.14.0': 4,
+  '0.15.0': 4,
+  '0.16.0': 4,
+  '0.17.0': 4,
 };
 
 /** The stored state exactly as the old version wrote it. */
@@ -72,8 +84,7 @@ function expectSameJson(actual: unknown, expected: unknown, path: string): void 
  * Set while a deliberate behaviour change is unreleased: what moved since the newest fixture, in
  * one line, matching its changeset. Back to null once the release that ships it has its fixture.
  */
-const UNRELEASED_CHANGE: string | null =
-  'state version 4 adds the engine clock (changeset engine-clock)';
+const UNRELEASED_CHANGE: string | null = null;
 
 /** The latest time an anchor `observe` writes was written at: what an upgraded state's clock is set to. Reveals are left out. */
 function latestAnchor(raw: Stored): number | null {
