@@ -177,6 +177,18 @@ Three things differ from the web version, and all three come from a real integra
 
 The engine itself is plain ES2020 with no globals, so it runs unchanged on Hermes and through Metro, including Expo (verified with Expo SDK 57). No polyfills, no native module.
 
+- **Hold `observe` until the clock is trusted.** A device that boots in 1970 and syncs its clock later makes one monotone jump that the engine cannot tell from a long absence ([Decay → Clocks](/guide/concepts/decay#clocks)): the evidence decays away and the session closes. Queue events while the clock is implausible and release them once it is, the way the load queue below holds them; events the device stamped in 1970 are better dropped than replayed:
+
+  ```ts
+  const CLOCK_SANE_AFTER = Date.UTC(2024, 0, 1); // any date after the build is proof enough
+  const clockTrusted = () => Date.now() > CLOCK_SANE_AFTER; // or your own time-sync signal
+
+  function track(name: string) {
+    if (!clockTrusted()) return; // or queue { name } and stamp it when the clock syncs
+    commit(observe(stateRef.current!, { name, at: Date.now() }));
+  }
+  ```
+
 With `@oracular/react` all three come built in: `createIntentStore(config, { persist: asyncStorageAdapter('oracular', AsyncStorage) })` (or `mmkvAdapter(key, mmkv)`), `useIntent(store)` in screens, and `flushOnBackground(store, AppState)` once, with React Native's `AppState`, since `pagehide` and `visibilitychange` do not exist there and the hook alone would only flush on unmount. The store replays events tracked before the read settled onto the loaded state, never writes before that read, debounces saves, and never ends an episode on its own; the helper flushes when the app leaves `active` and retries a failed read when it returns. On a cold start, `await store.load()` before hiding the splash screen if the first screen reveals a nudge: until the read settles, `reveal` decides on the state in memory. The same loop by hand:
 
 ```tsx

@@ -63,10 +63,9 @@ export interface IntentReport {
   intent: string;
   outcome: string;
   window: number;
-  /** Whether `window` is the intent's reveal cooldown (true) or was given explicitly. */
   /** Where the window came from. */
   windowSource: WindowSource;
-  /** `windowSource === 'cooldown'`, kept for readers of earlier reports. */
+  /** @deprecated `windowSource === 'cooldown'`; superseded in 0.10, kept for readers of earlier reports and never removed. */
   windowIsCooldown: boolean;
   installs: number;
   thresholds: ThresholdResult[];

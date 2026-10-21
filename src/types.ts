@@ -289,7 +289,7 @@ export interface IntentEvent {
   name: string;
   /** Timestamp. Every duration in the config uses the same unit (milliseconds recommended). */
   at: number;
-  /** Accepted and ignored in 0.1; never stored. */
+  /** Accepted and ignored; never stored. */
   props?: Record<string, unknown>;
 }
 

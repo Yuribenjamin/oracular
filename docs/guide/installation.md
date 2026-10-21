@@ -20,7 +20,7 @@ bun add oracular
 
 :::
 
-oracular has **zero runtime dependencies**. The ESM build is about 21 kB minified and 7.2 kB gzipped. For React, add the binding as well, `npm install oracular @oracular/react`; see [Using with frameworks](/guide/frameworks#react).
+oracular has **zero runtime dependencies**. The ESM build is about 24 kB minified and 8 kB gzipped. For React, add the binding as well, `npm install oracular @oracular/react`; see [Using with frameworks](/guide/frameworks#react).
 
 ## Module formats
 
@@ -49,7 +49,7 @@ The library never calls `Date.now()`, `setTimeout`, `fetch`, `localStorage`, `wi
 
 ## TypeScript
 
-Types are included. The package is written in strict TypeScript with `exactOptionalPropertyTypes`, so optional fields are either present with a value or absent; passing an explicit `undefined` is accepted at runtime and dropped, but your own strict config may flag it. Import the types you need from the package root:
+Types are included, for TypeScript 5.0 and newer: every tarball's declarations are checked with publint and Are the Types Wrong under the node10, node16 and bundler resolutions, and older compilers are untested. The package is written in strict TypeScript with `exactOptionalPropertyTypes`, so optional fields are either present with a value or absent; passing an explicit `undefined` is accepted at runtime and dropped, but your own strict config may flag it. Import the types you need from the package root:
 
 ```ts
 import type { EngineConfig, EngineState, Prediction, SignalExplanation } from 'oracular';

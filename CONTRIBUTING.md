@@ -29,11 +29,11 @@ Individual steps:
 | `npm run docs:build`    | builds the site; dead links fail the build                    |
 | `npm run docs:gif`      | re-records `assets/inspector.gif` from the React example on its virtual clock, through the system Chrome (`playwright-core`, no browser download); deterministic on one machine, fonts differ across OSes |
 
-`npm ls react` lists two copies on purpose: VitePress depends on `@docsearch/react`, whose peer
-range pins React below 19, so npm hoists React 18 to the root and nests the React 19 that
-`packages/react` and the example develop against; the root `overrides` entry for `@types/react`
-exists for the same reason, so that one set of React types serves the whole tree. Neither should
-be "fixed" here; both disappear on their own once that peer range admits React 19.
+VitePress depends on `@docsearch/react`, whose peer range pins React below 19, while
+`packages/react` and the example develop against React 19; the root `overrides` entry for
+`@types/react` exists for that reason, so that one set of React types serves the whole tree, and
+`npm ls react` may list more than one copy. Neither should be "fixed" here; both disappear on their
+own once that peer range admits React 19.
 
 Two more `overrides` entries close the Dependabot advisories on development dependencies: `vitepress`
 is pointed at Vite 6.4.5, because VitePress 1.6 pins Vite 5, which has no patched release, and its
@@ -58,7 +58,7 @@ src/            the library (zero runtime dependencies, no I/O of any kind)
   predict.ts    predict, shouldReveal, markRevealed
   explain.ts    explain
   serialize.ts  serialize, deserialize, config swap
-  migrate.ts    the built-in state migrations (version 1 → 2 → 3)
+  migrate.ts    the built-in state migrations (version 1 → 2 → 3 → 4)
   recorder.ts   createRecord, createEndRecord: the recorder format
   validate.ts   validateConfig
   units.ts      ms, durations in milliseconds
