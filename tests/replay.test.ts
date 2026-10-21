@@ -16,7 +16,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { parseLog } from '../cli/log';
 import { DEFAULT_THRESHOLD, type LogEntry, replay } from '../cli/replay';
-import { formatDuration } from '../cli/report';
+import { formatDuration, formatText } from '../cli/report';
 import { type Io, run } from '../cli/run';
 import { assertInvariants } from './helpers';
 
@@ -122,6 +122,17 @@ describe('replay, on a log small enough to check by hand', () => {
     expect(buy.brier).toBeCloseTo(brier, 9);
     expect(buy.baseRate).toBe(0.5);
     expect(buy.brierBaseline).toBe(0.25);
+  });
+
+  it('the text report shows censored reveals in the row and says recall still counts them', () => {
+    const text = formatText(replay(buyLog(), buyConfig, { thresholds: [0.5, 0.7] }));
+    // Two scored reveals at 0.5 and the third, at 500, whose window runs past the end of the log.
+    expect(text).toContain('| 2 (+1 censored) |');
+    expect(text).toMatch(/\| 0\.7\s+\| 0\s+\|/);
+    expect(text).toMatch(/not scored for precision[^\n]*still counts as caught for recall/);
+    // Nothing censored (nothing is ever revealed at 0.7), nothing said.
+    const quiet = formatText(replay(buyLog(), buyConfig, { thresholds: [0.7] }));
+    expect(quiet).not.toContain('censored');
   });
 
   it('a shorter window turns the late purchase into a miss', () => {
@@ -557,6 +568,36 @@ describe('oracular replay', () => {
       (i: { intent: string }) => i.intent === 'upgrade',
     );
     expect(upgrade).toMatchObject({ window: 7 * DAY, windowIsCooldown: false });
+  });
+
+  it("warns when the log is shorter than an intent's scoring window, and not once --window fits", async () => {
+    // The fixture log spans twelve days; a 30-day cooldown is a 30-day window, so every reveal
+    // and point of the upgrade intent is censored and the table alone would read as "no reveals".
+    const longCooldown: EngineConfig = {
+      ...config,
+      intents: {
+        ...config.intents,
+        upgrade: { ...config.intents.upgrade!, reveal: { cooldown: 30 * DAY } },
+      },
+    };
+    const readFile = (path: string) =>
+      path.endsWith('config.json') ? JSON.stringify(longCooldown) : readFileSync(path, 'utf8');
+    const warned = io();
+    warned.io.readFile = readFile;
+    expect(await run(replayArgs('shadow.ndjson', '--intent', 'upgrade'), warned.io)).toBe(0);
+    expect(warned.out.stderr).toMatch(
+      /^oracular: warning: upgrade: the log spans 12d, less than its 30d scoring window, so every reveal and point is censored and only recall can be counted\. Pass --window/,
+    );
+    expect(warned.out.stdout).toMatch(/\| 0\.5 \*\s+\| 0 \(\+1 censored\)/);
+    expect(warned.out.stdout).toContain('No scored points.');
+
+    const given = io();
+    given.io.readFile = readFile;
+    expect(
+      await run(replayArgs('shadow.ndjson', '--intent', 'upgrade', '--window', '7d'), given.io),
+    ).toBe(0);
+    expect(given.out.stderr).toBe('');
+    expect(given.out.stdout).not.toContain('censored)');
   });
 
   it('rejects an invalid config with exit code 1', async () => {
