@@ -17,6 +17,7 @@ const reactAliases =
         },
         { find: /^react-dom$/, replacement: join(reactDir, 'react-dom/index.js') },
         { find: /^react-dom\/client$/, replacement: join(reactDir, 'react-dom/client.js') },
+        { find: /^react-dom\/server$/, replacement: join(reactDir, 'react-dom/server.js') },
       ];
 
 export default defineConfig({

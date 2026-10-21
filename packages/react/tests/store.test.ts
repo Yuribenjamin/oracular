@@ -106,6 +106,37 @@ describe('createIntentStore', () => {
     expect(writes).toStrictEqual([serialize(store.getState())]);
   });
 
+  it('an adapter whose load returns undefined counts as an empty key, as one returning null does', async () => {
+    const writes: string[] = [];
+    const store = createIntentStore(config, {
+      // Written in JavaScript, without the `?? null` the shipped adapters have.
+      persist: { load: () => undefined as unknown as null, save: (json) => void writes.push(json) },
+      now: () => T,
+    });
+    await store.load();
+    expect(store.getStatus()).toBe('loaded');
+    await store.flush();
+    expect(writes).toHaveLength(0);
+    store.track('pricing.viewed');
+    await store.flush();
+    expect(writes).toStrictEqual([serialize(store.getState())]);
+  });
+
+  it("getInitialState is the fresh state, the same object for the store's life", async () => {
+    const { adapter } = fakeAdapter(saved, true);
+    const store = createIntentStore(config, { persist: adapter, now: () => T });
+    const initial = store.getInitialState();
+    expect(initial).toStrictEqual(createState(config));
+    expect(store.getState()).toBe(initial);
+    await store.load();
+    expect(store.getState()).not.toBe(initial);
+    expect(store.getInitialState()).toBe(initial);
+    store.track('limit.hit');
+    await store.clear();
+    expect(store.getInitialState()).toBe(initial);
+    expect(store.getState()).toStrictEqual(initial);
+  });
+
   it('writes at once when an episode closes, explicitly or by timeout', async () => {
     const { adapter, writes } = fakeAdapter();
     const c = clock();

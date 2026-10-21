@@ -53,13 +53,20 @@ export interface IntentStoreOptions {
  *
  * Persistence never writes before the first read has settled, so an early flush (React's
  * StrictMode, a component unmounting at once, the app backgrounding at cold start) cannot write a
- * fresh state over the stored history.
+ * fresh state over the stored history. A server render shows the fresh state; the hooks hydrate
+ * with that same state and then switch to the loaded one, so a store loaded before hydration
+ * does not disagree with the markup the server sent.
  */
 export interface IntentStore {
   /** The config the store was created with, as validated by the engine. */
   readonly config: EngineConfig;
   /** The current state. The same object until something changes, so it works as a snapshot. */
   getState(): EngineState;
+  /**
+   * The fresh state the store was created with, the same object for the store's life: what a
+   * server render shows, and what the hooks hydrate with before switching to the loaded state.
+   */
+  getInitialState(): EngineState;
   /** Where the store stands with its adapter; see {@link StoreStatus}. */
   getStatus(): StoreStatus;
   /** Calls `listener` after every change; returns the unsubscribe function. */
@@ -139,9 +146,10 @@ export function createIntentStore(
   const now = opts.now ?? Date.now;
   const saveDelay = opts.saveDelay ?? 250;
   const onError = opts.onError ?? warnOnce();
-  let state = createState(config);
+  const initial = createState(config);
+  let state = initial;
   /** What a fresh state serializes to. An empty key holds the same, so it counts as saved. */
-  const freshJson = serialize(state);
+  const freshJson = serialize(initial);
   const listeners = new Set<() => void>();
   let status: StoreStatus = persist === undefined ? 'memory' : 'idle';
   /** The read in flight, shared by everyone who waits for it. */
@@ -274,7 +282,7 @@ export function createIntentStore(
     const gen = generation;
     status = 'loading';
     const attempt = (async (): Promise<void> => {
-      let json: string | null;
+      let json: string | null | undefined;
       try {
         json = await persist.load();
       } catch (error) {
@@ -283,9 +291,10 @@ export function createIntentStore(
         return;
       }
       if (gen !== generation) return;
-      if (json === null) {
-        // Nothing stored: the state in memory is the truth. An empty key holds what a fresh state
-        // holds, so a flush with nothing tracked writes nothing; the first change writes.
+      if (json === null || json === undefined) {
+        // Nothing stored (an adapter written in JavaScript may say `undefined`): the state in
+        // memory is the truth. An empty key holds what a fresh state holds, so a flush with
+        // nothing tracked writes nothing; the first change writes.
         status = 'loaded';
         queue = null;
         badJson = null;
@@ -387,6 +396,7 @@ export function createIntentStore(
   const store: IntentStore = {
     config: state.config,
     getState: () => state,
+    getInitialState: () => initial,
     getStatus: () => status,
     subscribe: (listener) => {
       listeners.add(listener);

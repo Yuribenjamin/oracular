@@ -21,9 +21,9 @@ export function useIntentSelector<T>(
   // The value the component last rendered with, written after the commit; an equal new
   // selection returns this object, and React then skips the re-render.
   const committed = useRef<{ value: T } | null>(null);
-  const getSelection = useMemo(() => {
+  const [getSelection, getServerSelection] = useMemo(() => {
     let memo: { state: EngineState; value: T } | null = null;
-    return (): T => {
+    const select = (): T => {
       const state = store.getState();
       if (memo !== null && memo.state === state) return memo.value;
       let value = selector(state);
@@ -34,19 +34,32 @@ export function useIntentSelector<T>(
       memo = { state, value };
       return value;
     };
+    // The server rendered the fresh state; hydration selects over the same one, once, so that a
+    // store loaded before hydration shows the loaded selection only after the markup matched.
+    let server: { value: T } | null = null;
+    const selectServer = (): T => {
+      if (server === null) server = { value: selector(store.getInitialState()) };
+      return server.value;
+    };
+    return [select, selectServer] as const;
   }, [store, selector, isEqual]);
-  const value = useSyncExternalStore(store.subscribe, getSelection, getSelection);
+  const value = useSyncExternalStore(store.subscribe, getSelection, getServerSelection);
   useEffect(() => {
     committed.current = { value };
   }, [value]);
   return value;
 }
 
+/** Selects the whole state, for `usePrediction`; one function, so the selector memo holds. */
+const whole = (s: EngineState): EngineState => s;
+
 /**
  * The intent's prediction, re-rendering only when that intent's state changes: an event no
  * intent declares, or one that touches other intents, leaves this component alone. The value is
  * the prediction as of the last change or render; a cooldown ending on its own does not
- * re-render, so schedule a check on `suppressedUntil` if the screen must react to it.
+ * re-render, so schedule a check on `suppressedUntil` if the screen must react to it. It is
+ * computed from the rendered snapshot, so under server rendering it hydrates with what the server
+ * rendered before showing the loaded state.
  *
  * @example
  * ```tsx
@@ -58,21 +71,27 @@ export function usePrediction(
   intent: string,
   opts?: RevealOptions,
 ): Prediction {
-  const is = useIntentSelector(
+  // The whole state is selected, so the prediction is computed from the snapshot React rendered
+  // (the fresh one during hydration); the comparison keeps the previous state object, and so the
+  // render, while this intent's state is the same object.
+  const state = useIntentSelector(
     store,
-    useCallback((s: EngineState) => s.intents[intent], [intent]),
+    whole,
+    useCallback(
+      (a: EngineState, b: EngineState) => a.intents[intent] === b.intents[intent],
+      [intent],
+    ),
   );
   const threshold = opts?.threshold;
   const z = opts?.z;
   const cooldown = opts?.cooldown;
   const bound = opts?.bound;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `is` is the dependency that matters, the intent's state object, replaced on every change to that intent; the prediction is read from the store so that it carries the whole state.
   return useMemo(() => {
     const o: RevealOptions = {};
     if (threshold !== undefined) o.threshold = threshold;
     if (z !== undefined) o.z = z;
     if (cooldown !== undefined) o.cooldown = cooldown;
     if (bound !== undefined) o.bound = bound;
-    return predict(store.getState(), intent, store.now(), o);
-  }, [is, store, intent, threshold, z, cooldown, bound]);
+    return predict(state, intent, store.now(), o);
+  }, [state, store, intent, threshold, z, cooldown, bound]);
 }

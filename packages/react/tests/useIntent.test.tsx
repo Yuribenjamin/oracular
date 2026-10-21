@@ -1,6 +1,7 @@
-import { createState, observe, serialize } from 'oracular';
+import { createState, observe, predict, serialize } from 'oracular';
 import { act, type ReactElement, StrictMode, useState } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { assertInvariants, DAY, MINUTE } from '../../../tests/helpers';
 import {
@@ -66,6 +67,43 @@ function mount(element: ReactElement) {
   mounted.push(unmount);
   return { container, text, click, settle, rerender, unmount, errors };
 }
+/** Hydrates server-rendered markup with react-dom/client under act(); mismatches land in `errors`. */
+function hydrate(html: string, element: ReactElement) {
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  document.body.appendChild(container);
+  const errors: string[] = [];
+  // React 19 reports a mismatch as a recoverable error; React 18 also logs it through console.error.
+  const logged = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+    errors.push(String(args[0]).split('\n')[0] ?? '');
+  });
+  let root: ReturnType<typeof hydrateRoot>;
+  act(() => {
+    root = hydrateRoot(container, element, {
+      onRecoverableError: (error) => {
+        errors.push(`recoverable: ${String((error as Error).message ?? error).split('\n')[0]}`);
+      },
+    });
+  });
+  const text = (selector: string) => container.querySelector(selector)?.textContent ?? null;
+  const settle = async () => {
+    for (let i = 0; i < 4; i++) {
+      await act(async () => {
+        await microtasks();
+      });
+    }
+  };
+  const unmount = () => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    logged.mockRestore();
+  };
+  mounted.push(unmount);
+  return { text, settle, errors, unmount };
+}
+
 const mounted: (() => void)[] = [];
 afterEach(() => {
   for (const unmount of mounted.splice(0)) {
@@ -209,6 +247,60 @@ describe('useIntent', () => {
     expect(d.writes).toHaveLength(0);
     expect(d.stored()).toBe(saved);
     expect(store.getState().intents.tip?.contributions.s).toBeDefined();
+  });
+
+  describe('server rendering', () => {
+    const count = (s: ReturnType<IntentStore['getState']>) =>
+      Object.keys(s.intents.tip?.contributions ?? {}).length;
+    /** The three snapshot-based reads: the rendered state, usePrediction and useIntentSelector. */
+    function Page({ store }: { store: IntentStore }) {
+      const { state } = useIntent(store);
+      const { p } = usePrediction(store, 'tip');
+      const n = useIntentSelector(store, count);
+      const tip = state.intents.tip!;
+      return (
+        <div>
+          <span id="s">{(tip.alpha / (tip.alpha + tip.beta)).toFixed(2)}</span>
+          <span id="p">{p.toFixed(2)}</span>
+          <span id="n">{n}</span>
+        </div>
+      );
+    }
+    const stored = observe(createState(thin), { name: 's', at: T - 2 * DAY });
+    const saved = serialize(stored);
+    /** What the loaded state shows: the stored α/β as they are, and the prediction decayed to now. */
+    const mean = (
+      stored.intents.tip!.alpha /
+      (stored.intents.tip!.alpha + stored.intents.tip!.beta)
+    ).toFixed(2);
+    const loaded = predict(stored, 'tip', T).p.toFixed(2);
+
+    it('renders the fresh state on the server', () => {
+      const html = renderToString(<Page store={createIntentStore(thin, { now: () => T })} />);
+      expect(html).toContain('<span id="s">0.50</span>');
+      expect(html).toContain('<span id="p">0.50</span>');
+      expect(html).toContain('<span id="n">0</span>');
+    });
+
+    it('hydrates with the fresh state the server rendered, then shows the loaded one, whether the store loaded before hydration or loads on mount', async () => {
+      const html = renderToString(<Page store={createIntentStore(thin, { now: () => T })} />);
+      for (const loadFirst of [true, false]) {
+        const { adapter } = fakeAdapter(saved);
+        const store = createIntentStore(thin, { persist: adapter, now: () => T });
+        if (loadFirst) await store.load(); // the documented cold start: before the first screen renders
+        const view = hydrate(html, <Page store={store} />);
+        await view.settle();
+        expect(
+          view.errors,
+          loadFirst ? 'loaded before hydration' : 'loaded on mount',
+        ).toStrictEqual([]);
+        expect(view.text('#s')).toBe(mean);
+        expect(view.text('#p')).toBe(loaded);
+        expect(view.text('#n')).toBe('1');
+        expect([mean, loaded]).not.toContain('0.50');
+        view.unmount();
+      }
+    });
   });
 
   it('given a config, makes one store per component, loads it, and keeps it when the config changes', async () => {
