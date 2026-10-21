@@ -303,13 +303,17 @@ describe('a cooldown stamped by a clock that was ahead', () => {
     expect(predict(s, 'tip', T + HOUR + 7 * DAY + MINUTE).suppressedUntil).toBeNull();
   });
 
-  it('the outcome cooldown is pinned the same way', () => {
+  it('the outcome cooldown is pinned the same way, once two events behind the clock confirm the correction', () => {
     let s = createState(thinConfig());
     s = observe(s, { name: 'x', at: T });
-    s = observe(s, { name: 'tip.used', at: T + 365 * DAY });
+    s = observe(s, { name: 'tip.used', at: T + 365 * DAY }); // an outcome stamped a year ahead
     expect(predict(s, 'tip', T + HOUR).suppressedUntil).toBe(T + HOUR + 7 * DAY);
-    s = observe(s, { name: 'x', at: T + HOUR });
+    s = observe(s, { name: 'x', at: T + HOUR }); // one event behind the clock may be the glitch: held
+    expect(s.intents.tip!.lastOutcomeAt).toBe(T + 365 * DAY);
+    expect(predict(s, 'tip', T + HOUR).suppressedUntil).toBe(T + HOUR + 7 * DAY);
+    s = observe(s, { name: 'x', at: T + HOUR + MINUTE }); // the second confirms: pinned to the first
     expect(s.intents.tip!.lastOutcomeAt).toBe(T + HOUR);
+    expect(predict(s, 'tip', T + HOUR + 7 * DAY + MINUTE).suppressedUntil).toBeNull();
   });
 
   it('markRevealed trusts the time it is given: an earlier at moves the cooldown start back', () => {

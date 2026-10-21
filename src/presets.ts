@@ -104,15 +104,20 @@ const churn: IntentConfig = {
  * ```
  */
 /** Frozen through and through: a preset is shared, so a change by one caller would reach every other. */
-function freeze<T>(value: T): T {
+/** Read-only through and through, as the preset objects are at runtime. */
+export type DeepReadonly<T> = T extends object
+  ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+  : T;
+
+function freeze<T>(value: T): DeepReadonly<T> {
   if (typeof value === 'object' && value !== null) {
     for (const inner of Object.values(value)) freeze(inner);
     Object.freeze(value);
   }
-  return value;
+  return value as DeepReadonly<T>;
 }
 
-export const presets: Readonly<Record<PresetName, IntentConfig>> = freeze({
+export const presets: DeepReadonly<Record<PresetName, IntentConfig>> = freeze({
   willBuy,
   upgrade,
   stuck,
@@ -129,7 +134,7 @@ export const presets: Readonly<Record<PresetName, IntentConfig>> = freeze({
  * presetSources.willBuy.kind; // 'tuned'
  * ```
  */
-export const presetSources: Readonly<Record<PresetName, PresetSource>> = freeze({
+export const presetSources: DeepReadonly<Record<PresetName, PresetSource>> = freeze({
   willBuy: {
     kind: 'tuned',
     note: 'oracular tune on a public e-commerce clickstream: one shop, May to September 2015, 2.7 million events, 4.8% of sessions ending with an order; fitted October 2026, the fitted 0.0475 and 2.32 rounded',

@@ -46,14 +46,16 @@ export function withContributions(
 }
 
 /**
- * Decays evidence toward the prior by 2^(−Δt / halfLife) and moves the anchor to `at`, even when
- * `at` is earlier: a backwards step holds the evidence and decay resumes from there, so an event
- * stamped ahead of the clock cannot hold the intent until the clock catches up.
+ * Decays evidence toward the prior by 2^(−Δt / halfLife) and moves the anchor to `at`. An `at`
+ * before the anchor holds the evidence and leaves the anchor where it is: `observe` resolves the
+ * clock before it writes (see `syncClock` there), and a read before the anchor sees what the
+ * anchor sees.
  */
 export function decayIntent(state: IntentState, intent: IntentConfig, at: number): IntentState {
   if (state.updatedAt === null) return { ...state, updatedAt: at };
+  if (!(at > state.updatedAt)) return state;
   const d = decayFactor(at - state.updatedAt, intent.halfLife);
-  if (d === 1) return at === state.updatedAt ? state : { ...state, updatedAt: at };
+  if (d === 1) return { ...state, updatedAt: at };
   const contributions = mapRecord(state.contributions, (c) => ({
     alpha: c.alpha * d,
     beta: c.beta * d,

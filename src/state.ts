@@ -43,7 +43,13 @@ export function createState(config: EngineConfig): EngineState {
   for (const [name, intent] of Object.entries(normalized.intents)) {
     intents[name] = initIntent(intent);
   }
-  return { version: STATE_VERSION, config: normalized, intents, episode: emptyEpisode() };
+  return {
+    version: STATE_VERSION,
+    config: normalized,
+    intents,
+    episode: emptyEpisode(),
+    clock: { at: null, behindAt: null },
+  };
 }
 
 export function requireState(state: unknown): EngineState {
@@ -52,7 +58,8 @@ export function requireState(state: unknown): EngineState {
     state.version !== STATE_VERSION ||
     !isRecord(state.config) ||
     !isRecord(state.intents) ||
-    !isRecord(state.episode)
+    !isRecord(state.episode) ||
+    !isRecord(state.clock)
   ) {
     throw new TypeError('oracular: state must be an EngineState from createState or deserialize');
   }

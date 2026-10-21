@@ -5,6 +5,7 @@ import { signalWeights } from './learning';
 import { canMigrate, migrateStored } from './migrate';
 import { requireState } from './state';
 import type {
+  ClockState,
   DeserializeOptions,
   EngineConfig,
   EngineState,
@@ -42,7 +43,7 @@ export function serialize(state: EngineState): string {
  * before those checks existed still loads),
  * intents and signals no longer declared are dropped (α and β are recomputed from the kept
  * contributions), and newly declared intents start at their prior. States saved by oracular
- * 0.1.0 to 0.5.x are upgraded to the current shape on their own, and a state one version newer
+ * 0.1.0 to 0.11.x are upgraded to the current shape on their own, and a state one version newer
  * than {@link STATE_VERSION} (written by the next release, read after a rollback) is read as the
  * current one, ignoring the fields it adds; `migrate` is only for a version this library does
  * not know.
@@ -232,6 +233,14 @@ function episodeState(value: unknown, path: string): EpisodeState {
   };
 }
 
+function clockState(value: unknown, path: string): ClockState {
+  const r = record(value, path);
+  return {
+    at: nullOrFinite(r.at, `${path}.at`),
+    behindAt: nullOrFinite(r.behindAt, `${path}.behindAt`),
+  };
+}
+
 function parseState(value: unknown): EngineState {
   const r = record(value, 'state');
   if (r.version !== STATE_VERSION) {
@@ -244,6 +253,7 @@ function parseState(value: unknown): EngineState {
     config: normalizeConfig(r.config, false),
     intents: mapOwn(r.intents, 'state.intents', intentState),
     episode: episodeState(r.episode, 'state.episode'),
+    clock: clockState(r.clock, 'state.clock'),
   };
 }
 
@@ -347,5 +357,32 @@ function reconcile(raw: EngineState, config: EngineConfig): EngineState {
       lastEventAt: raw.episode.startedAt === null ? null : raw.episode.lastEventAt,
       intents: episodeIntents,
     },
+    clock: trustedClock(raw.clock, intents, raw.episode),
   };
+}
+
+/**
+ * The clock no anchor `observe` writes is ahead of: a migrated version 3 state gets the latest
+ * time its anchors were written at (reveals left out, so one stamped by a clock that was ahead
+ * is pinned by the next event rather than trusted), and a tampered clock is raised to them. A
+ * held stamp that is not behind the clock is dropped. A state `observe` wrote comes back as it was.
+ */
+function trustedClock(
+  clock: ClockState,
+  intents: Record<string, IntentState>,
+  episode: EpisodeState,
+): ClockState {
+  let at = clock.at;
+  const see = (value: number | null): void => {
+    if (value !== null && (at === null || value > at)) at = value;
+  };
+  see(episode.startedAt);
+  see(episode.lastEventAt);
+  for (const is of Object.values(intents)) {
+    see(is.updatedAt);
+    see(is.lastOutcomeAt);
+  }
+  const behindAt =
+    clock.behindAt !== null && at !== null && clock.behindAt < at ? clock.behindAt : null;
+  return at === clock.at && behindAt === clock.behindAt ? clock : { at, behindAt };
 }

@@ -7,6 +7,7 @@ export { createEndRecord, createRecord } from './recorder';
 export { deserialize, serialize } from './serialize';
 export { createState } from './state';
 export type {
+  ClockState,
   DeserializeOptions,
   EndRecord,
   EngineConfig,

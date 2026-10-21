@@ -1,11 +1,11 @@
 /**
  * Version of the serialized state shape, stored in every state as `state.version`. Bumped only
- * when `EngineState` changes incompatibly, and every bump ships its migration: {@link deserialize}
+ * when `EngineState` changes shape, and every bump ships its migration: {@link deserialize}
  * upgrades states saved by earlier versions of this library on its own (version 1, written by
- * oracular 0.1.0 to 0.2.x, and version 2, written by 0.3.0 to 0.5.x, become version 3), reads a
- * state one version newer than its own as its own (a version bump only adds fields, so a rollback
- * by one release keeps the user's history), and calls your `migrate` function only for a version
- * it does not know.
+ * oracular 0.1.0 to 0.2.x, version 2, written by 0.3.0 to 0.5.x, and version 3, written by 0.6.0
+ * to 0.11.x, become version 4), reads a state one version newer than its own as its own (a
+ * version bump only adds fields, so a rollback by one release keeps the user's history), and
+ * calls your `migrate` function only for a version it does not know.
  *
  * @example
  * ```ts
@@ -21,7 +21,7 @@
  * });
  * ```
  */
-export const STATE_VERSION = 3 as const;
+export const STATE_VERSION = 4 as const;
 
 /**
  * Version of the recorder format: the `v` field of every record that {@link createRecord} and

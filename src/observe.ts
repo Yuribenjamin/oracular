@@ -33,6 +33,15 @@ import { hasOwn } from './util';
  * or extends the current episode; an idle gap longer than `config.episodeTimeout` closes the
  * previous episode first.
  *
+ * The clock. An event at or after the latest event time moves the engine's clock there, and
+ * anything stamped ahead of it (a reveal stamped by a clock that was ahead) is pinned to it. An
+ * event stamped *behind* the clock counts now, at the clock's time, and its stamp is held: if the
+ * next event is also behind the clock, the clock was corrected, and every anchor ahead of the
+ * held stamp moves back to it so decay and cooldowns resume from the corrected time; if the next
+ * event is at or after the clock, the held stamp was one glitch and nothing moved. So one event
+ * stamped years ahead cannot hold an intent past the two events that follow it, and one stamped
+ * years behind cannot wipe the evidence or close the session.
+ *
  * @param state - The current state. Not mutated.
  * @param event - `name` is matched against every intent's signals and outcome; `at` is the
  *   event's timestamp, in the same unit as your durations; `props` are accepted and ignored,
@@ -49,8 +58,10 @@ import { hasOwn } from './util';
  * ```
  */
 export function observe(state: EngineState, event: IntentEvent): EngineState {
-  let s = requireState(state);
-  const { name, at } = validateEvent(event);
+  const { name, at: stamp } = validateEvent(event);
+  const synced = syncClock(requireState(state), stamp);
+  let s = synced.state;
+  const at = synced.at;
 
   const closeAt = timedOutAt(s.episode, s.config.episodeTimeout, at);
   if (closeAt !== null) s = closeEpisode(s, closeAt);
@@ -67,7 +78,6 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
     let is = getIntentState(s, intentName, intent);
     is = decayIntent(is, intent, at);
     is = settlePending(is, intent, learning, at);
-    is = pinAnchors(is, at);
 
     if (isSignal) {
       const { effective } = signalWeights(is, intent, learning, name);
@@ -98,19 +108,48 @@ export function observe(state: EngineState, event: IntentEvent): EngineState {
 }
 
 /**
- * A reveal or outcome stamped ahead of `at` was stamped by a clock that was ahead; it is pinned
- * to `at`, as `predict` already reads it, so its cooldown runs from this event rather than from a
- * date that may never come.
+ * Resolves an event's stamp against the clock and says when the event counts. At or after the
+ * clock (or the first event): the clock moves to the stamp and every anchor ahead of it is pinned
+ * to it. Behind the clock with nothing held: the event counts now, at the clock's time, and the
+ * stamp is held. Behind the clock with a stamp already held: two in a row confirm a correction,
+ * so everything ahead of the held stamp moves back to it and the event is resolved again from
+ * there. At or after the clock with a stamp held: the held one was a glitch, forgotten.
  */
-function pinAnchors(is: IntentState, at: number): IntentState {
-  const reveal = is.lastRevealedAt !== null && is.lastRevealedAt > at;
-  const outcome = is.lastOutcomeAt !== null && is.lastOutcomeAt > at;
-  if (!reveal && !outcome) return is;
-  return {
-    ...is,
-    lastRevealedAt: reveal ? at : is.lastRevealedAt,
-    lastOutcomeAt: outcome ? at : is.lastOutcomeAt,
-  };
+function syncClock(state: EngineState, stamp: number): { state: EngineState; at: number } {
+  const { at, behindAt } = state.clock;
+  if (at === null || stamp >= at) return { state: pinTo(state, stamp), at: stamp };
+  if (behindAt !== null) return syncClock(pinTo(state, behindAt), stamp);
+  return { state: { ...state, clock: { at, behindAt: stamp } }, at };
+}
+
+const INTENT_ANCHORS = ['updatedAt', 'learnedAt', 'lastRevealedAt', 'lastOutcomeAt'] as const;
+const EPISODE_ANCHORS = ['startedAt', 'lastEventAt'] as const;
+
+/** Moves every anchor ahead of `t` back to `t` and sets the clock there; intents nothing moves in keep their objects. */
+function pinTo(state: EngineState, t: number): EngineState {
+  let intents = state.intents;
+  for (const [name, is] of Object.entries(state.intents)) {
+    let pinned = pinKeys(is, INTENT_ANCHORS, t);
+    if (is.pending.some((p) => p.endedAt > t)) {
+      pinned = {
+        ...pinned,
+        pending: is.pending.map((p) => (p.endedAt > t ? { ...p, endedAt: t } : p)),
+      };
+    }
+    if (pinned !== is) intents = { ...intents, [name]: pinned };
+  }
+  const episode = pinKeys(state.episode, EPISODE_ANCHORS, t);
+  return { ...state, intents, episode, clock: { at: t, behindAt: null } };
+}
+
+/** `obj` with every listed key that holds a number above `t` set to `t`; the same object when none does. */
+function pinKeys<T extends object>(obj: T, keys: readonly (keyof T)[], t: number): T {
+  let out = obj;
+  for (const key of keys) {
+    const value: unknown = obj[key];
+    if (typeof value === 'number' && value > t) out = { ...out, [key]: t };
+  }
+  return out;
 }
 
 /**

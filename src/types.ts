@@ -211,6 +211,21 @@ export interface EpisodeState {
 }
 
 /**
+ * The engine's clock: the latest event time it trusts, and one event stamped behind it that is
+ * not yet confirmed as a clock correction. See `observe` for the rule.
+ */
+export interface ClockState {
+  /** The latest event time trusted so far; null before the first event. */
+  at: number | null;
+  /**
+   * The stamp of the last event that arrived behind `at`, held until the next event decides: a
+   * second event behind `at` confirms the clock was corrected and every anchor ahead of this
+   * time moves back to it; an event at or after `at` makes it a glitch that changed nothing.
+   */
+  behindAt: number | null;
+}
+
+/**
  * The whole engine state: plain JSON with no functions, class instances or hidden fields.
  * Persist it with `serialize`, restore it with `deserialize`.
  *
@@ -227,6 +242,7 @@ export interface EngineState {
   config: EngineConfig;
   intents: Record<string, IntentState>;
   episode: EpisodeState;
+  clock: ClockState;
 }
 
 /**
@@ -345,7 +361,7 @@ export interface Evaluation {
 /**
  * Turns a stored state of a version this library cannot migrate itself into a current
  * `EngineState`. Receives the parsed JSON as-is and the version it declares. States saved by
- * oracular 0.1.0 to 0.5.x (versions 1 and 2) never reach it, nor does a state one version newer
+ * oracular 0.1.0 to 0.11.x (versions 1 to 3) never reach it, nor does a state one version newer
  * than `STATE_VERSION`: `deserialize` handles both on its own.
  *
  * @example
@@ -371,7 +387,7 @@ export interface DeserializeOptions {
   config?: EngineConfig;
   /**
    * Called when the stored version is neither `STATE_VERSION`, nor one this library migrates
-   * itself (states from oracular 0.1.0 to 0.5.x are upgraded without it), nor the next version,
+   * itself (states from oracular 0.1.0 to 0.11.x are upgraded without it), nor the next version,
    * which it reads as its own.
    */
   migrate?: Migrate;

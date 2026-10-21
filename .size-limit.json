@@ -4,14 +4,14 @@
     "path": "dist/index.js",
     "import": "*",
     "gzip": true,
-    "limit": "7.9 kB"
+    "limit": "8.9 kB"
   },
   {
     "name": "quickstart: createState, observe, shouldReveal, markRevealed (ESM, min+gzip)",
     "path": "dist/index.js",
     "import": "{ createState, observe, shouldReveal, markRevealed }",
     "gzip": true,
-    "limit": "4.7 kB"
+    "limit": "5 kB"
   },
   {
     "name": "presets subpath (ESM, min+gzip)",

@@ -270,7 +270,7 @@ serialize(state): string
 deserialize(json: string, opts?: { config?: EngineConfig; migrate?: Migrate }): EngineState
 validateConfig(config: unknown): EngineConfig   // the checks createState runs, without a state; returns the normalized copy
 ms.seconds(n), ms.minutes(n), ms.hours(n), ms.days(n), ms.weeks(n)   // durations in milliseconds
-STATE_VERSION // 3
+STATE_VERSION // 4
 RECORD_VERSION // 1
 ```
 
@@ -340,7 +340,7 @@ interface SignalExplanation {
 
 ### Time
 
-`at` is a timestamp. Every duration (`halfLife`, `cooldown`, `episodeTimeout`, `learning.halfLife`) is in the same unit as `at`. Milliseconds from `Date.now()` are the obvious choice, but the library never calls `Date.now()` itself: you pass time in, which keeps every function deterministic and makes tests trivial. A clock that jumps backwards is tolerated: the evidence is held (no decay, no error) and the anchor moves to the new time, so decay resumes from there. One event stamped ahead of the clock therefore cannot hold an intent until the clock catches up, and a reveal or outcome stamped ahead of it counts as having happened now: its cooldown runs from the current time until the next event pins it there. When `at` is in milliseconds, `ms.days(7)`, `ms.hours(3)` and `ms.minutes(30)` spell the durations; they are plain multiplications.
+`at` is a timestamp. Every duration (`halfLife`, `cooldown`, `episodeTimeout`, `learning.halfLife`) is in the same unit as `at`. Milliseconds from `Date.now()` are the obvious choice, but the library never calls `Date.now()` itself: you pass time in, which keeps every function deterministic and makes tests trivial. The engine keeps a clock, the latest event time it trusts, and resolves every stamp against it. An event stamped behind the clock is tolerated: it counts now, at the clock's time, with no decay and no error, and its stamp is held. If the next event is also behind the clock, the clock was corrected (a device whose time was ahead caught up): every anchor ahead of the held stamp moves back to it, and decay and cooldowns resume from the corrected time. If the next event is at or after the clock, the held stamp was one glitch (a phone that woke up in 1970 before it synced) and nothing moved. So one event stamped years ahead holds an intent for at most the two events that follow it, and one stamped years behind wipes nothing and closes no session. A reveal or outcome stamped ahead of the clock counts as having happened now, and the next event pins it to its own time. A device that boots in 1970 and syncs forward later makes one monotone jump that no rule can tell from a long absence, so hold `observe` until its clock is trusted. When `at` is in milliseconds, `ms.days(7)`, `ms.hours(3)` and `ms.minutes(30)` spell the durations; they are plain multiplications.
 
 ## Persistence
 
@@ -358,7 +358,7 @@ const state = deserialize(saved, { config });
 
 The new config is validated and swapped in. Intents and signals you no longer declare are dropped (α and β are recomputed from what remains), newly declared intents start at their prior, and everything learned about signals that still exist is kept.
 
-States saved by an older version of this library are upgraded on load: `deserialize` migrates the state shapes written by oracular 0.1.0 to 0.5.x (`STATE_VERSION` 1 and 2) to the current one on its own. A `migrate` function is consulted only for a version the library does not know, such as a state written by a newer oracular before a rollback; without one, that throws a `RangeError`:
+States saved by an older version of this library are upgraded on load: `deserialize` migrates the state shapes written by oracular 0.1.0 to 0.11.x (`STATE_VERSION` 1 to 3) to the current one on its own. A `migrate` function is consulted only for a version the library does not know, such as a state written by a newer oracular before a rollback; without one, that throws a `RangeError`:
 
 ```ts
 deserialize(saved, {

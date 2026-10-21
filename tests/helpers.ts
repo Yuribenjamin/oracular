@@ -52,10 +52,30 @@ export function assertInvariants(state: EngineState): void {
   expectNullOrFinite(state.episode.startedAt, 'episode.startedAt');
   expectNullOrFinite(state.episode.lastEventAt, 'episode.lastEventAt');
 
+  // The clock: a held stamp is behind it, and nothing `observe` writes is ahead of it. Reveals,
+  // learned anchors and waiting episodes may be: `markRevealed` and `endEpisode` trust their time.
+  const clockAt = state.clock.at;
+  expectNullOrFinite(clockAt, 'clock.at');
+  expectNullOrFinite(state.clock.behindAt, 'clock.behindAt');
+  if (state.clock.behindAt !== null) {
+    expect(clockAt, 'a held stamp needs a clock').not.toBeNull();
+    expect(state.clock.behindAt).toBeLessThan(clockAt as number);
+  }
+  const notAhead = (value: number | null, label: string): void => {
+    if (value !== null) {
+      expect(clockAt, `${label} written with no clock`).not.toBeNull();
+      expect(value, `${label} ahead of the clock`).toBeLessThanOrEqual(clockAt as number);
+    }
+  };
+  notAhead(state.episode.startedAt, 'episode.startedAt');
+  notAhead(state.episode.lastEventAt, 'episode.lastEventAt');
+
   for (const [name, intent] of Object.entries(state.config.intents)) {
     const is = state.intents[name];
     expect(is, `missing state for intent ${name}`).toBeDefined();
     if (is === undefined) continue;
+    notAhead(is.updatedAt, `${name}.updatedAt`);
+    notAhead(is.lastOutcomeAt, `${name}.lastOutcomeAt`);
 
     const signals = Object.keys(intent.signals);
     const { alpha0, beta0 } = priorCounts(intent);
