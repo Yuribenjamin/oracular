@@ -161,7 +161,7 @@
             "normalized-difference",
             "association-rule"
           ],
-          "description": "Association measure, converted to an evidence score in [-1, 1], neutral at zero. Ratios use (R - 1)/(R + 1), relative/log lift use x/(1 + abs(x)), and absolute/normalized differences keep their scale. Default normalized-difference preserves existing behavior. Association-rule compares with the overall outcome rate."
+          "description": "Association measure, converted to an evidence score in [-1, 1], neutral at zero. Ratios use (R - 1)/(R + 1), relative/log lift use x/(1 + abs(x)), and absolute/normalized differences keep their scale. Default normalized-difference preserves existing behavior. Association-rule compares with the overall outcome rate. Every value but normalized-difference is deprecated and removed in 1.0: a sweep of all seven on the clickstream case study found none that beats the default on either split."
         }
       }
     }

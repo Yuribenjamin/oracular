@@ -32,14 +32,25 @@ export interface RevealOptions {
   bound?: 'normal' | 'exact';
 }
 
-/** The association measure converted to a signed, bounded score when learning signal weights. */
+/**
+ * The association measure converted to a signed, bounded score when learning signal weights.
+ * Every value but the default, `'normalized-difference'`, is deprecated: a sweep of all seven on
+ * the clickstream case study found none that beats the default on either split, so the six are
+ * removed in 1.0. They keep working, unchanged, until then; `learning.lift` itself stays.
+ */
 export type LiftType =
+  /** @deprecated Removed in 1.0: use the default, `'normalized-difference'`. */
   | 'absolute-difference'
+  /** @deprecated Removed in 1.0: use the default, `'normalized-difference'`. */
   | 'relative-lift'
+  /** @deprecated Removed in 1.0: use the default, `'normalized-difference'`. */
   | 'risk-ratio'
+  /** @deprecated Removed in 1.0: use the default, `'normalized-difference'`. */
   | 'log-lift'
+  /** @deprecated Removed in 1.0: use the default, `'normalized-difference'`. */
   | 'odds-ratio'
   | 'normalized-difference'
+  /** @deprecated Removed in 1.0: use the default, `'normalized-difference'`. */
   | 'association-rule';
 
 /**
@@ -60,6 +71,7 @@ export interface LearningConfig {
    * absolute/normalized differences keep their scale. Omit to preserve the existing normalized
    * difference exactly. 'association-rule' uses the overall outcome rate as its baseline; the
    * others use episodes without the signal. Raw ratios are reporting metrics, never weights.
+   * Every value but the default is deprecated and removed in 1.0 (see {@link LiftType}).
    */
   lift?: LiftType;
   /** Half-life of learned hit/miss counts, in the same unit as `at`. Omit for no forgetting. */
