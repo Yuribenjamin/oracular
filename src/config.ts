@@ -32,6 +32,7 @@ export const INTENT_KEYS = [
   'outcome',
   'resetOnOutcome',
   'saturate',
+  'episodePerOutcome',
   'attribution',
   'reveal',
 ] as const;
@@ -221,6 +222,12 @@ export function normalizeIntentConfig(value: unknown, path: string, strict = tru
   if (record.saturate !== undefined) {
     if (typeof record.saturate !== 'boolean') typeError(`${path}.saturate`, 'must be a boolean');
     out.saturate = record.saturate;
+  }
+  if (record.episodePerOutcome !== undefined) {
+    if (typeof record.episodePerOutcome !== 'boolean') {
+      typeError(`${path}.episodePerOutcome`, 'must be a boolean');
+    }
+    out.episodePerOutcome = record.episodePerOutcome;
   }
   if (record.attribution !== undefined) {
     out.attribution = expectPositive(record.attribution, `${path}.attribution`);

@@ -25,6 +25,16 @@ upgrade: { signals: { 'pricing.viewed': 3, 'limit.hit': 2 }, outcome: 'upgrade.c
 
 An outcome event that no episode preceded still counts toward the base rate. Within one episode, the signals seen after an outcome earn a hit only if another outcome follows them, and stay neutral at the close; a repeated outcome with nothing seen since is a duplicate and counts nothing. An event that is both a signal and the outcome of the same intent is never remembered as seen, so it cannot learn from itself; `validateConfig` refuses that pairing unless `resetOnOutcome` is `false`, since the reset would wipe the evidence the signal just added.
 
+### Attempts rather than sessions
+
+For an intent shaped as attempts, an upload that fails, then completes, then completes again in the same session, the session is the wrong unit. The second completion, with no failure before it, is the contrast the failure signal needs (an outcome without the signal), and a second attempt that fails and never completes should be a miss, not neutral. Set `episodePerOutcome: true` on the intent and each outcome is an episode of its own:
+
+- a later outcome in the same session counts as another episode even with nothing seen since, with its hit and no signal record;
+- signals seen after an outcome take a miss at the session's close, or wait under `attribution` when it is set;
+- the rest is as before: the outcome gives the signals seen since the last one their hit, credits waiting episodes, records `lastOutcomeAt`, and resets the evidence unless `resetOnOutcome` is `false`.
+
+What it costs: a genuinely duplicated outcome event (one completion reported twice) counts twice, where the default counts it once; dedupe such events in the app for these intents. The option is per intent because the session is shared by every intent: calling `endEpisode` on an outcome instead would give every other intent's signals a miss and restart every saturation count, and in shadow mode would need an `end` record after every outcome. `tune` reads the engine's counts, so it follows the option.
+
 ## Credit across episodes
 
 By default a signal earns a hit only when the outcome arrives in the same episode. For an intent that builds over days, the sessions that built it take misses and the session where the user finally acts gets all the credit ([What oracular can and cannot learn](/guide/can-and-cannot-learn#credit-stays-inside-the-episode)). `IntentConfig.attribution`, a duration, changes the verdict on a closed episode from "a miss, now" to "wait and see":

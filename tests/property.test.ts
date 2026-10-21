@@ -80,6 +80,7 @@ const intent: fc.Arbitrary<IntentConfig> = fc.record(
     outcome: fc.constant(OUTCOME),
     resetOnOutcome: fc.boolean(),
     saturate: fc.boolean(),
+    episodePerOutcome: fc.boolean(),
     attribution: fc.oneof(fc.constantFrom(HOUR, DAY, 7 * DAY), fc.integer({ min: 1e3, max: 1e9 })),
     reveal,
   },

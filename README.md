@@ -186,7 +186,7 @@ Before any update or reading, the evidence decays by 2^(−Δt / halfLife), wher
 
 ### The user's history corrects your weights
 
-Events happen inside **episodes** (sessions). An episode ends when you call `endEpisode`, or on its own after `episodeTimeout` of inactivity. Signals seen in the episode are remembered per intent. When the intent's `outcome` event arrives, each remembered signal gets a **hit**; when the episode ends without it, each gets a **miss**, or, with `attribution` set on the intent, the episode waits and takes the share `2^(−age / halfLife)` of a hit if the outcome arrives inside the window. The engine also counts, per intent, how many episodes ended with and without the outcome: the intent's **base rate**. Signals seen after an outcome in the same episode count only if another outcome follows them; a repeated outcome with nothing seen since counts nothing.
+Events happen inside **episodes** (sessions). An episode ends when you call `endEpisode`, or on its own after `episodeTimeout` of inactivity. Signals seen in the episode are remembered per intent. When the intent's `outcome` event arrives, each remembered signal gets a **hit**; when the episode ends without it, each gets a **miss**, or, with `attribution` set on the intent, the episode waits and takes the share `2^(−age / halfLife)` of a hit if the outcome arrives inside the window. The engine also counts, per intent, how many episodes ended with and without the outcome: the intent's **base rate**. Signals seen after an outcome in the same episode count only if another outcome follows them; a repeated outcome with nothing seen since counts nothing. For an intent shaped as attempts (an upload that fails, completes, and completes again), set `episodePerOutcome` and each outcome is an episode of its own: the second completion counts, with nothing seen, as the contrast learning needs, and failures after a completion take a miss when the session ends.
 
 A signal's weight is then a blend of your prior and the learned estimate:
 
@@ -297,6 +297,7 @@ interface IntentConfig {
   outcome?: string;                 // event that confirms the intent
   resetOnOutcome?: boolean;         // default true
   saturate?: boolean;               // repeats within an episode add less; default: episodeTimeout is set
+  episodePerOutcome?: boolean;      // each outcome is an episode of its own for this intent; default false: the session is
   attribution?: number;             // how long a closed episode waits for the outcome before it is a miss; off if omitted
   reveal?: RevealOptions;
 }

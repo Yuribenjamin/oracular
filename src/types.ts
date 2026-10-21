@@ -111,6 +111,18 @@ export interface IntentConfig {
    */
   saturate?: boolean;
   /**
+   * Each outcome is an episode of its own for this intent, rather than the session. After the
+   * outcome arrives, the intent's bookkeeping starts over: a later outcome in the same session
+   * counts as another episode even with nothing seen since, and signals seen after an outcome
+   * take a miss at the session's close (or wait under `attribution`), as a first attempt would.
+   * Default false: the episode is the session, a repeated outcome with nothing seen since counts
+   * nothing, and signals seen after an outcome are neutral at the close. For intents shaped as
+   * attempts (an upload that fails, then completes, then completes again), where the second
+   * attempt is the contrast learning needs. With it set, a duplicated outcome event counts twice:
+   * dedupe such events in the app.
+   */
+  episodePerOutcome?: boolean;
+  /**
    * How long a closed episode's signals wait for the outcome before they take a miss, in the same
    * unit as `at`. With it set, an episode that ends without the outcome is held instead of
    * counted. When the outcome arrives inside the window, each held episode gets a share

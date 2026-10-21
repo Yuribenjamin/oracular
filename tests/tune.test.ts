@@ -883,3 +883,49 @@ describe('oracular tune', () => {
     expect(out.stdout).toMatch(/--all-events/);
   });
 });
+
+describe('tune with episodePerOutcome', () => {
+  it('counts each attempt, where the default counts the session', () => {
+    const T0 = 1_700_000_000_000;
+    const config: EngineConfig = {
+      episodeTimeout: 30 * 60_000,
+      intents: {
+        stuck: {
+          prior: 0.15,
+          priorStrength: 5,
+          halfLife: 600_000,
+          saturate: false,
+          signals: { 'upload.rows.failed': 2 },
+          outcome: 'upload.completed',
+        },
+      },
+    };
+    const entries: LogEntry[] = [
+      { kind: 'event', installId: 'u1', mode: 'shadow', name: 'upload.rows.failed', at: T0 },
+      { kind: 'event', installId: 'u1', mode: 'shadow', name: 'upload.completed', at: T0 + 60_000 },
+      {
+        kind: 'event',
+        installId: 'u1',
+        mode: 'shadow',
+        name: 'upload.completed',
+        at: T0 + 300_000,
+      },
+      { kind: 'end', installId: 'u1', mode: 'shadow', at: T0 + 1_200_000 },
+    ];
+    expect(tune(entries, config).intents[0]).toMatchObject({ episodes: 1, outcomes: 1 });
+    const attempts: EngineConfig = {
+      ...config,
+      intents: { stuck: { ...config.intents.stuck!, episodePerOutcome: true } },
+    };
+    const fit = tune(entries, attempts).intents[0]!;
+    expect(fit).toMatchObject({ episodes: 2, outcomes: 2 });
+    // The failure signal now has its contrast: one attempt with it, one without.
+    expect(fit.signals[0]).toMatchObject({
+      signal: 'upload.rows.failed',
+      hits: 1,
+      misses: 0,
+      without: 1,
+      outcomesWithout: 1,
+    });
+  });
+});

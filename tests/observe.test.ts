@@ -370,3 +370,120 @@ function patchIntent(
 ): EngineConfig {
   return { ...base, intents: { upgrade: { ...base.intents.upgrade!, ...patch } } };
 }
+
+describe('episodePerOutcome', () => {
+  /** An upload that fails, then completes: an intent shaped as attempts. */
+  const attempts = (overrides: Partial<EngineConfig['intents'][string]> = {}): EngineConfig => ({
+    episodeTimeout: 30 * MINUTE,
+    intents: {
+      stuck: {
+        prior: 0.15,
+        priorStrength: 5,
+        halfLife: 10 * MINUTE,
+        saturate: false,
+        signals: { 'upload.rows.failed': 2 },
+        outcome: 'upload.completed',
+        ...overrides,
+      },
+    },
+  });
+  const T = 1_700_000_000_000;
+  const run = (config: EngineConfig, events: [string, number][], endAt?: number) => {
+    let s = createState(config);
+    for (const [name, at] of events) {
+      s = observe(s, { name, at });
+      assertInvariants(s);
+    }
+    if (endAt !== undefined) {
+      s = endEpisode(s, endAt);
+      assertInvariants(s);
+    }
+    return s.intents.stuck!;
+  };
+  const session: [string, number][] = [
+    ['upload.rows.failed', T],
+    ['upload.completed', T + MINUTE],
+    ['upload.completed', T + 5 * MINUTE], // a second attempt, nothing seen before it
+  ];
+
+  it('a later outcome with nothing seen since counts as another episode; by default it is a duplicate', () => {
+    const off = run(attempts(), session, T + 20 * MINUTE);
+    expect(off.episodes).toStrictEqual({ hits: 1, misses: 0 });
+    const on = run(attempts({ episodePerOutcome: true }), session, T + 20 * MINUTE);
+    expect(on.episodes).toStrictEqual({ hits: 2, misses: 0 });
+    // The signal's own record is the same: it was seen in one attempt and that attempt completed.
+    expect(on.learned).toStrictEqual({ 'upload.rows.failed': { hits: 1, misses: 0 } });
+    expect(off.learned).toStrictEqual(on.learned);
+  });
+
+  it('signals seen after an outcome take a miss at the close; by default they are neutral', () => {
+    const failedAgain: [string, number][] = [
+      ['upload.rows.failed', T],
+      ['upload.completed', T + MINUTE],
+      ['upload.rows.failed', T + 5 * MINUTE],
+      ['upload.rows.failed', T + 6 * MINUTE],
+    ];
+    const off = run(attempts(), failedAgain, T + 20 * MINUTE);
+    expect(off.episodes).toStrictEqual({ hits: 1, misses: 0 });
+    expect(off.learned).toStrictEqual({ 'upload.rows.failed': { hits: 1, misses: 0 } });
+    const on = run(attempts({ episodePerOutcome: true }), failedAgain, T + 20 * MINUTE);
+    expect(on.episodes).toStrictEqual({ hits: 1, misses: 1 });
+    expect(on.learned).toStrictEqual({ 'upload.rows.failed': { hits: 1, misses: 1 } });
+    // Nothing seen after the outcome is nothing: no empty miss at the close.
+    const quiet = run(
+      attempts({ episodePerOutcome: true }),
+      failedAgain.slice(0, 2),
+      T + 20 * MINUTE,
+    );
+    expect(quiet.episodes).toStrictEqual({ hits: 1, misses: 0 });
+  });
+
+  it('with attribution the attempt after an outcome waits for the next one instead', () => {
+    const cfg = attempts({ episodePerOutcome: true, attribution: DAY });
+    let s = createState(cfg);
+    for (const [name, at] of [
+      ['upload.rows.failed', T],
+      ['upload.completed', T + MINUTE],
+      ['upload.rows.failed', T + 5 * MINUTE],
+    ] as [string, number][]) {
+      s = observe(s, { name, at });
+    }
+    s = endEpisode(s, T + 20 * MINUTE);
+    assertInvariants(s);
+    expect(s.intents.stuck!.pending).toStrictEqual([
+      { endedAt: T + 20 * MINUTE, seen: ['upload.rows.failed'] },
+    ]);
+    expect(s.intents.stuck!.episodes).toStrictEqual({ hits: 1, misses: 0 });
+    // The next session completes: the waiting attempt gets its share of a hit.
+    s = observe(s, { name: 'upload.completed', at: T + HOUR });
+    assertInvariants(s);
+    expect(s.intents.stuck!.pending).toStrictEqual([]);
+    const share = 2 ** (-(40 * MINUTE) / (10 * MINUTE));
+    expect(s.intents.stuck!.learned['upload.rows.failed']!.hits).toBeCloseTo(1 + share, 12);
+    expect(s.intents.stuck!.episodes.hits).toBeCloseTo(2 + share, 12);
+  });
+
+  it('is independent of resetOnOutcome, and a duplicated outcome event counts twice, as documented', () => {
+    const keep = run(attempts({ episodePerOutcome: true, resetOnOutcome: false }), session);
+    expect(keep.episodes).toStrictEqual({ hits: 2, misses: 0 });
+    expect(keep.contributions['upload.rows.failed']).toBeDefined(); // the evidence survived both outcomes
+    const twice: [string, number][] = [
+      ['upload.completed', T],
+      ['upload.completed', T + 1_000],
+    ];
+    expect(run(attempts(), twice).episodes).toStrictEqual({ hits: 1, misses: 0 });
+    expect(run(attempts({ episodePerOutcome: true }), twice).episodes).toStrictEqual({
+      hits: 2,
+      misses: 0,
+    });
+  });
+
+  it('must be a boolean', () => {
+    expect(() => createState(attempts({ episodePerOutcome: 'yes' as unknown as boolean }))).toThrow(
+      /episodePerOutcome must be a boolean/,
+    );
+    expect(
+      createState(attempts({ episodePerOutcome: false })).config.intents.stuck!.episodePerOutcome,
+    ).toBe(false);
+  });
+});

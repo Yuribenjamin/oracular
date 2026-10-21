@@ -91,6 +91,10 @@
           "type": "boolean",
           "description": "Repeats of a signal within one episode add less. Default: true when episodeTimeout is set, false otherwise."
         },
+        "episodePerOutcome": {
+          "type": "boolean",
+          "description": "Each outcome is an episode of its own for this intent: a later outcome in the same session counts as another episode even with nothing seen since, and signals seen after an outcome take a miss at the session's close. Default false: the episode is the session."
+        },
         "attribution": {
           "$ref": "#/$defs/duration",
           "description": "How long a closed episode's signals wait for the outcome before they take a miss. An outcome inside the window credits each waiting episode by 2^(−age / halfLife). Unset: a miss at once when the episode ends."
