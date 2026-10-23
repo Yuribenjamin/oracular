@@ -11,9 +11,11 @@ import {
   observe,
   type RevealOptions,
   serialize,
+  settleState,
   shouldReveal,
 } from 'oracular';
 import { DEV } from './env';
+import { type ClockStatus, historyClock } from './historyClock';
 import type { PersistAdapter } from './persist';
 
 /** Which step of persistence failed: the read, the parse of what was read, a write, or a clear. */
@@ -32,10 +34,18 @@ export type StoreStatus = 'memory' | 'idle' | 'loading' | 'loaded' | 'failed' | 
 export interface IntentStoreOptions {
   /** Where the state is loaded from and saved to. Without it the store lives in memory. */
   persist?: PersistAdapter;
-  /** The clock that stamps events and reads. Default `Date.now`; inject one in tests. */
+  /** Explicit trusted clock override. Otherwise history is advanced by a monotonic timer. */
   now?: () => number;
+  /** Monotonic timer in milliseconds. Default performance.now. Useful for native platforms and tests. */
+  monotonicNow?: () => number;
+  /** Largest device-clock gap accepted on restore, in milliseconds. Default 30 days.
+   * Negative or larger gaps are ignored; time continues from saved history. */
+  maxResumeGap?: number;
   /** How long after a change the save runs, so a burst of events writes once. Default 250 ms. */
   saveDelay?: number;
+  /** Settle restored episodes and attribution at now() during load. Default false.
+   * Changes use the normal debounced save; load does not wait for that write. */
+  settleOnLoad?: boolean;
   /**
    * Called when a read, the parse of what was read, a write or a clear fails; the store keeps
    * working from the state it has. Without it, a development build warns once per phase through
@@ -69,6 +79,9 @@ export interface IntentStore {
   getInitialState(): EngineState;
   /** Where the store stands with its adapter; see {@link StoreStatus}. */
   getStatus(): StoreStatus;
+  /** 'held': a suspicious resume gap or unavailable timer; startup settlement was skipped.
+   * 'steady': monotonic time with an estimated resume gap. 'custom': opts.now was supplied. */
+  getClockStatus(): ClockStatus;
   /** Calls `listener` after every change; returns the unsubscribe function. */
   subscribe(listener: () => void): () => void;
   /** The store's clock. */
@@ -88,6 +101,8 @@ export interface IntentStore {
    */
   reveal(intent: string, opts?: RevealOptions): boolean;
   /**
+   * With settleOnLoad, restored state is settled after replay, before notifying subscribers.
+   * Changes are saved through the normal debounce; loading does not wait for the write.
    * Reads the saved state through the adapter. Every caller gets the same promise while the read
    * is in flight, and a store that has loaded does not read again. Operations made before the
    * read settles are applied to the state in memory at once and replayed onto the loaded state
@@ -143,7 +158,8 @@ export function createIntentStore(
   opts: IntentStoreOptions = {},
 ): IntentStore {
   const persist = opts.persist;
-  const now = opts.now ?? Date.now;
+  const clock = historyClock(opts.now, opts.monotonicNow, opts.maxResumeGap ?? 30 * 864e5);
+  const now = clock.now;
   const saveDelay = opts.saveDelay ?? 250;
   const onError = opts.onError ?? warnOnce();
   const initial = createState(config);
@@ -319,7 +335,12 @@ export function createIntentStore(
         return;
       }
       badJson = null;
+      clock.restore(next);
       for (const op of queue ?? []) next = op(next);
+      if (opts.settleOnLoad) {
+        const at = now();
+        if (clock.status() !== 'held') next = settleState(next, at);
+      }
       state = next;
       status = 'loaded';
       queue = null;
@@ -398,6 +419,7 @@ export function createIntentStore(
     getState: () => state,
     getInitialState: () => initial,
     getStatus: () => status,
+    getClockStatus: clock.status,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {
@@ -406,18 +428,24 @@ export function createIntentStore(
     },
     now,
     track: (name, props) => {
-      // Stamped now, not when replayed onto a loaded state.
-      const event: IntentEvent =
-        props === undefined ? { name, at: now() } : { name, at: now(), props };
-      return apply((s) => observe(s, event));
+      const at = clock.capture();
+      return apply((s) =>
+        observe(s, props === undefined ? { name, at: at() } : { name, at: at(), props }),
+      );
     },
     observe: (event) => apply((s) => observe(s, event)),
-    endEpisode: (at = now()) => apply((s) => endEpisodeAt(s, at)),
-    markRevealed: (intent, at = now()) => apply((s) => markRevealedAt(s, intent, at)),
+    endEpisode: (at) => {
+      const stamp = at === undefined ? clock.capture() : () => at;
+      return apply((s) => endEpisodeAt(s, stamp()));
+    },
+    markRevealed: (intent, at) => {
+      const stamp = at === undefined ? clock.capture() : () => at;
+      return apply((s) => markRevealedAt(s, intent, stamp()));
+    },
     reveal: (intent, revealOpts) => {
-      const at = now();
-      if (!shouldReveal(state, intent, at, revealOpts)) return false;
-      apply((s) => markRevealedAt(s, intent, at));
+      const at = clock.capture();
+      if (!shouldReveal(state, intent, at(), revealOpts)) return false;
+      apply((s) => markRevealedAt(s, intent, at()));
       return true;
     },
     load,

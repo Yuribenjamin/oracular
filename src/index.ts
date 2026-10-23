@@ -1,7 +1,7 @@
 export { evaluate, inspect } from './evaluate';
 export { evidenceToReveal } from './evidence';
 export { explain } from './explain';
-export { endEpisode, episodeClosed, observe } from './observe';
+export { endEpisode, episodeClosed, observe, settleState } from './observe';
 export { markRevealed, predict, shouldReveal } from './predict';
 export { createEndRecord, createRecord } from './recorder';
 export { deserialize, serialize } from './serialize';

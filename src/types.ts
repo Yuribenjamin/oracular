@@ -242,11 +242,11 @@ export interface EpisodeState {
 }
 
 /**
- * The engine's clock: the latest event time it trusts, and one event stamped behind it that is
+ * The engine's clock: the latest event or settlement time it trusts, and one event stamped behind it that is
  * not yet confirmed as a clock correction. See `observe` for the rule.
  */
 export interface ClockState {
-  /** The latest event time trusted so far; null before the first event. */
+  /** The latest event or settlement time trusted so far; null before either operation. */
   at: number | null;
   /**
    * The stamp of the last event that arrived behind `at`, held until the next event decides: a

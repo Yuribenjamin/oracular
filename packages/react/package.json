@@ -53,7 +53,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "oracular": ">=0.8.0 <2",
+    "oracular": ">=0.18.0 <2",
     "react": ">=18"
   },
   "scripts": {
@@ -62,13 +62,14 @@
     "test:watch": "vitest",
     "test:react18": "node scripts/react18.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "smoke": "node scripts/smoke.cjs && node scripts/smoke.mjs",
+    "smoke": "node scripts/smoke.cjs && node scripts/smoke.mjs && node scripts/peer-check.mjs",
     "size": "size-limit",
     "pack:check": "node scripts/pack-check.mjs",
     "check": "npm run typecheck && npm test && npm run build && npm run smoke && npm run size && npm run pack:check",
     "prepublishOnly": "npm run check"
   },
   "devDependencies": {
+    "oracular": "file:../..",
     "@size-limit/preset-small-lib": "^12.1.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

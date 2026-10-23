@@ -55,6 +55,25 @@ The next event decides what the held stamp was. If it is also behind the clock, 
 
 Two costs come with the rule. The first event after a correction is processed at the uncorrected time, so the intents it touches are decayed to that time and their episodes waiting under `attribution` can settle as misses before the second event moves everything back. And two bad stamps in a row read as a correction, which costs what 0.10 paid on every backward step: the anchors move to the bad time and the next good event decays the gap again. One case no rule covers: a device that boots in 1970 and syncs forward later makes a single monotone jump of decades, indistinguishable from a long absence, so the evidence decays away and the session closes. Hold `observe` until the device clock is trusted, as an analytics SDK would.
 
+`settleState(state, at)` also advances the engine clock, without recording an event or extending
+a session. It closes expired sessions, settles attribution windows, and decays every intent.
+An `at` earlier than the current engine clock holds there; it does not confirm a backwards clock
+correction. Supply trusted time: settlement cannot tell a long absence from a bad future stamp.
+
+The React store's default clock uses a monotonic timer while running, anchored to saved history.
+On restoration, it estimates the absence from the device-clock sample taken at store creation.
+It accepts only a nonnegative gap up to `maxResumeGap` (30 days by default). Otherwise it anchors
+to the latest saved clock/evidence/learning/pending-close time and reports `getClockStatus() ===
+'held'`; the steady timer advances from there, ignoring the guessed absence. Queued store-stamped
+operations keep their elapsed spacing after reanchoring. This is a configurable heuristic, not
+a way to verify the real date: an incorrect clock within the bound is indistinguishable from a
+real absence, and real absences beyond it are held too. `now` is an explicit trusted override;
+`monotonicNow` supplies a platform timer. No internet request is made. A missing or invalid
+monotonic timer holds time; OS suspension follows the platform timer's behavior.
+
+React startup settlement is opt-in (`settleOnLoad: true`), skipped when the clock is held, and
+saved through the normal debounce. Loading alone does not force a write or wait for it.
+
 ## Learned data decays separately
 
 Hit and miss counts, and the episode counts, are not evidence about *now*; they are knowledge about *this user*. They do not decay unless you set `learning.halfLife`, which gives them their own, usually much longer, half-life. See [Episodes & learning](/guide/concepts/episodes-and-learning).

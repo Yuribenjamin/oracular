@@ -17,11 +17,30 @@ Persist after every `observe` if writes are cheap (localStorage, an in-memory st
 ## Load: pass your current config
 
 ```ts
-import { createState, deserialize } from 'oracular';
+import { createState, deserialize, settleState } from 'oracular';
 
 const saved = localStorage.getItem('oracular');
-let state = saved ? deserialize(saved, { config }) : createState(config);
+let state = saved
+  ? settleState(deserialize(saved, { config }), Date.now())
+  : createState(config);
 ```
+
+`settleState(state, at)` brings restored state up to startup time before the first prediction. It
+closes an expired session at its original timeout, records its unresolved outcomes as misses (or
+holds them for attribution), settles attribution windows that have expired, and decays evidence
+and learned counts to `at`. Sessions and attribution windows still within their time limits stay
+open. It records no event and does not extend the session. Without `episodeTimeout`, sessions
+still need an explicit `endEpisode`.
+
+Save the settled state so the next startup resumes from it. Repeated settlement never counts the
+same session twice. `deserialize` alone remains a lossless restore; time advances only when the
+app supplies it. Use a trusted time for explicit core settlement: the core does not read a clock
+or request time from the network. The `@oracular/react` store offers `settleOnLoad: true`, disabled
+by default. It settles after replay, unless the history clock is held, and saves changes through
+the normal debounce; `load()` does not wait for the write. Its default runtime clock uses a
+monotonic timer and estimates an absence only within `maxResumeGap` (30 days by default).
+Backwards or excessive device-clock gaps continue from saved history, with no startup settlement.
+See the [Clocks guide](./concepts/decay#clocks).
 
 `createState` stores a snapshot of the config inside the state, so a saved state remembers the weights it was built with. **That snapshot is for migrations, not for running.** When you ship a new version with different weights, a new signal or a removed intent, the saved state must follow your code, so pass the config your app ships *now* to [`deserialize`](/api/functions/deserialize). It then:
 

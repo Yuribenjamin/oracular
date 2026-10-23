@@ -1,6 +1,6 @@
 import { createState, observe, STATE_VERSION, serialize } from 'oracular';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { assertInvariants, DAY, MINUTE, upgradeConfig } from '../../../tests/helpers';
+import { assertInvariants, DAY, HOUR, MINUTE, upgradeConfig } from '../../../tests/helpers';
 import { createIntentStore, type PersistAdapter, type PersistPhase } from '../src';
 import { clock, deferredAdapter, fakeAdapter, microtasks, slowSaveAdapter, T } from './adapters';
 
@@ -29,6 +29,132 @@ function recorder() {
 }
 
 describe('createIntentStore', () => {
+  it('settles an expired session on startup, notifies with settled state, and saves through the debounce', async () => {
+    const config = upgradeConfig({ episodeTimeout: 30 * MINUTE });
+    const active = observe(createState(config), { name: 'pricing.viewed', at: T - HOUR });
+    assertInvariants(active);
+    const { adapter, writes } = fakeAdapter(serialize(active));
+    const store = createIntentStore(config, { persist: adapter, settleOnLoad: true, now: () => T });
+    const seen: number[] = [];
+    store.subscribe(() => {
+      seen.push(store.getState().intents.upgrade!.episodes.misses);
+    });
+    await store.load();
+    const settled = store.getState();
+    assertInvariants(settled);
+    expect(settled.episode.startedAt).toBeNull();
+    expect(settled.intents.upgrade!.learned['pricing.viewed']!.misses).toBe(1);
+    expect(seen).toStrictEqual([1]);
+    expect(writes).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(writes).toStrictEqual([serialize(settled)]);
+
+    const restarted = createIntentStore(config, {
+      persist: adapter,
+      settleOnLoad: true,
+      now: () => T,
+    });
+    await restarted.load();
+    assertInvariants(restarted.getState());
+    expect(restarted.getState().intents.upgrade!.episodes.misses).toBe(1);
+    expect(writes).toHaveLength(1);
+  });
+
+  it('finishes loading before the debounced startup save begins or completes', async () => {
+    const config = upgradeConfig({ episodeTimeout: 30 * MINUTE });
+    const active = observe(createState(config), { name: 'pricing.viewed', at: T - HOUR });
+    const saves = slowSaveAdapter(serialize(active));
+    const store = createIntentStore(config, {
+      persist: saves.adapter,
+      settleOnLoad: true,
+      now: () => T,
+    });
+    await store.load();
+    expect(saves.pending).toHaveLength(0);
+    expect(store.getState().intents.upgrade!.episodes.misses).toBe(1);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(saves.pending).toHaveLength(1);
+    saves.settle();
+    await store.flush();
+    expect(saves.stored()).toBe(serialize(store.getState()));
+  });
+
+  it('preserves a recent session across startup and decays its evidence without extending it', async () => {
+    const config = upgradeConfig({ episodeTimeout: 30 * MINUTE });
+    const active = observe(createState(config), { name: 'pricing.viewed', at: T - MINUTE });
+    assertInvariants(active);
+    const { adapter } = fakeAdapter(serialize(active));
+    const store = createIntentStore(config, { persist: adapter, settleOnLoad: true, now: () => T });
+    await store.load();
+    const settled = store.getState();
+    assertInvariants(settled);
+    expect(settled.episode).toStrictEqual(active.episode);
+    expect(settled.intents.upgrade!.episodes.misses).toBe(0);
+    expect(settled.intents.upgrade!.updatedAt).toBe(T);
+    expect(settled.intents.upgrade!.contributions['pricing.viewed']!.alpha).toBeLessThan(3);
+  });
+
+  it('settles expired attribution and learning decay during startup', async () => {
+    const base = upgradeConfig({ episodeTimeout: 30 * MINUTE });
+    const config = {
+      ...base,
+      learning: { halfLife: HOUR },
+      intents: { upgrade: { ...base.intents.upgrade!, attribution: HOUR } },
+    };
+    const active = observe(createState(config), { name: 'pricing.viewed', at: T });
+    assertInvariants(active);
+    const { adapter, writes } = fakeAdapter(serialize(active));
+    const store = createIntentStore(config, {
+      persist: adapter,
+      settleOnLoad: true,
+      now: () => T + 150 * MINUTE,
+    });
+    await store.load();
+    const settled = store.getState();
+    assertInvariants(settled);
+    expect(settled.episode.startedAt).toBeNull();
+    expect(settled.intents.upgrade!.pending).toStrictEqual([]);
+    expect(settled.intents.upgrade!.learned['pricing.viewed']!.misses).toBeCloseTo(0.5, 12);
+    expect(writes).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(writes).toStrictEqual([serialize(settled)]);
+  });
+
+  it('replays queued outcomes at their original time before settling to load completion', async () => {
+    const base = upgradeConfig({ episodeTimeout: 30 * MINUTE });
+    const config = {
+      ...base,
+      intents: { upgrade: { ...base.intents.upgrade!, attribution: 2 * HOUR } },
+    };
+    const active = observe(createState(config), { name: 'pricing.viewed', at: T });
+    assertInvariants(active);
+    const saved = serialize(active);
+    const c = clock(T + HOUR);
+    const store = createIntentStore(config, {
+      now: c.now,
+      settleOnLoad: true,
+      persist: {
+        load: () => new Promise((resolve) => setTimeout(() => resolve(saved), 10)),
+        save: () => {},
+      },
+    });
+    const loading = store.load();
+    store.track('upgrade.completed');
+    assertInvariants(store.getState());
+    c.advance(2 * HOUR);
+    await vi.advanceTimersByTimeAsync(10);
+    await loading;
+    const settled = store.getState();
+    assertInvariants(settled);
+    expect(settled.intents.upgrade!.lastOutcomeAt).toBe(T + HOUR);
+    expect(settled.intents.upgrade!.learned['pricing.viewed']!.hits).toBeCloseTo(
+      2 ** (-(30 * MINUTE) / (7 * DAY)),
+      12,
+    );
+    expect(settled.intents.upgrade!.pending).toStrictEqual([]);
+    expect(settled.episode.startedAt).toBeNull();
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
   });

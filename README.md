@@ -254,6 +254,7 @@ Every function is pure: it never mutates its input and returns the same output f
 createState(config: EngineConfig): EngineState
 observe(state, event: { name: string; at: number; props?: Record<string, unknown> }): EngineState
 endEpisode(state, at: number): EngineState
+settleState(state, at: number): EngineState  // settle expired sessions and attribution without an event
 predict(state, intent: string, at: number, opts?: RevealOptions): Prediction
 shouldReveal(state, intent: string, at: number, opts?: RevealOptions): boolean
 markRevealed(state, intent: string, at: number): EngineState
@@ -353,8 +354,10 @@ localStorage.setItem('oracular', serialize(state));
 `createState` persists a snapshot of the config inside the state, so a saved state remembers the weights it was built with. On load, pass the config your app ships *now*:
 
 ```ts
-const state = deserialize(saved, { config });
+const state = settleState(deserialize(saved, { config }), Date.now());
 ```
+
+`settleState` closes expired sessions, settles expired attribution windows, and decays evidence and learning before startup decisions. It keeps recent sessions open and records no event. Import it from `oracular` and supply a trusted time. The React store offers optional `settleOnLoad: true`, uses a history-based runtime clock, and saves through the normal debounce. Suspicious device-clock gaps hold at saved history and skip startup settlement.
 
 The new config is validated and swapped in. Intents and signals you no longer declare are dropped (α and β are recomputed from what remains), newly declared intents start at their prior, and everything learned about signals that still exist is kept. The stored snapshot is then not read at all, so a state written by a newer release, with a config key or value this one does not know, still loads after a rollback; loading without a config runs the stored snapshot instead, and a key the library does not know is then an error.
 

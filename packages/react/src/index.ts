@@ -1,5 +1,6 @@
 export type { AppStateLike } from './appState';
 export { flushOnBackground } from './appState';
+export type { ClockStatus } from './historyClock';
 export type { AsyncStorageLike, MmkvLike, PersistAdapter, StorageLike } from './persist';
 export { asyncStorageAdapter, localStorageAdapter, mmkvAdapter } from './persist';
 export type { IntentStore, IntentStoreOptions, PersistPhase, StoreStatus } from './store';
